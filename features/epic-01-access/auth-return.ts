@@ -1,7 +1,7 @@
 import type { UserRole } from "@/lib/api/types";
 
 const roleReturnPrefixes: Record<UserRole, readonly string[]> = {
-  observer: ["/report-a-reef", "/my-reports"],
+  observer: ["/report-a-reef", "/my-reports", "/plan-a-dive"],
   case_coordinator: ["/coordinator"],
   system_administrator: ["/admin"],
 };

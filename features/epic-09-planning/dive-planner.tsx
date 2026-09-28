@@ -1,0 +1,1027 @@
+"use client";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  ArrowRight,
+  Bookmark,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Compass,
+  FlaskConical,
+  Info,
+  MapPin,
+  Plus,
+  SlidersHorizontal,
+  Trash2,
+  Waves,
+  X,
+} from "lucide-react";
+import { useAuth } from "@/features/epic-01-access/auth-context";
+import { reefSites } from "@/features/epic-02-reef-explorer/reef-sites";
+import { storeSelectedReefSite } from "@/features/epic-02-reef-explorer/selected-site-storage";
+import {
+  addDays,
+  areas,
+  assess,
+  dateLabel,
+  dateRange,
+  localToday,
+  pastExample,
+  readPlans,
+  sitesIn,
+  validDate,
+  writePlans,
+  type Area,
+  type Plan,
+  type Scenario,
+} from "./planning-data";
+import {
+  BriefPanel,
+  DateComparison,
+  Seasonality,
+  AreaOverview,
+  SiteCard,
+} from "./planning-panels";
+import styles from "./planning.module.css";
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className={styles.modal}
+      onCancel={onClose}
+      aria-label={title}
+    >
+      <button
+        type="button"
+        className={styles.close}
+        onClick={onClose}
+        aria-label="Close dialog"
+      >
+        <X size={22} />
+      </button>
+      {children}
+    </dialog>
+  );
+}
+
+export function DivePlanner() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const previewMode = params.get("preview") === "1";
+  const { user, status } = useAuth();
+  const incomingSite = reefSites.find((site) => site.id === params.get("site"));
+  const initialArea =
+    incomingSite?.island ??
+    (areas.includes(params.get("area") as Area)
+      ? (params.get("area") as Area)
+      : "Perhentian");
+  const [today] = useState(() => localToday());
+  const initialDate = validDate(params.get("date") ?? "")
+    ? params.get("date")!
+    : addDays(today, 1);
+  const [area, setArea] = useState<Area>(initialArea);
+  const [from, setFrom] = useState(initialDate);
+  const [to, setTo] = useState(addDays(initialDate, 4));
+  const [dates, setDates] = useState(() =>
+    dateRange(initialDate, addDays(initialDate, 4)),
+  );
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [selectedSites, setSelectedSites] = useState<string[]>(
+    params
+      .getAll("sites")
+      .filter((id) => sitesIn(initialArea).some((site) => site.id === id))
+      .length
+      ? params
+          .getAll("sites")
+          .filter((id) => sitesIn(initialArea).some((site) => site.id === id))
+      : incomingSite
+        ? [incomingSite.id]
+        : [],
+  );
+  const [tab, setTab] = useState<"planner" | "season" | "plans">("planner");
+  const [scenario, setScenario] = useState<Scenario>("normal");
+  const [showTools, setShowTools] = useState(false);
+  const [briefSite, setBriefSite] = useState<string | null>(null);
+  const [authPrompt, setAuthPrompt] = useState(false);
+  const [demoOwner, setDemoOwner] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [planName, setPlanName] = useState("");
+  const [saveDialog, setSaveDialog] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Plan | null>(null);
+  const [pastPlan, setPastPlan] = useState<Plan | null>(null);
+  const [reportSite, setReportSite] = useState("");
+  const [reportDate, setReportDate] = useState("");
+  const [confirmedDive, setConfirmedDive] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [storageReady, setStorageReady] = useState(false);
+  const owner =
+    status === "authenticated" && user?.role === "observer"
+      ? `user-${user.id}`
+      : status === "unauthenticated" && previewMode
+        ? demoOwner
+        : null;
+  const sites = sitesIn(area);
+  const activeBriefSite = sites.find((site) => site.id === briefSite);
+  const selectedProfiles = sites.filter((site) =>
+    selectedSites.includes(site.id),
+  );
+  const returnPath = `/plan-a-dive?area=${area}&date=${selectedDate}${selectedSites[0] ? `&site=${selectedSites[0]}${selectedSites.map((id) => `&sites=${id}`).join("")}` : ""}`;
+  const loginHref = `/login?next=${encodeURIComponent(returnPath)}`;
+
+  useEffect(() => {
+    let storedDemo: string | null = null;
+    try {
+      storedDemo = previewMode
+        ? sessionStorage.getItem("reefcare-planner-demo")
+        : null;
+    } catch {
+      /* Browsing still works without storage. */
+    }
+    queueMicrotask(() => setDemoOwner(storedDemo));
+  }, [previewMode]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      setPlans(owner ? readPlans(owner) : []);
+      setStorageReady(true);
+    });
+  }, [owner]);
+
+  function switchArea(value: Area) {
+    setArea(value);
+    setSelectedSites([]);
+    setEditing(null);
+    setBriefSite(null);
+    setMessage("");
+    setError("");
+  }
+  function compare(event: React.FormEvent) {
+    event.preventDefault();
+    const nextDates = dateRange(from, to);
+    if (!nextDates.length) {
+      setError(
+        "Choose an end date on or after the start date, within a 14-day window.",
+      );
+      return;
+    }
+    setDates(nextDates);
+    setSelectedDate(from);
+    setError("");
+    setMessage("Date comparison updated.");
+    setTab("planner");
+  }
+  function toggleSite(id: string) {
+    setSelectedSites((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+    setError("");
+  }
+  function requestSave() {
+    setError("");
+    setMessage("");
+    if (!selectedProfiles.length) {
+      setError("Add at least one dive site to your plan using the + button.");
+      return;
+    }
+    if (status === "loading") {
+      setError("Your account is still loading. Please try again shortly.");
+      return;
+    }
+    if (status === "authenticated" && user?.role !== "observer") {
+      setError("Private dive plans are available to Observer accounts.");
+      return;
+    }
+    if (!owner) {
+      setAuthPrompt(true);
+      return;
+    }
+    setPlanName(
+      editing
+        ? (plans.find((plan) => plan.planId === editing)?.name ??
+            `${area} dive plan`)
+        : `${area} dive plan`,
+    );
+    setSaveDialog(true);
+  }
+  function enterDemo() {
+    try {
+      const id = demoOwner ?? `demo-${crypto.randomUUID()}`;
+      sessionStorage.setItem("reefcare-planner-demo", id);
+      if (!readPlans(id).length) writePlans(id, [pastExample(today)]);
+      setStorageReady(false);
+      setDemoOwner(id);
+      setAuthPrompt(false);
+      setMessage(
+        "Demo workspace opened. Plans stay in this browser; you are not signed into ReefCare.",
+      );
+    } catch {
+      setError(
+        "Browser storage is unavailable. Allow local storage to try saved plans.",
+      );
+    }
+  }
+  function persist(next: Plan[]): boolean {
+    if (!owner) return false;
+    try {
+      writePlans(owner, next);
+      setPlans(next);
+      return true;
+    } catch {
+      setError(
+        "Your plan could not be stored on this device. Please check browser storage and try again.",
+      );
+      return false;
+    }
+  }
+  function savePlan(event: React.FormEvent) {
+    event.preventDefault();
+    if (!planName.trim() || !owner || !storageReady) return;
+    const plan: Plan = {
+      planId: editing ?? crypto.randomUUID(),
+      name: planName.trim(),
+      area,
+      plannedDate: selectedDate,
+      siteIds: selectedSites,
+      updatedAt: new Date().toISOString(),
+    };
+    if (
+      persist([plan, ...plans.filter((item) => item.planId !== plan.planId)])
+    ) {
+      setSaveDialog(false);
+      setEditing(null);
+      setMessage(`“${plan.name}” saved on this device.`);
+      setTab("plans");
+    }
+  }
+  function openPlan(plan: Plan, edit = false) {
+    setError("");
+    setMessage("");
+    if (plan.plannedDate < today && !edit) {
+      setPastPlan(plan);
+      setReportSite(plan.siteIds[0]);
+      setReportDate(plan.plannedDate);
+      setConfirmedDive(false);
+      return;
+    }
+    setArea(plan.area);
+    setSelectedDate(plan.plannedDate);
+    setFrom(plan.plannedDate);
+    setTo(addDays(plan.plannedDate, 4));
+    setDates(dateRange(plan.plannedDate, addDays(plan.plannedDate, 4)));
+    setSelectedSites(plan.siteIds);
+    setEditing(plan.planId);
+    setTab("planner");
+    setMessage(
+      "Plan loaded. Conditions are recalculated from the current sample dataset, not the saved forecast.",
+    );
+  }
+  function startReport() {
+    const site = reefSites.find((item) => item.id === reportSite);
+    if (
+      !site ||
+      !confirmedDive ||
+      !validDate(reportDate) ||
+      reportDate > today
+    ) {
+      setError(
+        "Confirm the site and a date no later than today before continuing.",
+      );
+      return;
+    }
+    try {
+      storeSelectedReefSite(site);
+    } catch {
+      setError(
+        "Cannot preserve the selected site. Please enable browser storage and retry.",
+      );
+      return;
+    }
+    const destination = `/report-a-reef?source=planning&plannedDate=${reportDate}`;
+    router.push(
+      status === "authenticated" && user?.role === "observer"
+        ? destination
+        : `/login?next=${encodeURIComponent(destination)}`,
+    );
+  }
+  function exitDemo() {
+    try {
+      sessionStorage.removeItem("reefcare-planner-demo");
+    } catch {}
+    setDemoOwner(null);
+    setPlans([]);
+    setStorageReady(false);
+    setMessage("Demo workspace closed.");
+  }
+
+  return (
+    <div className={styles.page}>
+      {previewMode && (
+        <>
+          <div className={styles.demoBar}>
+            <span>
+              <FlaskConical size={15} />
+              <strong>Interactive prototype</strong>
+              <span className={styles.demoDescription}>
+                Sample forecasts, seasonal guidance & reef activity
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowTools(!showTools)}
+              aria-expanded={showTools}
+            >
+              <SlidersHorizontal size={15} /> Demo settings
+            </button>
+          </div>
+          {showTools && (
+            <div className={styles.tools}>
+              <label>
+                Preview a service state
+                <select
+                  value={scenario}
+                  onChange={(event) =>
+                    setScenario(event.target.value as Scenario)
+                  }
+                >
+                  <option value="normal">All sample data available</option>
+                  <option value="provider">
+                    Forecast provider unavailable
+                  </option>
+                  <option value="ai">AI briefing unavailable</option>
+                  <option value="context">No public ReefCare context</option>
+                  <option value="position">
+                    First site position unavailable
+                  </option>
+                </select>
+              </label>
+              <p>
+                Demonstration controls only. No live data or AI is connected.
+                Saved plans use this browser’s storage, not the backend.
+              </p>
+              {demoOwner ? (
+                <button
+                  className={styles.secondary}
+                  type="button"
+                  onClick={exitDemo}
+                >
+                  Exit demo workspace
+                </button>
+              ) : (
+                status === "unauthenticated" && (
+                  <button
+                    className={styles.secondary}
+                    type="button"
+                    onClick={enterDemo}
+                  >
+                    Open demo workspace
+                  </button>
+                )
+              )}
+            </div>
+          )}
+        </>
+      )}
+      <div className={styles.container}>
+        <div className={styles.breadcrumb}>
+          <Link href="/explore">Explore reefs</Link>
+          <ChevronRight size={13} />
+          <span>Plan a dive</span>
+        </div>
+        <section className={styles.hero}>
+          <div className={styles.heroCopy}>
+            <span className={styles.eyebrow}>REEF-AWARE DIVE PLANNING</span>
+            <h1
+              tabIndex={-1}
+              style={{ outline: "none", outlineOffset: 0, boxShadow: "none" }}
+            >
+              A little planning.
+              <br />A deeper connection.
+            </h1>
+            <p>
+              Find your window, get to know the reef, and arrive with a little
+              more awareness.
+            </p>
+            <div className={styles.heroMeta}>
+              <span>
+                <Compass size={17} />3 Malaysian reef areas
+              </span>
+              <span>
+                <Waves size={18} />
+                Conditions with context
+              </span>
+            </div>
+          </div>
+          <div className={styles.heroImage}>
+            <Image
+              src="/images/reef-sites/surface/redang.jpg"
+              alt="Turquoise water, white sand and palm trees along the coast of Redang Island"
+              fill
+              priority
+              sizes="(max-width: 700px) 100vw, 45vw"
+            />
+            <span>
+              Discover with care.
+              <small>
+                Redang Island · <a href="https://commons.wikimedia.org/wiki/File:Redang_Sea_Beach.jpg" target="_blank" rel="noreferrer">Mukherjeesaikat</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA 3.0</a> · Cropped
+              </small>
+            </span>
+          </div>
+        </section>
+        <div className={styles.tabs} aria-label="Planning sections">
+          {(
+            [
+              { key: "planner", label: "Plan your dive", icon: Compass },
+              { key: "season", label: "Seasonal calendar", icon: CalendarDays },
+              { key: "plans", label: "My dive plans", icon: Bookmark },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={tab === item.key}
+              onClick={() => {
+                setTab(item.key);
+                setError("");
+              }}
+            >
+              <item.icon size={17} />
+              {item.label}
+              {item.key === "plans" && owner && plans.length > 0 && (
+                <span className={styles.count}>{plans.length}</span>
+              )}
+            </button>
+          ))}
+          <span className={styles.tabNote}>
+            {owner
+              ? owner.startsWith("demo-")
+                ? "Demo workspace · this device"
+                : "Your dive plans"
+              : "Explore freely. No account needed."}
+          </span>
+        </div>
+        {message && (
+          <div className={styles.success} role="status">
+            <Check size={17} />
+            {message}
+            <button
+              type="button"
+              aria-label="Dismiss notification"
+              onClick={() => setMessage("")}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+        {tab !== "plans" && (
+          <form className={styles.search} onSubmit={compare}>
+            <label>
+              <span>
+                <MapPin size={15} /> Reef area
+              </span>
+              <select
+                value={area}
+                onChange={(event) => switchArea(event.target.value as Area)}
+              >
+                {areas.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+            {tab === "planner" && (
+              <>
+                <label>
+                  <span>From</span>
+                  <input
+                    type="date"
+                    value={from}
+                    onChange={(event) => setFrom(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>To</span>
+                  <input
+                    type="date"
+                    value={to}
+                    onChange={(event) => setTo(event.target.value)}
+                    required
+                  />
+                </label>
+                <button className={styles.primary} type="submit">
+                  Compare dates <ArrowRight size={18} />
+                </button>
+              </>
+            )}
+            <p className={styles.searchHint}>
+              {tab === "planner"
+                ? `Sample forecast: ${dateLabel(today)} – ${dateLabel(addDays(today, 6))}. Dates outside this range show seasonal context only.`
+                : "Curated seasonal reference · separate from date-specific forecasts"}
+            </p>
+          </form>
+        )}
+        {tab === "season" && <Seasonality area={area} />}
+        {tab === "planner" && (
+          <>
+            <DateComparison
+              dates={dates}
+              area={area}
+              today={today}
+              scenario={scenario}
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+            />
+            <div className={styles.contentGrid}>
+              <section aria-labelledby="sites-heading">
+                <div className={styles.sectionHeading}>
+                  <div>
+                    <span className={styles.eyebrow}>
+                      02 / GET TO KNOW YOUR OPTIONS
+                    </span>
+                    <h2 id="sites-heading">A closer look at {area}</h2>
+                    <p>
+                      {dateLabel(selectedDate, true)} · {sites.length} supported
+                      dive sites
+                    </p>
+                  </div>
+                </div>
+                {(selectedDate < today || selectedDate > addDays(today, 6)) && (
+                  <div className={styles.seasonDetail}>
+                    <Info size={20} />
+                    <div>
+                      <strong>No current forecast for this date</strong>
+                      <p>
+                        Keep planning with site information and seasonal
+                        reference.
+                      </p>
+                      <button
+                        type="button"
+                        className={styles.textButton}
+                        onClick={() => setTab("season")}
+                      >
+                        View seasonal calendar <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <AreaOverview area={area} />
+                <div id="site-results" className={styles.siteGrid}>
+                  {sites.map((site, index) => (
+                    <SiteCard
+                      date={selectedDate}
+                      key={site.id}
+                      site={site}
+                      assessment={assess(
+                        selectedDate,
+                        area,
+                        today,
+                        scenario,
+                        index,
+                      )}
+                      selected={selectedSites.includes(site.id)}
+                      onToggle={() => toggleSite(site.id)}
+                      onBrief={() => setBriefSite(site.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+              <aside className={styles.sidebar}>
+                <div className={styles.planSummary}>
+                  <span className={styles.eyebrow}>YOUR DIVE PLAN</span>
+                  <h2>{area}</h2>
+                  <p>
+                    <CalendarDays size={16} />
+                    {dateLabel(selectedDate, true)}
+                  </p>
+                  <div className={styles.selectedList}>
+                    {selectedProfiles.length ? (
+                      selectedProfiles.map((site) => (
+                        <div key={site.id}>
+                          <span>
+                            <Check size={15} />
+                            {site.name}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${site.name}`}
+                            onClick={() => toggleSite(site.id)}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className={styles.emptySelection}>
+                        <Plus size={24} />
+                        <p>
+                          Add the sites you would like to explore using the + on
+                          each card.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.primary}
+                    onClick={requestSave}
+                    disabled={!selectedProfiles.length || !storageReady}
+                  >
+                    <Bookmark size={17} />
+                    {editing ? "Update plan" : "Save dive plan"}
+                  </button>
+                  <small>
+                    {owner
+                      ? "Saved on this device."
+                      : "Sign in to save your dive plan."}
+                  </small>
+                </div>
+                <div className={styles.careNote}>
+                  <div className={styles.careIcon}>
+                    <Waves size={24} />
+                  </div>
+                  <h3>A forecast is a starting point.</h3>
+                  <p>
+                    Conditions can change. Speak to a local dive operator about
+                    current conditions, access and your experience.
+                  </p>
+                  <Link href="/reef-threats">
+                    Dive with reef awareness <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </aside>
+            </div>
+          </>
+        )}
+        {tab === "plans" && (
+          <section className={styles.panel}>
+            <div className={styles.sectionHeading}>
+              <div>
+                <span className={styles.eyebrow}>
+                  KEEP YOUR NEXT ADVENTURE CLOSE
+                </span>
+                <h2>My dive plans</h2>
+                <p>
+                  Revisit your ideas. Refresh your conditions. Record what you
+                  observed.
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => {
+                  setEditing(null);
+                  setSelectedSites([]);
+                  setTab("planner");
+                }}
+              >
+                <Plus size={17} /> New plan
+              </button>
+            </div>
+            {!owner ? (
+              <div className={styles.emptyState}>
+                <Bookmark size={36} />
+                <h3>Your plans, ready when you are.</h3>
+                <p>
+                  Sign in as an Observer to save and revisit your dive plans.
+                </p>
+                <Link className={styles.primary} href={loginHref}>
+                  Log in
+                </Link>
+                {previewMode && status === "unauthenticated" && (
+                  <button
+                    className={styles.secondary}
+                    type="button"
+                    onClick={enterDemo}
+                  >
+                    Try demo workspace
+                  </button>
+                )}
+              </div>
+            ) : !storageReady ? (
+              <p role="status">Loading your plans…</p>
+            ) : !plans.length ? (
+              <div className={styles.emptyState}>
+                <Compass size={36} />
+                <h3>A new plan starts with a place.</h3>
+                <p>You haven’t saved any dive plans yet.</p>
+                <button
+                  className={styles.primary}
+                  type="button"
+                  onClick={() => setTab("planner")}
+                >
+                  Explore dive sites <ArrowRight size={17} />
+                </button>
+              </div>
+            ) : (
+              <div className={styles.savedList}>
+                {plans.map((plan) => (
+                  <article key={plan.planId} className={styles.savedPlan}>
+                    <div className={styles.savedIcon}>
+                      <CalendarDays size={26} />
+                    </div>
+                    <div>
+                      <span className={styles.smallTag}>
+                        {plan.plannedDate < today
+                          ? "Past plan"
+                          : "Upcoming plan"}
+                        {plan.planId === "example-past"
+                          ? " · Demo example"
+                          : ""}
+                      </span>
+                      <h3>{plan.name}</h3>
+                      <p>
+                        {plan.area} · {dateLabel(plan.plannedDate, true)} ·{" "}
+                        {plan.siteIds.length}{" "}
+                        {plan.siteIds.length === 1 ? "site" : "sites"}
+                      </p>
+                      <small>
+                        {plan.plannedDate < today
+                          ? "Past planning intent, not proof a dive occurred. No current forecast shown."
+                          : "Current sample conditions refresh when you reopen this plan."}
+                      </small>
+                    </div>
+                    <div className={styles.planActions}>
+                      <button
+                        type="button"
+                        className={styles.primary}
+                        onClick={() => openPlan(plan)}
+                      >
+                        {plan.plannedDate < today
+                          ? "View past plan"
+                          : "Open plan"}
+                        <ArrowRight size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.textButton}
+                        onClick={() => openPlan(plan, true)}
+                      >
+                        Edit plan
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.iconButton}
+                        aria-label={`Delete ${plan.name}`}
+                        onClick={() => setDeleting(plan)}
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            <p className={styles.source}>
+              Plans are saved only on this device. They are not synced across
+              devices.
+            </p>
+          </section>
+        )}
+        <div className={styles.bottomNote}>
+          <Info size={17} />
+          <p>
+            ReefCare helps you understand conditions and reef context. It does
+            not provide dive clearance or replace local operator and authority
+            guidance.
+          </p>
+        </div>
+      </div>
+      {activeBriefSite && (
+        <Modal
+          title="Reef-aware planning brief"
+          onClose={() => setBriefSite(null)}
+        >
+          <BriefPanel
+            key={`${activeBriefSite.id}-${selectedDate}-${scenario}`}
+            site={activeBriefSite}
+            date={selectedDate}
+            area={area}
+            today={today}
+            scenario={scenario}
+          />
+        </Modal>
+      )}
+      {authPrompt && (
+        <Modal title="Save your dive plan" onClose={() => setAuthPrompt(false)}>
+          <div className={styles.dialogContent}>
+            <Bookmark size={32} />
+            <h2>Keep this plan for later</h2>
+            <p>
+              Sign in or create an Observer account to continue. Your selected
+              site and date will travel with you.
+            </p>
+            <div className={styles.dialogActions}>
+              <Link className={styles.primary} href={loginHref}>
+                Log in
+              </Link>
+              <Link
+                className={styles.secondary}
+                href={`/register?next=${encodeURIComponent(returnPath)}`}
+              >
+                Create account
+              </Link>
+            </div>
+            {previewMode && (
+              <>
+                <hr />
+                <h3>Just exploring the prototype?</h3>
+                <p>
+                  Try a local demo workspace. It includes a past plan so you can
+                  preview the reporting handoff. No real account or report is
+                  created.
+                </p>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={enterDemo}
+                >
+                  Continue in demo workspace <ArrowRight size={17} />
+                </button>
+              </>
+            )}
+            {error && (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
+      {saveDialog && (
+        <Modal title="Name your dive plan" onClose={() => setSaveDialog(false)}>
+          <form className={styles.dialogContent} onSubmit={savePlan}>
+            <span className={styles.eyebrow}>SAVE YOUR INTENTION</span>
+            <h2>
+              {editing ? "Update your plan" : "Make it your next adventure"}
+            </h2>
+            <label>
+              Plan name
+              <input
+                value={planName}
+                onChange={(event) => setPlanName(event.target.value)}
+                required
+                maxLength={80}
+                autoFocus
+              />
+            </label>
+            <p>
+              {area} · {dateLabel(selectedDate, true)} · {selectedSites.length}{" "}
+              selected sites
+            </p>
+            <p>
+              We save your area, date and sites. Forecast values are refreshed
+              when you revisit.
+            </p>
+            {error && (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className={styles.primary}
+              type="submit"
+              disabled={!planName.trim()}
+            >
+              Save plan
+            </button>
+          </form>
+        </Modal>
+      )}
+      {deleting && (
+        <Modal title="Delete dive plan" onClose={() => setDeleting(null)}>
+          <div className={styles.dialogContent}>
+            <h2>Delete “{deleting.name}”?</h2>
+            <p>This removes the saved plan from this device.</p>
+            <div className={styles.dialogActions}>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => setDeleting(null)}
+              >
+                Keep plan
+              </button>
+              <button
+                type="button"
+                className={styles.danger}
+                onClick={() => {
+                  if (
+                    persist(
+                      plans.filter((plan) => plan.planId !== deleting.planId),
+                    )
+                  ) {
+                    setDeleting(null);
+                    setMessage("Plan deleted.");
+                  }
+                }}
+              >
+                Delete plan
+              </button>
+            </div>
+            {error && (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+        </Modal>
+      )}
+      {pastPlan && (
+        <Modal
+          title="Past dive plan and report handoff"
+          onClose={() => setPastPlan(null)}
+        >
+          <div className={styles.dialogContent}>
+            <span className={styles.eyebrow}>
+              PAST PLAN · NO CURRENT FORECAST
+            </span>
+            <h2>{pastPlan.name}</h2>
+            <p>
+              {dateLabel(pastPlan.plannedDate, true)} · {pastPlan.area}
+            </p>
+            <h3>Did you observe something?</h3>
+            <p>
+              Start the normal reef report with editable suggestions from your
+              plan. A saved plan does not prove that a dive took place.
+            </p>
+            <label>
+              Observed site
+              <select
+                value={reportSite}
+                onChange={(event) => setReportSite(event.target.value)}
+              >
+                {sitesIn(pastPlan.area).map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Actual observation date
+              <input
+                type="date"
+                max={today}
+                value={reportDate}
+                onChange={(event) => setReportDate(event.target.value)}
+              />
+            </label>
+            <label className={styles.checkbox}>
+              <input
+                type="checkbox"
+                checked={confirmedDive}
+                onChange={(event) => setConfirmedDive(event.target.checked)}
+              />
+              I have checked the suggested site and date against my actual
+              observation.
+            </label>
+            <p className={styles.source}>
+              Reporting requires a real Observer account. Your Dive Session,
+              location and evidence still need confirmation in the existing
+              report flow.
+            </p>
+            {error && (
+              <p role="alert" className={styles.error}>
+                {error}
+              </p>
+            )}
+            <button
+              className={styles.primary}
+              type="button"
+              disabled={!confirmedDive}
+              onClick={startReport}
+            >
+              Report an observation <ArrowRight size={17} />
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}

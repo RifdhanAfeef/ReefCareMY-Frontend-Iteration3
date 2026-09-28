@@ -81,7 +81,7 @@ function formatFileSize(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 }
 
-export function ObservationForm({ initialThreat, fromExplorer = false }: { initialThreat?: string; fromExplorer?: boolean }) {
+export function ObservationForm({ initialThreat, fromExplorer = false, plannedDate }: { initialThreat?: string; fromExplorer?: boolean; plannedDate?: string }) {
   const router = useRouter();
   const { reportDraft, isAccountDraftRestored, updateReportDraft, saveReportDraft, resetReportDraft } = useMockAppState();
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
@@ -418,10 +418,17 @@ export function ObservationForm({ initialThreat, fromExplorer = false }: { initi
         <li data-status="upcoming"><span aria-hidden="true">2</span><strong>Dive &amp; location</strong></li>
         <li data-status="upcoming"><span aria-hidden="true">3</span><strong>Review &amp; submit</strong></li>
       </ol>
+      {plannedDate && /^\d{4}-\d{2}-\d{2}$/.test(plannedDate) && !Number.isNaN(Date.parse(plannedDate)) && (
+        <aside className={styles.selectedSiteNotice} aria-label="Dive plan context">
+          <div><strong>Suggested by your dive plan</strong><span>{plannedDate} · Confirm your actual observation date below.</span></div>
+          <button type="button" onClick={() => updateReportDraft({ observationDate: plannedDate })}>Use suggested date</button>
+          <p>Your plan is not evidence of a dive. Confirm your Dive Session and site in the location step.</p>
+        </aside>
+      )}
       {selectedReefSite && (
         <aside className={styles.selectedSiteNotice} aria-label="Selected reef site carried from Reef Explorer">
           <div>
-            <strong>Selected from Reef Explorer</strong>
+            <strong>{plannedDate ? "Selected from your dive plan" : "Selected from Reef Explorer"}</strong>
             <span>{selectedReefSite.name} · {selectedReefSite.publicAreaLabel}</span>
           </div>
           <p>You can confirm or change this named site in the location step.</p>

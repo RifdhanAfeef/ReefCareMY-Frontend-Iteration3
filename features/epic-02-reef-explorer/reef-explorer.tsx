@@ -90,6 +90,7 @@ function BasicSiteDetail({
         Explore this recognised {site.publicAreaLabel} dive site or use it as the starting point for a reef-threat report.
       </p>
       <div className={styles.siteActions}>
+        <Link className={styles.primaryButton} href={`/plan-a-dive?site=${site.id}`}>Plan a dive</Link>
         <button className={styles.primaryButton} type="button" onClick={onReport}>Report a Reef Threat</button>
         <a className={styles.secondaryButton} href="#responsible-observation">View guidance</a>
       </div>
