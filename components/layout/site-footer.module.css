@@ -1,0 +1,26 @@
+.footer {
+  min-height: var(--footer-height);
+  display: flex;
+  align-items: center;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.inner {
+  width: min(calc(100% - 112px), var(--content-width));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .inner {
+    width: min(calc(100% - 32px), var(--content-width));
+    padding: 20px 0;
+    justify-content: center;
+  }
+}

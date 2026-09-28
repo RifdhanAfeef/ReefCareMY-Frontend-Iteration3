@@ -1,0 +1,111 @@
+.card {
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(20, 54, 66, 0.07);
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.header p {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 4px 0 6px;
+  color: var(--color-ink);
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.header span,
+.empty {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 26px;
+}
+
+.step:last-child {
+  padding-bottom: 0;
+}
+
+.step:not(:last-child)::after {
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+  background: #c7e3e1;
+  content: "";
+}
+
+.marker {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.current .marker {
+  background: var(--color-primary);
+  box-shadow: 0 0 0 4px #dcefed;
+}
+
+.label {
+  margin: 0;
+  color: var(--color-ink);
+  font-weight: 750;
+}
+
+.current .label {
+  color: var(--color-primary-hover);
+}
+
+.date {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.empty {
+  margin: 0;
+  padding: 18px;
+  border-radius: 10px;
+  background: #f5faf9;
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 20px;
+  }
+}
