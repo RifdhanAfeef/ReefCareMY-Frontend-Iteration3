@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowRight,
   Bookmark,
@@ -22,10 +22,10 @@ import {
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { reefSites } from "@/features/epic-02-reef-explorer/reef-sites";
 import { storeSelectedReefSite } from "@/features/epic-02-reef-explorer/selected-site-storage";
+import { userFacingError } from "@/lib/api/user-facing-error";
 import {
   addDays,
   areas,
-  assess,
   dateLabel,
   dateRange,
   localToday,
@@ -35,17 +35,25 @@ import {
   validDate,
   writePlans,
   type Area,
+  type Assessment,
   type Plan,
   type Scenario,
 } from "./planning-data";
 import {
   BriefPanel,
   DateComparison,
+  LoadError,
   Seasonality,
   AreaOverview,
   SiteCard,
 } from "./planning-panels";
+import {
+  FORECAST_HORIZON_DAYS,
+  getPlanningSource,
+  unavailableAssessment,
+} from "./planning-source";
 import styles from "./planning.module.css";
+import { useAsyncData } from "./use-async-data";
 
 function Modal({
   title,
@@ -136,6 +144,7 @@ export function DivePlanner() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [storageReady, setStorageReady] = useState(false);
+  const [saving, setSaving] = useState(false);
   const owner =
     status === "authenticated" && user?.role === "observer"
       ? `user-${user.id}`
@@ -143,6 +152,31 @@ export function DivePlanner() {
         ? demoOwner
         : null;
   const sites = sitesIn(area);
+  const source = getPlanningSource(previewMode);
+  const sample = source.mode === "sample";
+  const planningContext = useMemo(
+    () => ({ today, scenario }),
+    [today, scenario],
+  );
+  const { state: summaries, retry: retrySummaries } = useAsyncData(
+    () => source.dateSummaries(area, dates, planningContext),
+    [source, area, dates, planningContext],
+  );
+  const { state: siteState, retry: retrySites } = useAsyncData(
+    () => source.siteAssessments(area, selectedDate, planningContext),
+    [source, area, selectedDate, planningContext],
+  );
+  function assessmentFor(siteId: string): Assessment | null {
+    if (siteState.status === "loading") return null;
+    if (siteState.status === "error")
+      return unavailableAssessment("Conditions could not be loaded for this site.");
+    return (
+      siteState.data[siteId] ??
+      unavailableAssessment("No assessment is available for this site.")
+    );
+  }
+  const siteAssessments =
+    siteState.status === "ready" ? Object.values(siteState.data) : [];
   const activeBriefSite = sites.find((site) => site.id === briefSite);
   const selectedProfiles = sites.filter((site) =>
     selectedSites.includes(site.id),
@@ -162,11 +196,30 @@ export function DivePlanner() {
     queueMicrotask(() => setDemoOwner(storedDemo));
   }, [previewMode]);
   useEffect(() => {
-    queueMicrotask(() => {
-      setPlans(owner ? readPlans(owner) : []);
+    let current = true;
+    queueMicrotask(async () => {
+      if (!current) return;
+      if (!owner) {
+        setPlans([]);
+        setStorageReady(true);
+        return;
+      }
+      setStorageReady(false);
+      try {
+        const loaded = await source.listPlans(owner);
+        if (!current) return;
+        setPlans(loaded);
+      } catch (loadError) {
+        if (!current) return;
+        setPlans([]);
+        setError(userFacingError(loadError, "Your dive plans could not be loaded."));
+      }
       setStorageReady(true);
     });
-  }, [owner]);
+    return () => {
+      current = false;
+    };
+  }, [owner, source]);
 
   function switchArea(value: Area) {
     setArea(value);
@@ -243,22 +296,9 @@ export function DivePlanner() {
       );
     }
   }
-  function persist(next: Plan[]): boolean {
-    if (!owner) return false;
-    try {
-      writePlans(owner, next);
-      setPlans(next);
-      return true;
-    } catch {
-      setError(
-        "Your plan could not be stored on this device. Please check browser storage and try again.",
-      );
-      return false;
-    }
-  }
-  function savePlan(event: React.FormEvent) {
+  async function savePlan(event: React.FormEvent) {
     event.preventDefault();
-    if (!planName.trim() || !owner || !storageReady) return;
+    if (!planName.trim() || !owner || !storageReady || saving) return;
     const plan: Plan = {
       planId: editing ?? crypto.randomUUID(),
       name: planName.trim(),
@@ -267,13 +307,57 @@ export function DivePlanner() {
       siteIds: selectedSites,
       updatedAt: new Date().toISOString(),
     };
-    if (
-      persist([plan, ...plans.filter((item) => item.planId !== plan.planId)])
-    ) {
+    setSaving(true);
+    try {
+      const saved = await source.savePlan(owner, plan, editing !== null);
+      setPlans((current) => [
+        saved,
+        ...current.filter(
+          (item) => item.planId !== plan.planId && item.planId !== saved.planId,
+        ),
+      ]);
       setSaveDialog(false);
       setEditing(null);
-      setMessage(`“${plan.name}” saved on this device.`);
+      setError("");
+      setMessage(
+        `“${saved.name}” saved ${sample ? "on this device" : "to your account"}.`,
+      );
       setTab("plans");
+    } catch (saveError) {
+      setError(
+        userFacingError(
+          saveError,
+          sample
+            ? "Your plan could not be stored on this device. Please check browser storage and try again."
+            : "Your plan could not be saved. Please try again.",
+        ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function confirmDelete() {
+    if (!deleting || !owner || saving) return;
+    setSaving(true);
+    try {
+      await source.deletePlan(owner, deleting.planId);
+      setPlans((current) =>
+        current.filter((plan) => plan.planId !== deleting.planId),
+      );
+      setDeleting(null);
+      setError("");
+      setMessage("Plan deleted.");
+    } catch (deleteError) {
+      setError(
+        userFacingError(
+          deleteError,
+          sample
+            ? "Your plan could not be removed from this device. Please try again."
+            : "Your plan could not be deleted. Please try again.",
+        ),
+      );
+    } finally {
+      setSaving(false);
     }
   }
   function openPlan(plan: Plan, edit = false) {
@@ -295,7 +379,9 @@ export function DivePlanner() {
     setEditing(plan.planId);
     setTab("planner");
     setMessage(
-      "Plan loaded. Conditions are recalculated from the current sample dataset, not the saved forecast.",
+      sample
+        ? "Plan loaded. Conditions are recalculated from the current sample dataset, not the saved forecast."
+        : "Plan loaded. Conditions are refreshed from the latest forecast, not the saved one.",
     );
   }
   function startReport() {
@@ -542,21 +628,25 @@ export function DivePlanner() {
             )}
             <p className={styles.searchHint}>
               {tab === "planner"
-                ? `Sample forecast: ${dateLabel(today)} – ${dateLabel(addDays(today, 6))}. Dates outside this range show seasonal context only.`
+                ? `${sample ? "Sample forecast" : "Forecast"}: ${dateLabel(today)} – ${dateLabel(addDays(today, FORECAST_HORIZON_DAYS))}. Dates outside this range show seasonal context only.`
                 : "Curated seasonal reference · separate from date-specific forecasts"}
             </p>
           </form>
         )}
-        {tab === "season" && <Seasonality area={area} />}
+        {tab === "season" && (
+          <Seasonality area={area} source={source} today={today} />
+        )}
         {tab === "planner" && (
           <>
             <DateComparison
               dates={dates}
-              area={area}
-              today={today}
-              scenario={scenario}
+              summaries={summaries}
+              onRetry={retrySummaries}
+              siteAssessments={siteAssessments}
+              total={sites.length}
               selected={selectedDate}
               onSelect={setSelectedDate}
+              mode={source.mode}
             />
             <div className={styles.contentGrid}>
               <section aria-labelledby="sites-heading">
@@ -572,7 +662,8 @@ export function DivePlanner() {
                     </p>
                   </div>
                 </div>
-                {(selectedDate < today || selectedDate > addDays(today, 6)) && (
+                {(selectedDate < today ||
+                  selectedDate > addDays(today, FORECAST_HORIZON_DAYS)) && (
                   <div className={styles.seasonDetail}>
                     <Info size={20} />
                     <div>
@@ -592,19 +683,21 @@ export function DivePlanner() {
                   </div>
                 )}
                 <AreaOverview area={area} />
+                {siteState.status === "error" && (
+                  <LoadError
+                    error={siteState.error}
+                    fallback="Site conditions could not be loaded."
+                    onRetry={retrySites}
+                  />
+                )}
                 <div id="site-results" className={styles.siteGrid}>
-                  {sites.map((site, index) => (
+                  {sites.map((site) => (
                     <SiteCard
                       date={selectedDate}
                       key={site.id}
                       site={site}
-                      assessment={assess(
-                        selectedDate,
-                        area,
-                        today,
-                        scenario,
-                        index,
-                      )}
+                      mode={source.mode}
+                      assessment={assessmentFor(site.id)}
                       selected={selectedSites.includes(site.id)}
                       onToggle={() => toggleSite(site.id)}
                       onBrief={() => setBriefSite(site.id)}
@@ -658,7 +751,9 @@ export function DivePlanner() {
                   </button>
                   <small>
                     {owner
-                      ? "Saved on this device."
+                      ? sample
+                        ? "Saved on this device."
+                        : "Saved to your account."
                       : "Sign in to save your dive plan."}
                   </small>
                 </div>
@@ -764,7 +859,9 @@ export function DivePlanner() {
                       <small>
                         {plan.plannedDate < today
                           ? "Past planning intent, not proof a dive occurred. No current forecast shown."
-                          : "Current sample conditions refresh when you reopen this plan."}
+                          : sample
+                            ? "Current sample conditions refresh when you reopen this plan."
+                            : "Current conditions refresh when you reopen this plan."}
                       </small>
                     </div>
                     <div className={styles.planActions}>
@@ -799,8 +896,9 @@ export function DivePlanner() {
               </div>
             )}
             <p className={styles.source}>
-              Plans are saved only on this device. They are not synced across
-              devices.
+              {sample
+                ? "Plans are saved only on this device. They are not synced across devices."
+                : "Your plans are saved to your ReefCare account."}
             </p>
           </section>
         )}
@@ -822,9 +920,9 @@ export function DivePlanner() {
             key={`${activeBriefSite.id}-${selectedDate}-${scenario}`}
             site={activeBriefSite}
             date={selectedDate}
-            area={area}
-            today={today}
-            scenario={scenario}
+            assessment={assessmentFor(activeBriefSite.id)}
+            source={source}
+            context={planningContext}
           />
         </Modal>
       )}
@@ -907,9 +1005,9 @@ export function DivePlanner() {
             <button
               className={styles.primary}
               type="submit"
-              disabled={!planName.trim()}
+              disabled={!planName.trim() || saving}
             >
-              Save plan
+              {saving ? "Saving…" : "Save plan"}
             </button>
           </form>
         </Modal>
@@ -918,7 +1016,11 @@ export function DivePlanner() {
         <Modal title="Delete dive plan" onClose={() => setDeleting(null)}>
           <div className={styles.dialogContent}>
             <h2>Delete “{deleting.name}”?</h2>
-            <p>This removes the saved plan from this device.</p>
+            <p>
+              {sample
+                ? "This removes the saved plan from this device."
+                : "This permanently removes the saved plan from your account."}
+            </p>
             <div className={styles.dialogActions}>
               <button
                 type="button"
@@ -930,18 +1032,10 @@ export function DivePlanner() {
               <button
                 type="button"
                 className={styles.danger}
-                onClick={() => {
-                  if (
-                    persist(
-                      plans.filter((plan) => plan.planId !== deleting.planId),
-                    )
-                  ) {
-                    setDeleting(null);
-                    setMessage("Plan deleted.");
-                  }
-                }}
+                onClick={confirmDelete}
+                disabled={saving}
               >
-                Delete plan
+                {saving ? "Deleting…" : "Delete plan"}
               </button>
             </div>
             {error && (

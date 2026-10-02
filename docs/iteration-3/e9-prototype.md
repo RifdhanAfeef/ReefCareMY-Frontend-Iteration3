@@ -51,6 +51,16 @@ The supplied Backend Design & Integration Standard v0.1 marks these contracts as
 
 The brief's factual inputs must ultimately be assembled by the backend, not supplied as client-authoritative facts. Production plans need server-enforced owner access. Agree area codes, complete response shapes, forecast rules/provider/horizon/cache policy and account plan persistence with the backend owner. Existing numeric `backendDiveSiteId` values are retained through the shared site catalogue.
 
+## Connecting to the backend
+
+Set `NEXT_PUBLIC_E9_DATA_SOURCE=api` (see `.env.example`) to replace the sample adapters with the routes above. The default is `sample`, and `/plan-a-dive?preview=1` always stays on sample data so the demo states keep working.
+
+- `lib/api/planningApi.ts` holds the typed calls for each route. The response shapes are the frontend's expectation of the proposed contract; adjust the DTOs there once the backend owner agrees them.
+- `features/epic-09-planning/planning-source.ts` is the single place that chooses between sample and API data. It maps backend dive site ids to the shared site catalogue (`backendDiveSiteId`) and area codes (`perhentian`, `redang`, `tioman`) to the UI areas.
+- Public reef context uses the existing `GET /api/v1/public/dive-sites/{id}/activity` route, which already exists in the backend, instead of the proposed `/context` route.
+- In API mode, saved plans are read and written through `/api/v1/plans` and require an Observer login; the browser-storage workspace is not used.
+- Loading and failure states are shown for the date comparison, site conditions, seasonal calendar and reef context, each with a retry action.
+
 ## Verification
 
 `npm run check` runs lint, TypeScript and tests. The planning tests cover deterministic threshold boundaries, Malaysia dates, forecast horizons, missing positions/provider failure, local workspace separation and safe authentication returns. Browser checks cover saving, reopening, past-plan handoff, brief generation, failure states, seasonal reference and mobile overflow.
