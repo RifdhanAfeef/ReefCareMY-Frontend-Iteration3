@@ -123,6 +123,18 @@ export type PublicSiteActivityResponse = {
   message: string;
 };
 
+export type PublicReportHandoffResponse = {
+  selectedDiveSiteId: number;
+  selectedDiveSiteName: string;
+  publicAreaLabel: string;
+  centreLatitude: number | null;
+  centreLongitude: number | null;
+  defaultUncertaintyMetres: number | null;
+  requiresAuthentication: boolean;
+  reportingPath: string;
+  message: string;
+};
+
 export type ReportPreciseLocation = {
   latitude: number | null;
   longitude: number | null;

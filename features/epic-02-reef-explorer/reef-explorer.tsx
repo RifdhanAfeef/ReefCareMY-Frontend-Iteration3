@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { threatCategories } from "@/features/epic-02-reporting/threat-data";
-import { getPublicSiteActivity } from "@/lib/api/publicApi";
+import { getPublicReportHandoff, getPublicSiteActivity } from "@/lib/api/publicApi";
 import type { PublicActivityItem } from "@/lib/api/types";
 import { diveSiteCatalog } from "./dive-site-catalog";
 import { reefIslands, reefSites } from "./reef-sites";
@@ -30,6 +30,24 @@ const threatImages = {
   physical_reef_damage: "/images/threats/physical-reef-damage-photo.jpg",
   unsure: "/images/reef-photo-2.jpg",
 } as const;
+
+function planningHref(site: ReefSiteReference) {
+  const query = new URLSearchParams({
+    area: site.island,
+    site: site.id,
+  });
+  return `/plan-a-dive?${query.toString()}`;
+}
+
+function reportPath(path: string) {
+  const safePath = path.startsWith("/") && !path.startsWith("//")
+    ? path
+    : "/report-a-reef";
+  const [pathname, existingQuery = ""] = safePath.split("?", 2);
+  const query = new URLSearchParams(existingQuery);
+  query.set("source", "explore");
+  return `${pathname}?${query.toString()}`;
+}
 
 function SiteList({
   sites,
@@ -74,10 +92,12 @@ function BasicSiteDetail({
   site,
   onBack,
   onReport,
+  reportPending,
 }: {
   site: ReefSiteReference;
   onBack: () => void;
   onReport: () => void;
+  reportPending: boolean;
 }) {
   return (
     <article className={styles.siteDetail} aria-labelledby="selected-site-heading">
@@ -90,8 +110,12 @@ function BasicSiteDetail({
         Explore this recognised {site.publicAreaLabel} dive site or use it as the starting point for a reef-threat report.
       </p>
       <div className={styles.siteActions}>
-        <Link className={styles.primaryButton} href={`/plan-a-dive?site=${site.id}`}>Plan a dive</Link>
-        <button className={styles.primaryButton} type="button" onClick={onReport}>Report a Reef Threat</button>
+        <p className={styles.planningUnavailable} role="status">
+          Dive planning is not available for this site yet. You can still review the public site information or start a report.
+        </p>
+        <button className={styles.primaryButton} type="button" onClick={onReport} disabled={reportPending}>
+          {reportPending ? "Checking selected site…" : "Report a Reef Threat"}
+        </button>
         <a className={styles.secondaryButton} href="#responsible-observation">View guidance</a>
       </div>
     </article>
@@ -230,11 +254,13 @@ function SiteDetail({
   onBack,
   onReport,
   onEnlargeImage,
+  reportPending,
 }: {
   site: ReefSite;
   onBack: () => void;
   onReport: () => void;
   onEnlargeImage: (imageIndex: number) => void;
+  reportPending: boolean;
 }) {
   return (
     <article className={styles.siteDetail} aria-labelledby="selected-site-heading">
@@ -284,8 +310,9 @@ function SiteDetail({
       <ActivityPanel key={site.backendDiveSiteId} site={site} />
 
       <div className={styles.siteActions}>
-        <button className={styles.primaryButton} type="button" onClick={onReport}>
-          Report a Reef Threat
+        <Link className={styles.primaryButton} href={planningHref(site)}>Plan a dive</Link>
+        <button className={styles.primaryButton} type="button" onClick={onReport} disabled={reportPending}>
+          {reportPending ? "Checking selected site…" : "Report a Reef Threat"}
         </button>
         <a className={styles.secondaryButton} href="#responsible-observation">View guidance</a>
       </div>
@@ -320,9 +347,16 @@ function ImageDialog({ site, imageIndex, onClose }: { site: ReefSite; imageIndex
   );
 }
 
-function AuthenticationDialog({ site, onClose }: { site: ReefSiteReference; onClose: () => void }) {
-  const next = encodeURIComponent("/report-a-reef?source=explore");
-  const rememberSite = () => storeSelectedReefSite(site);
+function AuthenticationDialog({
+  site,
+  reportingPath,
+  onClose,
+}: {
+  site: ReefSiteReference;
+  reportingPath: string;
+  onClose: () => void;
+}) {
+  const next = encodeURIComponent(reportingPath);
 
   return (
     <div className={styles.dialogBackdrop} role="presentation" onMouseDown={onClose}>
@@ -344,8 +378,8 @@ function AuthenticationDialog({ site, onClose }: { site: ReefSiteReference; onCl
           <strong>Your selected site will be saved</strong>
           <span>You can confirm or change it during the reporting workflow.</span>
         </div>
-        <Link className={styles.primaryButton} href={`/login?next=${next}`} onClick={rememberSite}>Log in</Link>
-        <Link className={styles.secondaryButton} href={`/register?next=${next}`} onClick={rememberSite}>Create Observer account</Link>
+        <Link className={styles.primaryButton} href={`/login?next=${next}`}>Log in</Link>
+        <Link className={styles.secondaryButton} href={`/register?next=${next}`}>Create Observer account</Link>
       </section>
     </div>
   );
@@ -357,6 +391,8 @@ export function ReefExplorer() {
   const [search, setSearch] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [showAuthentication, setShowAuthentication] = useState(false);
+  const [validatedReportingPath, setValidatedReportingPath] = useState("/report-a-reef?source=explore");
+  const [reportHandoffState, setReportHandoffState] = useState<"idle" | "loading" | "error">("idle");
   const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null);
   const guidanceCategories = useMemo(
     () => threatCategories.filter((category) => category.guidanceAvailable),
@@ -379,15 +415,30 @@ export function ReefExplorer() {
     );
   }, [search]);
 
-  function startReport() {
+  async function startReport() {
     if (!selectedSite) return;
-    storeSelectedReefSite(selectedSite);
-    if (status === "authenticated" && user?.role === "observer") {
-      router.push("/report-a-reef?source=explore");
-      return;
+    if (status === "authenticated" && user?.role !== "observer") return;
+    setReportHandoffState("loading");
+    try {
+      const handoff = await getPublicReportHandoff(selectedSite.backendDiveSiteId);
+      const canonicalSite: ReefSiteReference = {
+        ...selectedSite,
+        backendDiveSiteId: handoff.selectedDiveSiteId,
+        name: handoff.selectedDiveSiteName,
+        publicAreaLabel: handoff.publicAreaLabel,
+      };
+      const path = reportPath(handoff.reportingPath);
+      storeSelectedReefSite(canonicalSite);
+      setValidatedReportingPath(path);
+      setReportHandoffState("idle");
+      if (status === "authenticated" && user?.role === "observer") {
+        router.push(path);
+        return;
+      }
+      setShowAuthentication(true);
+    } catch {
+      setReportHandoffState("error");
     }
-    if (status === "authenticated") return;
-    setShowAuthentication(true);
   }
 
   return (
@@ -409,9 +460,15 @@ export function ReefExplorer() {
                 onBack={() => setSelectedSiteId(null)}
                 onReport={startReport}
                 onEnlargeImage={setEnlargedImageIndex}
+                reportPending={reportHandoffState === "loading"}
               />
             ) : (
-              <BasicSiteDetail site={selectedSite} onBack={() => setSelectedSiteId(null)} onReport={startReport} />
+              <BasicSiteDetail
+                site={selectedSite}
+                onBack={() => setSelectedSiteId(null)}
+                onReport={startReport}
+                reportPending={reportHandoffState === "loading"}
+              />
             )
           ) : (
             <>
@@ -440,6 +497,15 @@ export function ReefExplorer() {
 
         <ReefExplorerMap sites={mappedProfiles} selectedSiteId={selectedSiteId} onSelectSite={setSelectedSiteId} />
       </section>
+
+      {reportHandoffState === "loading" && (
+        <p className={styles.handoffNotice} role="status">Checking the selected dive site…</p>
+      )}
+      {reportHandoffState === "error" && (
+        <p className={styles.handoffError} role="alert">
+          We could not start the report from this site. Please check your connection and try again.
+        </p>
+      )}
 
       <section className={styles.guidance} id="responsible-observation" aria-labelledby="guidance-heading">
         <div className={styles.guidanceHeading}>
@@ -496,7 +562,11 @@ export function ReefExplorer() {
         <p className={styles.roleNotice} role="status">Reporting is available to Registered Observer accounts.</p>
       )}
       {showAuthentication && selectedSite && (
-        <AuthenticationDialog site={selectedSite} onClose={() => setShowAuthentication(false)} />
+        <AuthenticationDialog
+          site={selectedSite}
+          reportingPath={validatedReportingPath}
+          onClose={() => setShowAuthentication(false)}
+        />
       )}
       {selectedProfile && enlargedImageIndex !== null && (
         <ImageDialog site={selectedProfile} imageIndex={enlargedImageIndex} onClose={() => setEnlargedImageIndex(null)} />
