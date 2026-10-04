@@ -31,6 +31,20 @@ export type ReportAISuggestion = {
   observerValue: string | null;
 };
 
+export type VisualRecognitionStatus = "recognized" | "unsure" | "unavailable";
+export type VisualRecognitionResolution = "unresolved" | "accepted" | "kept" | "changed" | "not_required";
+
+export type ReportVisualRecognition = {
+  photoId: string;
+  photoName: string;
+  status: VisualRecognitionStatus;
+  suggestedThreatCode: ThreatCategoryCode | null;
+  suggestedThreatLabel: string | null;
+  confidence: number | null;
+  warning: string | null;
+  resolution: VisualRecognitionResolution;
+};
+
 export type ReportDraft = {
   threatCategoryCode: ThreatCategoryCode | "";
   threatCategoryId: number | null;
@@ -40,5 +54,6 @@ export type ReportDraft = {
   description: string;
   photos: ReportPhotoMetadata[];
   aiSuggestions: ReportAISuggestion[];
+  visualRecognition: ReportVisualRecognition | null;
   lastSavedAt: string | null;
 };

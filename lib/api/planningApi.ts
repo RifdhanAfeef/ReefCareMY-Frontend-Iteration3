@@ -1,6 +1,8 @@
 import { apiRequest } from "./client";
 
-// Epic 9 contracts, frozen with the backend owner on 4 Oct 2026 (see docs/iteration-3/e9-api-contract.md). Keep any reshaping in this file so the UI never sees raw responses.
+// Epic 9 public planning contracts, frozen with the backend owner on 4 Oct 2026
+// (see docs/iteration-3/e9-api-contract.md). Saved-plan CRUD lives in plansApi.ts.
+// Keep any reshaping out of the UI: planning-source.ts maps these responses to view shapes.
 
 export type PlanningBand =
   | "more_favourable"
@@ -54,9 +56,11 @@ export type AreaDatesDto = {
 
 export type SiteAssessmentDto = {
   diveSiteId: number;
+  siteName?: string;
   band: PlanningBand;
   waveHeightMaxM: number | null;
   windSpeedMaxKmh: number | null;
+  precipitationProbabilityMaxPct?: number | null;
   reason: string;
 };
 
@@ -75,22 +79,6 @@ export type PlanningBriefDto = {
   status: "generated" | "unavailable";
   text: string | null;
   generatedAt: string | null;
-};
-
-export type PlanDto = {
-  planId: number;
-  name: string;
-  areaCode: string;
-  plannedDate: string;
-  diveSiteIds: number[];
-  updatedAt: string;
-};
-
-export type PlanWrite = {
-  name: string;
-  areaCode: string;
-  plannedDate: string;
-  diveSiteIds: number[];
 };
 
 const PLANNING_BASE = "/api/v1/public/planning/areas";
@@ -139,29 +127,4 @@ export function createPlanningBrief(
     auth: false,
     signal,
   });
-}
-
-export async function listPlans(signal?: AbortSignal): Promise<PlanDto[]> {
-  const result = await apiRequest<{ items: PlanDto[] }>({ path: "/api/v1/plans", signal });
-  return result.items;
-}
-
-export function getPlan(planId: number, signal?: AbortSignal): Promise<PlanDto> {
-  return apiRequest<PlanDto>({ path: `/api/v1/plans/${planId}`, signal });
-}
-
-export function createPlan(payload: PlanWrite): Promise<PlanDto> {
-  return apiRequest<PlanDto>({ path: "/api/v1/plans", method: "POST", body: payload });
-}
-
-export function updatePlan(planId: number, payload: PlanWrite): Promise<PlanDto> {
-  return apiRequest<PlanDto>({
-    path: `/api/v1/plans/${planId}`,
-    method: "PATCH",
-    body: payload,
-  });
-}
-
-export function deletePlan(planId: number): Promise<void> {
-  return apiRequest<void>({ path: `/api/v1/plans/${planId}`, method: "DELETE" });
 }

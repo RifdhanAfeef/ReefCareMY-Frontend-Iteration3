@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as planningApi from "@/lib/api/planningApi";
+import * as plansApi from "@/lib/api/plansApi";
 import { reefSites } from "@/features/epic-02-reef-explorer/reef-sites";
 import { sitesIn } from "../planning-data";
 
 vi.mock("@/lib/api/planningApi");
+vi.mock("@/lib/api/plansApi");
 vi.mock("@/lib/api/publicApi");
 
 const today = "2026-10-03";
@@ -95,17 +97,18 @@ describe("API source", () => {
   it("translates plans between front-end site ids and backend dive site ids", async () => {
     const source = await loadApiSource();
     const [site] = sitesIn("Perhentian");
-    vi.mocked(planningApi.createPlan).mockImplementation(async (payload) => ({
+    vi.mocked(plansApi.createPlan).mockImplementation(async (body) => ({
       planId: 1,
-      ...payload,
+      ...body,
+      createdAt: "2026-10-03T00:00:00Z",
       updatedAt: "2026-10-03T00:00:00Z",
     }));
     const saved = await source.savePlan(
       "user-1",
-      { planId: "local", name: "Trip", area: "Perhentian", plannedDate: today, siteIds: [site.id], updatedAt: "" },
+      { planId: "local", name: " Trip ", area: "Perhentian", plannedDate: today, siteIds: [site.id], updatedAt: "" },
       false,
     );
-    expect(planningApi.createPlan).toHaveBeenCalledWith({
+    expect(plansApi.createPlan).toHaveBeenCalledWith({
       name: "Trip",
       areaCode: "perhentian",
       plannedDate: today,
@@ -114,15 +117,32 @@ describe("API source", () => {
     expect(saved).toMatchObject({ planId: "1", area: "Perhentian", siteIds: [site.id] });
   });
 
-  it("drops saved plans that reference unknown areas or sites", async () => {
+  it("keeps valid saved plans when another plan references an unknown area or site", async () => {
     const source = await loadApiSource();
-    vi.mocked(planningApi.listPlans).mockResolvedValue([
-      { planId: 1, name: "Unknown area", areaCode: "atlantis", plannedDate: today, diveSiteIds: [1], updatedAt: "" },
-      { planId: 2, name: "Unknown site", areaCode: "redang", plannedDate: today, diveSiteIds: [9999], updatedAt: "" },
-      { planId: 3, name: "Good", areaCode: "redang", plannedDate: today, diveSiteIds: [reefSites.find((s) => s.island === "Redang")!.backendDiveSiteId], updatedAt: "" },
-    ]);
+    const stamp = { createdAt: "", updatedAt: "" };
+    vi.mocked(plansApi.listPlans).mockResolvedValue({
+      items: [
+        { planId: 1, name: "Unknown area", areaCode: "atlantis", plannedDate: today, diveSiteIds: [1], ...stamp },
+        { planId: 2, name: "Unknown site", areaCode: "redang", plannedDate: today, diveSiteIds: [9999], ...stamp },
+        { planId: 3, name: "Good", areaCode: "redang", plannedDate: today, diveSiteIds: [reefSites.find((s) => s.island === "Redang")!.backendDiveSiteId], ...stamp },
+      ],
+    });
     const plans = await source.listPlans("user-1");
     expect(plans.map((plan) => plan.planId)).toEqual(["3"]);
+  });
+
+  it("reloads the saved intent from the server when a plan is reopened", async () => {
+    const source = await loadApiSource();
+    const redang = reefSites.find((s) => s.island === "Redang")!;
+    vi.mocked(plansApi.getPlan).mockResolvedValue({
+      planId: 12, name: "Renamed elsewhere", areaCode: "redang", plannedDate: today,
+      diveSiteIds: [redang.backendDiveSiteId], createdAt: "", updatedAt: "",
+    });
+    const loaded = await source.loadPlan("user-1", {
+      planId: "12", name: "Old name", area: "Redang", plannedDate: today, siteIds: [], updatedAt: "",
+    });
+    expect(plansApi.getPlan).toHaveBeenCalledWith(12);
+    expect(loaded).toMatchObject({ planId: "12", name: "Renamed elsewhere", siteIds: [redang.id] });
   });
 
   it("reports an unavailable brief when the backend returns no text", async () => {

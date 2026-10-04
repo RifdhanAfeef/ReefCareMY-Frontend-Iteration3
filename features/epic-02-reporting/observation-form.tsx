@@ -7,11 +7,13 @@ import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { useMockAppState } from "@/features/shared/mock-app-state";
 import {
   dateToMalaysiaFormValues,
+  inputDateToDisplayValue,
   isFutureDisplayDate,
   isValidDisplayDate,
 } from "@/lib/format/date";
 import { getThreatCategories } from "@/lib/api/referenceApi";
 import { structureReportDescription, type SmartReportFollowUpQuestion } from "@/lib/api/smartReportApi";
+import { recognizeVisualThreat } from "@/lib/api/visualRecognitionApi";
 import type { ThreatCategoryReference } from "@/lib/api/types";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import {
@@ -31,6 +33,7 @@ import {
   type StoredReefSite,
 } from "@/features/epic-02-reef-explorer/selected-site-storage";
 import type { ReportDraft } from "./types";
+import { confidenceLabel, visualRecognitionDraft } from "./visual-recognition-state";
 import styles from "./reporting.module.css";
 
 type PhotoPreview = StoredDraftPhoto & { previewUrl: string };
@@ -99,6 +102,9 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<SmartReportFollowUpQuestion[]>([]);
   const smartStructuringRequest = useRef(0);
+  const visualRecognitionRequest = useRef(0);
+  const [visualRecognitionBusy, setVisualRecognitionBusy] = useState(false);
+  const [visualRecognitionMessage, setVisualRecognitionMessage] = useState("");
   const ignoreInitialHandoff = useRef(false);
   const lastStructuredDescription = useRef(
     reportDraft.aiSuggestions.length > 0 ? reportDraft.description.trim() : "",
@@ -166,6 +172,9 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       setErrors({});
       setUploadMessage("");
       setAssistantMessage("");
+      visualRecognitionRequest.current += 1;
+      setVisualRecognitionBusy(false);
+      setVisualRecognitionMessage("");
       setFollowUpQuestions([]);
     };
     window.addEventListener(selectedReefSiteClearedEvent, clearFreshReportState);
@@ -288,6 +297,40 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     return automaticValues;
   }
 
+  async function analysePhoto(photo: PhotoPreview) {
+    const requestId = ++visualRecognitionRequest.current;
+    setVisualRecognitionBusy(true);
+    setVisualRecognitionMessage(`Analysing ${photo.file.name}…`);
+    try {
+      const result = await recognizeVisualThreat(photo.file);
+      if (requestId !== visualRecognitionRequest.current) return;
+      updateReportDraft({
+        visualRecognition: visualRecognitionDraft(photo.id, photo.file.name, result),
+      });
+      setVisualRecognitionMessage(result.status === "recognized"
+        ? "Image analysis is ready. This is only a suggestion and will need your review."
+        : result.warning ?? "No supported threat could be suggested. Continue the report manually.");
+    } catch (error) {
+      if (requestId !== visualRecognitionRequest.current) return;
+      const warning = userFacingError(error, "Visual recognition is temporarily unavailable. You can continue the report manually.");
+      updateReportDraft({
+        visualRecognition: {
+          photoId: photo.id,
+          photoName: photo.file.name,
+          status: "unavailable",
+          suggestedThreatCode: null,
+          suggestedThreatLabel: null,
+          confidence: null,
+          warning,
+          resolution: "not_required",
+        },
+      });
+      setVisualRecognitionMessage(warning);
+    } finally {
+      if (requestId === visualRecognitionRequest.current) setVisualRecognitionBusy(false);
+    }
+  }
+
   async function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -314,6 +357,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       setUploadMessage(automaticValues
         ? `${additions.length} photo${additions.length === 1 ? "" : "s"} attached. The photo date and time were added to the observation fields; review them before continuing.`
         : `${additions.length} photo${additions.length === 1 ? "" : "s"} attached to this report draft.`);
+      void analysePhoto(additions[0]);
     } catch {
       setUploadMessage("The photos could not be saved locally. Please try again.");
     }
@@ -323,7 +367,14 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     const removed = photos.find((photo) => photo.id === id);
     if (removed) URL.revokeObjectURL(removed.previewUrl);
     previewUrls.current = previewUrls.current.filter((url) => url !== removed?.previewUrl);
+    const removingAnalysedPhoto = reportDraft.visualRecognition?.photoId === id;
+    if (removingAnalysedPhoto) {
+      visualRecognitionRequest.current += 1;
+      setVisualRecognitionBusy(false);
+      setVisualRecognitionMessage("");
+    }
     await syncPhotos(photos.filter((photo) => photo.id !== id));
+    if (removingAnalysedPhoto) updateReportDraft({ visualRecognition: null });
     setUploadMessage("Photo removed from the draft.");
   }
 
@@ -382,6 +433,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     try {
       await clearDraftPhotos();
       smartStructuringRequest.current += 1;
+      visualRecognitionRequest.current += 1;
       ignoreInitialHandoff.current = true;
       previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
       previewUrls.current = [];
@@ -390,6 +442,8 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       setErrors({});
       setAssistantMessage("");
       setAssistantBusy(false);
+      setVisualRecognitionBusy(false);
+      setVisualRecognitionMessage("");
       setFollowUpQuestions([]);
       setCategoryLoadError("");
       clearSelectedReefSite();
@@ -421,7 +475,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       {plannedDate && /^\d{4}-\d{2}-\d{2}$/.test(plannedDate) && !Number.isNaN(Date.parse(plannedDate)) && (
         <aside className={styles.selectedSiteNotice} aria-label="Dive plan context">
           <div><strong>Suggested by your dive plan</strong><span>{plannedDate} · Confirm your actual observation date below.</span></div>
-          <button type="button" onClick={() => updateReportDraft({ observationDate: plannedDate })}>Use suggested date</button>
+          <button type="button" onClick={() => updateReportDraft({ observationDate: inputDateToDisplayValue(plannedDate) })}>Use suggested date</button>
           <p>Your plan is not evidence of a dive. Confirm your Dive Session and site in the location step.</p>
         </aside>
       )}
@@ -443,7 +497,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
         <div className={styles.formGrid}>
           <section className={styles.uploadArea} aria-labelledby="photo-heading">
             <h3 id="photo-heading">Photographs *</h3>
-            <p className={styles.supporting}>Attach PNG, JPG or WebP images. Maximum 10 MB per photo.</p>
+            <p className={styles.supporting}>Attach PNG, JPG or WebP images. Maximum 10 MB per photo. The first new photo is sent for optional AI image analysis; you can continue manually if it is unavailable.</p>
             <div className={styles.uploadContent}>
               <input className={styles.fileInput} id="report-photos" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={choosePhotos} />
               <label className={styles.uploadLabel} htmlFor="report-photos">Choose photos</label>
@@ -453,7 +507,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                 const metadata = reportDraft.photos.find((item) => item.id === photo.id);
                 return <article className={styles.photoCard} key={photo.id}>
                   <Image className={styles.photoImage} src={photo.previewUrl} alt={`Selected evidence: ${photo.file.name}`} width={360} height={220} unoptimized />
-                  <div className={styles.photoMeta}><strong title={photo.file.name}>{photo.file.name}</strong><span>{formatFileSize(photo.file.size)}</span><button className={styles.textButton} type="button" onClick={() => removePhoto(photo.id)}>Remove</button></div>
+                  <div className={styles.photoMeta}><strong title={photo.file.name}>{photo.file.name}</strong><span>{formatFileSize(photo.file.size)}</span><div className={styles.compactActions}><button className={styles.smallButton} type="button" disabled={visualRecognitionBusy} onClick={() => analysePhoto(photo)}>{reportDraft.visualRecognition?.photoId === photo.id ? "Analyse again" : "Analyse photo"}</button><button className={styles.textButton} type="button" onClick={() => removePhoto(photo.id)}>Remove</button></div></div>
                   {metadata?.capturedAt && <div className={styles.metadataPrompt}>
                     <strong>Photo date and time added</strong>
                     <span>{new Date(metadata.capturedAt).toLocaleString()}</span>
@@ -461,6 +515,15 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                   </div>}
                 </article>;
               })}</div>}
+              {(visualRecognitionBusy || reportDraft.visualRecognition) && <aside className={styles.visualRecognitionCard} aria-labelledby="visual-recognition-heading">
+                <div><p className={styles.assistantLabel}>Image analysis</p><h4 id="visual-recognition-heading">Possible visual threat</h4></div>
+                {visualRecognitionBusy ? <p role="status">{visualRecognitionMessage}</p> : reportDraft.visualRecognition && <>
+                  <strong>{reportDraft.visualRecognition.suggestedThreatLabel ?? "No suggestion available"}</strong>
+                  {reportDraft.visualRecognition.status === "recognized" && <span>{confidenceLabel(reportDraft.visualRecognition.confidence)}</span>}
+                  <p>{reportDraft.visualRecognition.warning ?? visualRecognitionMessage}</p>
+                  <small>AI suggestion only — this does not verify the image or replace your final threat choice.</small>
+                </>}
+              </aside>}
             </div>
           </section>
 

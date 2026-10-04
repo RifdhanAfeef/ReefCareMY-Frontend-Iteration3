@@ -4,10 +4,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReefExplorer } from "../reef-explorer";
 import { diveSiteCatalog } from "../dive-site-catalog";
 import { reefSites } from "../reef-sites";
-import { getPublicSiteActivity } from "@/lib/api/publicApi";
+import { getPublicReportHandoff, getPublicSiteActivity } from "@/lib/api/publicApi";
+
+const { routerPush, authState } = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  authState: {
+    status: "unauthenticated" as "unauthenticated" | "authenticated",
+    user: null as null | { id: number; displayName: string; role: "observer" },
+  },
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
 }));
 
 vi.mock("next/dynamic", () => ({
@@ -17,12 +25,17 @@ vi.mock("next/dynamic", () => ({
 }));
 
 vi.mock("@/features/epic-01-access/auth-context", () => ({
-  useAuth: () => ({ status: "anonymous", user: null }),
+  useAuth: () => authState,
 }));
 vi.mock("@/lib/api/publicApi");
 
 beforeEach(() => {
+  window.localStorage.clear();
+  routerPush.mockReset();
+  authState.status = "unauthenticated";
+  authState.user = null;
   vi.mocked(getPublicSiteActivity).mockReset();
+  vi.mocked(getPublicReportHandoff).mockReset();
   vi.mocked(getPublicSiteActivity).mockResolvedValue({
     diveSiteId: 3,
     diveSiteName: "Renggis Island",
@@ -30,6 +43,17 @@ beforeEach(() => {
     hasActivity: false,
     items: [],
     message: "No public ReefCare activity is currently available for this site.",
+  });
+  vi.mocked(getPublicReportHandoff).mockResolvedValue({
+    selectedDiveSiteId: 19,
+    selectedDiveSiteName: "D'Lagoon",
+    publicAreaLabel: "Perhentian Islands",
+    centreLatitude: 5.905,
+    centreLongitude: 102.735,
+    defaultUncertaintyMetres: 1000,
+    requiresAuthentication: true,
+    reportingPath: "/report-a-reef",
+    message: "Sign in or create an Observer account to continue reporting.",
   });
 });
 
@@ -82,6 +106,10 @@ describe("Epic 2 Reef Explorer", () => {
     expect(screen.getByRole("heading", { name: "D'Lagoon" })).toBeInTheDocument();
     expect(screen.getByText(/General area only/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Experience suitability" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Plan a dive" })).toHaveAttribute(
+      "href",
+      "/plan-a-dive?area=Perhentian&site=perhentian-d-lagoon",
+    );
     expect(screen.getByRole("link", { name: /PADI — Diving the Perhentian Islands/i })).toBeInTheDocument();
     expect(screen.getByLabelText("Dive conditions reminder")).toHaveTextContent(
       "Conditions and requirements can change. Confirm them with a licensed operator and the relevant authority.",
@@ -107,10 +135,45 @@ describe("Epic 2 Reef Explorer", () => {
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
     await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
 
-    expect(screen.getByRole("dialog", { name: "Sign in to report this reef threat" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Sign in to report this reef threat" })).toBeInTheDocument();
+    expect(getPublicReportHandoff).toHaveBeenCalledWith(19);
     expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login?next=%2Freport-a-reef%3Fsource%3Dexplore");
     expect(screen.getByRole("link", { name: "Create Observer account" })).toHaveAttribute("href", "/register?next=%2Freport-a-reef%3Fsource%3Dexplore");
     expect(screen.getByText(/track it, respond to information requests/i)).toBeInTheDocument();
+  });
+
+  it("does not continue when the selected site cannot be validated", async () => {
+    vi.mocked(getPublicReportHandoff).mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+
+    await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
+    await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not start the report from this site",
+    );
+    expect(screen.queryByRole("dialog", { name: "Sign in to report this reef threat" })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("reefcare-my-i2-selected-reef-site")).toBeNull();
+  });
+
+  it("sends a registered observer to the validated reporting path with canonical site context", async () => {
+    authState.status = "authenticated";
+    authState.user = { id: 7, displayName: "Observer", role: "observer" };
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+
+    await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
+    await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
+
+    expect(routerPush).toHaveBeenCalledWith("/report-a-reef?source=explore");
+    expect(JSON.parse(window.localStorage.getItem("reefcare-my-i2-selected-reef-site") ?? "null"))
+      .toEqual({
+        id: "perhentian-d-lagoon",
+        backendDiveSiteId: 19,
+        name: "D'Lagoon",
+        publicAreaLabel: "Perhentian Islands",
+      });
   });
 
   it("shows an honest no-activity state", async () => {

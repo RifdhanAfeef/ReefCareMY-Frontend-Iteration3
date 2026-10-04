@@ -7,7 +7,10 @@ import { clearDraftPhotos, loadDraftPhotos } from "../draft-storage";
 import { ReportReview } from "../report-review";
 
 const push = vi.hoisted(() => vi.fn());
-const scenario = vi.hoisted(() => ({ aiSuggestions: [] as Array<Record<string, unknown>> }));
+const scenario = vi.hoisted(() => ({
+  aiSuggestions: [] as Array<Record<string, unknown>>,
+  visualRecognition: null as Record<string, unknown> | null,
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/lib/api/reportsApi", () => ({ reviewReport: vi.fn(), submitReport: vi.fn() }));
 vi.mock("@/lib/api/referenceApi", () => ({ getThreatCategories: vi.fn() }));
@@ -20,6 +23,7 @@ vi.mock("@/features/shared/mock-app-state", async (importOriginal) => {
       threatCategoryCode: "ghost_gear", threatCategoryId: 1,
       observationDate: "01/01/2020", observationTime: "10:00", description: "Net on coral.",
       aiSuggestions: scenario.aiSuggestions as typeof original.initialReportDraft.aiSuggestions,
+      visualRecognition: scenario.visualRecognition as typeof original.initialReportDraft.visualRecognition,
     });
     const [locationDraft, setLocation] = useState<typeof original.initialLocationDraft>({ ...original.initialLocationDraft,
       confidence: "dive_site_only", selectedSessionId: "one",
@@ -35,6 +39,7 @@ vi.mock("@/features/shared/mock-app-state", async (importOriginal) => {
 beforeEach(() => {
   vi.clearAllMocks();
   scenario.aiSuggestions = [];
+  scenario.visualRecognition = null;
   URL.createObjectURL = vi.fn(() => "blob:photo");
   URL.revokeObjectURL = vi.fn();
   vi.mocked(loadDraftPhotos).mockResolvedValue([{ id: "one", file: new File(["photo"], "reef.jpg") }]);
@@ -42,6 +47,7 @@ beforeEach(() => {
   vi.mocked(getThreatCategories).mockResolvedValue([
     { threatCategoryId: 101, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
     { threatCategoryId: 105, code: "unsure", label: "Unsure", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+    { threatCategoryId: 103, code: "marine_debris", label: "Marine debris", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
   ]);
   vi.mocked(reviewReport).mockImplementation(async (payload) => {
     const unresolvedSuggestions = payload.aiSuggestions.filter((suggestion) => suggestion.status === "unresolved");
@@ -94,4 +100,43 @@ it("accepts all non-conflicting AI suggestions together at final review", async 
   await waitFor(() => expect(screen.queryByRole("button", { name: "Accept AI suggestions" })).not.toBeInTheDocument());
   await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
   expect(screen.getByText("AI assisted - reviewed")).toBeInTheDocument();
+});
+
+it("blocks submission until a recognized image suggestion is explicitly resolved", async () => {
+  scenario.visualRecognition = {
+    photoId: "one",
+    photoName: "reef.jpg",
+    status: "recognized",
+    suggestedThreatCode: "marine_debris",
+    suggestedThreatLabel: "Marine debris",
+    confidence: 0.87,
+    warning: null,
+    resolution: "unresolved",
+  };
+  render(<ReportReview />);
+
+  expect(await screen.findByText("Image suggestion needs your decision")).toBeInTheDocument();
+  expect(screen.getByText("High confidence (87%)")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeDisabled());
+  fireEvent.click(screen.getByRole("button", { name: "Use image suggestion" }));
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  expect(screen.getByText("Marine debris", { selector: "dd" })).toBeInTheDocument();
+});
+
+it("keeps visual recognition failures non-blocking", async () => {
+  scenario.visualRecognition = {
+    photoId: "one",
+    photoName: "reef.jpg",
+    status: "unavailable",
+    suggestedThreatCode: null,
+    suggestedThreatLabel: null,
+    confidence: null,
+    warning: "Visual recognition is temporarily unavailable. You can continue the report manually.",
+    resolution: "not_required",
+  };
+  render(<ReportReview />);
+
+  expect(await screen.findByText(/temporarily unavailable/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
 });

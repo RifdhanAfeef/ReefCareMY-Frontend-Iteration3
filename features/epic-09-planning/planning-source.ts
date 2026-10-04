@@ -1,19 +1,14 @@
 import {
-  createPlan,
   createPlanningBrief,
-  deletePlan,
   getAreaDates,
   getAreaSeasonality,
   getAreaSites,
-  listPlans,
-  updatePlan,
-  type PlanDto,
   type SeasonState,
 } from "@/lib/api/planningApi";
+import { createPlan, deletePlan, getPlan, listPlans, updatePlan } from "@/lib/api/plansApi";
 import { getPublicSiteActivity } from "@/lib/api/publicApi";
 import type { ReefSite } from "@/features/epic-02-reef-explorer/types";
 import {
-  areas,
   assess,
   daySummary,
   labels,
@@ -26,6 +21,7 @@ import {
   type Plan,
   type Scenario,
 } from "./planning-data";
+import { areaCodeFor, planFromApi, planWriteInput } from "./saved-plan-adapter";
 
 // "sample" keeps the offline prototype data. "api" calls the backend routes in planningApi.ts.
 // The interactive preview (?preview=1) always uses sample data so its demo states keep working.
@@ -67,6 +63,8 @@ export type PlanningSource = {
   publicContext(site: ReefSite, context: PlanningContext): Promise<ContextView>;
   brief(site: ReefSite, date: string, assessment: Assessment, context: PlanningContext, contextAvailable: boolean): Promise<BriefView>;
   listPlans(owner: string): Promise<Plan[]>;
+  // Reloads the saved intent when a plan is reopened. Conditions are never part of a plan.
+  loadPlan(owner: string, plan: Plan): Promise<Plan>;
   savePlan(owner: string, plan: Plan, exists: boolean): Promise<Plan>;
   deletePlan(owner: string, planId: string): Promise<void>;
 };
@@ -77,14 +75,6 @@ const API_MODE_ENABLED = process.env.NEXT_PUBLIC_E9_DATA_SOURCE === "api";
 
 export function planningModeFor(previewMode: boolean): PlanningMode {
   return !previewMode && API_MODE_ENABLED ? "api" : "sample";
-}
-
-export function areaCodeFor(area: Area): string {
-  return area.toLowerCase();
-}
-
-function areaFromCode(code: string): Area | null {
-  return areas.find((area) => areaCodeFor(area) === code.toLowerCase()) ?? null;
 }
 
 export function unavailableAssessment(reason: string): Assessment {
@@ -200,6 +190,9 @@ const sampleSource: PlanningSource = {
   async listPlans(owner) {
     return readPlans(owner);
   },
+  async loadPlan(_owner, plan) {
+    return plan;
+  },
   async savePlan(owner, plan) {
     const current = readPlans(owner);
     writePlans(owner, [plan, ...current.filter((item) => item.planId !== plan.planId)]);
@@ -214,36 +207,11 @@ const sampleSource: PlanningSource = {
 // API source: the backend routes proposed in the Epic 9 contract.
 // ---------------------------------------------------------------------------------------------
 
-function planFromDto(dto: PlanDto): Plan | null {
-  const area = areaFromCode(dto.areaCode);
-  if (!area) return null;
-  const known = sitesIn(area);
-  const siteIds = dto.diveSiteIds.flatMap((id) => {
-    const site = known.find((item) => item.backendDiveSiteId === id);
-    return site ? [site.id] : [];
-  });
-  if (!siteIds.length) return null;
-  return { planId: String(dto.planId), name: dto.name, area, plannedDate: dto.plannedDate, siteIds, updatedAt: dto.updatedAt };
-}
-
 // The UI keeps plan ids as strings (sample plans use local ids); the API uses numbers.
 function backendPlanId(planId: string): number {
   const id = Number(planId);
-  if (!Number.isSafeInteger(id)) throw new Error("This plan has not been saved to the server.");
+  if (!Number.isSafeInteger(id)) throw new Error("This plan has not been saved to your account.");
   return id;
-}
-
-function planWriteFor(plan: Plan) {
-  const known = sitesIn(plan.area);
-  return {
-    name: plan.name,
-    areaCode: areaCodeFor(plan.area),
-    plannedDate: plan.plannedDate,
-    diveSiteIds: plan.siteIds.flatMap((id) => {
-      const site = known.find((item) => item.id === id);
-      return site ? [site.backendDiveSiteId] : [];
-    }),
-  };
 }
 
 const apiSource: PlanningSource = {
@@ -340,18 +308,23 @@ const apiSource: PlanningSource = {
     };
   },
   async listPlans() {
-    const dtos = await listPlans();
-    return dtos.flatMap((dto) => {
-      const plan = planFromDto(dto);
-      return plan ? [plan] : [];
+    const { items } = await listPlans();
+    // One plan that references a retired site should not hide the rest of the list.
+    return items.flatMap((dto) => {
+      try {
+        return [planFromApi(dto)];
+      } catch {
+        return [];
+      }
     });
   },
+  async loadPlan(_owner, plan) {
+    return planFromApi(await getPlan(backendPlanId(plan.planId)));
+  },
   async savePlan(_owner, plan, exists) {
-    const payload = planWriteFor(plan);
-    const dto = exists ? await updatePlan(backendPlanId(plan.planId), payload) : await createPlan(payload);
-    const saved = planFromDto(dto);
-    if (!saved) throw new Error("The saved plan could not be read back.");
-    return saved;
+    const body = planWriteInput(plan.name, plan.area, plan.plannedDate, plan.siteIds);
+    const dto = exists ? await updatePlan(backendPlanId(plan.planId), body) : await createPlan(body);
+    return planFromApi(dto);
   },
   async deletePlan(_owner, planId) {
     await deletePlan(backendPlanId(planId));

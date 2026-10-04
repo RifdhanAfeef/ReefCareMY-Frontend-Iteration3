@@ -22,6 +22,7 @@ import {
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { reefSites } from "@/features/epic-02-reef-explorer/reef-sites";
 import { storeSelectedReefSite } from "@/features/epic-02-reef-explorer/selected-site-storage";
+import { ApiError } from "@/lib/api/client";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import {
   addDays,
@@ -144,7 +145,8 @@ export function DivePlanner() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [storageReady, setStorageReady] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [openedPlan, setOpenedPlan] = useState<Plan | null>(null);
   const owner =
     status === "authenticated" && user?.role === "observer"
       ? `user-${user.id}`
@@ -223,6 +225,7 @@ export function DivePlanner() {
 
   function switchArea(value: Area) {
     setArea(value);
+    setOpenedPlan(null);
     setSelectedSites([]);
     setEditing(null);
     setBriefSite(null);
@@ -298,7 +301,7 @@ export function DivePlanner() {
   }
   async function savePlan(event: React.FormEvent) {
     event.preventDefault();
-    if (!planName.trim() || !owner || !storageReady || saving) return;
+    if (!planName.trim() || !owner || !storageReady || planBusy) return;
     const plan: Plan = {
       planId: editing ?? crypto.randomUUID(),
       name: planName.trim(),
@@ -307,7 +310,7 @@ export function DivePlanner() {
       siteIds: selectedSites,
       updatedAt: new Date().toISOString(),
     };
-    setSaving(true);
+    setPlanBusy(true);
     try {
       const saved = await source.savePlan(owner, plan, editing !== null);
       setPlans((current) => [
@@ -318,6 +321,7 @@ export function DivePlanner() {
       ]);
       setSaveDialog(false);
       setEditing(null);
+      setOpenedPlan(null);
       setError("");
       setMessage(
         `“${saved.name}” saved ${sample ? "on this device" : "to your account"}.`,
@@ -333,12 +337,12 @@ export function DivePlanner() {
         ),
       );
     } finally {
-      setSaving(false);
+      setPlanBusy(false);
     }
   }
   async function confirmDelete() {
-    if (!deleting || !owner || saving) return;
-    setSaving(true);
+    if (!deleting || !owner || planBusy) return;
+    setPlanBusy(true);
     try {
       await source.deletePlan(owner, deleting.planId);
       setPlans((current) =>
@@ -357,32 +361,45 @@ export function DivePlanner() {
         ),
       );
     } finally {
-      setSaving(false);
+      setPlanBusy(false);
     }
   }
-  function openPlan(plan: Plan, edit = false) {
+  async function openPlan(plan: Plan, edit = false) {
+    if (!owner || planBusy) return;
     setError("");
     setMessage("");
-    if (plan.plannedDate < today && !edit) {
-      setPastPlan(plan);
-      setReportSite(plan.siteIds[0]);
-      setReportDate(plan.plannedDate);
+    setPlanBusy(true);
+    let loaded: Plan;
+    try {
+      // Reload the saved intent so a plan edited or deleted elsewhere is not shown stale.
+      loaded = await source.loadPlan(owner, plan);
+    } catch (openError) {
+      if (openError instanceof ApiError && openError.status === 404) {
+        setPlans((current) => current.filter((item) => item.planId !== plan.planId));
+        setError("This dive plan no longer exists. It has been removed from your list.");
+      } else {
+        setError(userFacingError(openError, "This saved dive plan could not be opened. Please try again."));
+      }
+      return;
+    } finally {
+      setPlanBusy(false);
+    }
+    if (loaded.plannedDate < today && !edit) {
+      setPastPlan(loaded);
+      setReportSite(loaded.siteIds[0]);
+      setReportDate(loaded.plannedDate);
       setConfirmedDive(false);
       return;
     }
-    setArea(plan.area);
-    setSelectedDate(plan.plannedDate);
-    setFrom(plan.plannedDate);
-    setTo(addDays(plan.plannedDate, 4));
-    setDates(dateRange(plan.plannedDate, addDays(plan.plannedDate, 4)));
-    setSelectedSites(plan.siteIds);
-    setEditing(plan.planId);
+    setArea(loaded.area);
+    setSelectedDate(loaded.plannedDate);
+    setFrom(loaded.plannedDate);
+    setTo(addDays(loaded.plannedDate, 4));
+    setDates(dateRange(loaded.plannedDate, addDays(loaded.plannedDate, 4)));
+    setSelectedSites(loaded.siteIds);
+    setEditing(loaded.planId);
+    setOpenedPlan(loaded);
     setTab("planner");
-    setMessage(
-      sample
-        ? "Plan loaded. Conditions are recalculated from the current sample dataset, not the saved forecast."
-        : "Plan loaded. Conditions are refreshed from the latest forecast, not the saved one.",
-    );
   }
   function startReport() {
     const site = reefSites.find((item) => item.id === reportSite);
@@ -586,6 +603,32 @@ export function DivePlanner() {
             {error}
           </p>
         )}
+        {tab === "planner" && openedPlan && (
+          <section className={styles.savedIntent} aria-labelledby="saved-intent-heading">
+            <Bookmark size={18} />
+            <div>
+              <span className={styles.eyebrow}>SAVED PLAN · PLANNING INTENT ONLY</span>
+              <h2 id="saved-intent-heading">{openedPlan.name}</h2>
+              <p>
+                {openedPlan.area} · {dateLabel(openedPlan.plannedDate, true)} ·{" "}
+                {openedPlan.siteIds.length} selected{" "}
+                {openedPlan.siteIds.length === 1 ? "site" : "sites"}
+              </p>
+              <p>
+                {sample
+                  ? "Conditions below are recalculated from the current sample dataset. No forecast was stored with this plan."
+                  : "Conditions below were requested again just now. No forecast was stored with this plan."}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Dismiss saved plan summary"
+              onClick={() => setOpenedPlan(null)}
+            >
+              <X size={16} />
+            </button>
+          </section>
+        )}
         {tab !== "plans" && (
           <form className={styles.search} onSubmit={compare}>
             <label>
@@ -744,7 +787,7 @@ export function DivePlanner() {
                     type="button"
                     className={styles.primary}
                     onClick={requestSave}
-                    disabled={!selectedProfiles.length || !storageReady}
+                    disabled={!selectedProfiles.length || !storageReady || planBusy}
                   >
                     <Bookmark size={17} />
                     {editing ? "Update plan" : "Save dive plan"}
@@ -753,7 +796,7 @@ export function DivePlanner() {
                     {owner
                       ? sample
                         ? "Saved on this device."
-                        : "Saved to your account."
+                        : "Saved privately to your Observer account."
                       : "Sign in to save your dive plan."}
                   </small>
                 </div>
@@ -868,7 +911,8 @@ export function DivePlanner() {
                       <button
                         type="button"
                         className={styles.primary}
-                        onClick={() => openPlan(plan)}
+                        onClick={() => void openPlan(plan)}
+                        disabled={planBusy}
                       >
                         {plan.plannedDate < today
                           ? "View past plan"
@@ -878,7 +922,8 @@ export function DivePlanner() {
                       <button
                         type="button"
                         className={styles.textButton}
-                        onClick={() => openPlan(plan, true)}
+                        onClick={() => void openPlan(plan, true)}
+                        disabled={planBusy}
                       >
                         Edit plan
                       </button>
@@ -887,6 +932,7 @@ export function DivePlanner() {
                         className={styles.iconButton}
                         aria-label={`Delete ${plan.name}`}
                         onClick={() => setDeleting(plan)}
+                        disabled={planBusy}
                       >
                         <Trash2 size={17} />
                       </button>
@@ -898,7 +944,7 @@ export function DivePlanner() {
             <p className={styles.source}>
               {sample
                 ? "Plans are saved only on this device. They are not synced across devices."
-                : "Your plans are saved to your ReefCare account."}
+                : "Plans contain planning intent only. Forecasts and assessments are refreshed when a plan is opened."}
             </p>
           </section>
         )}
@@ -1005,9 +1051,9 @@ export function DivePlanner() {
             <button
               className={styles.primary}
               type="submit"
-              disabled={!planName.trim() || saving}
+              disabled={!planName.trim() || planBusy}
             >
-              {saving ? "Saving…" : "Save plan"}
+              {planBusy ? "Saving…" : "Save plan"}
             </button>
           </form>
         </Modal>
@@ -1033,9 +1079,9 @@ export function DivePlanner() {
                 type="button"
                 className={styles.danger}
                 onClick={confirmDelete}
-                disabled={saving}
+                disabled={planBusy}
               >
-                {saving ? "Deleting…" : "Delete plan"}
+                {planBusy ? "Deleting…" : "Delete plan"}
               </button>
             </div>
             {error && (

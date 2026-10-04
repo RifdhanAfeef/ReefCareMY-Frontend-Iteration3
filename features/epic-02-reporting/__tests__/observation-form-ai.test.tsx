@@ -4,6 +4,7 @@ import { buildAutomaticPhotoDraftChanges, ObservationForm } from "../observation
 import { structureReportDescription } from "@/lib/api/smartReportApi";
 import { getThreatCategories } from "@/lib/api/referenceApi";
 import { clearDraftPhotos, loadDraftPhotos } from "@/features/epic-02-reporting/draft-storage";
+import { recognizeVisualThreat } from "@/lib/api/visualRecognitionApi";
 
 const { resetReportDraft, updateReportDraft, runtime } = vi.hoisted(() => ({
   resetReportDraft: vi.fn(),
@@ -19,6 +20,7 @@ const { resetReportDraft, updateReportDraft, runtime } = vi.hoisted(() => ({
       description: "A large fishing net is tangled around coral at about 12 metres.",
       photos: [],
       aiSuggestions: [],
+      visualRecognition: null,
       lastSavedAt: null,
     },
   },
@@ -64,6 +66,10 @@ vi.mock("@/lib/api/smartReportApi", () => ({
   structureReportDescription: vi.fn(),
 }));
 
+vi.mock("@/lib/api/visualRecognitionApi", () => ({
+  recognizeVisualThreat: vi.fn(),
+}));
+
 describe("automatic Smart Report Structuring", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -77,6 +83,7 @@ describe("automatic Smart Report Structuring", () => {
       description: "A large fishing net is tangled around coral at about 12 metres.",
       photos: [],
       aiSuggestions: [],
+      visualRecognition: null,
       lastSavedAt: null,
     };
     vi.setSystemTime(new Date("2026-09-16T00:00:00Z"));
@@ -91,6 +98,12 @@ describe("automatic Smart Report Structuring", () => {
       followUpQuestions: [],
       warnings: [],
       requiresUserConfirmation: true,
+    });
+    vi.mocked(recognizeVisualThreat).mockResolvedValue({
+      status: "recognized",
+      suggestedThreat: { code: "ghost_gear", label: "Ghost fishing gear" },
+      confidence: 0.87,
+      warning: null,
     });
   });
 
@@ -144,6 +157,30 @@ describe("automatic Smart Report Structuring", () => {
     expect(preserved.changes).not.toHaveProperty("observationTime");
   });
 
+  it("analyses a newly attached photo without overwriting the observer threat", async () => {
+    const file = new File(["reef"], "reef.jpg", { type: "image/jpeg" });
+    const { createPhotoId } = await import("@/features/epic-02-reporting/draft-storage");
+    vi.mocked(createPhotoId).mockReturnValue("photo-1");
+    render(<ObservationForm />);
+
+    fireEvent.change(screen.getByLabelText("Choose photos"), { target: { files: [file] } });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(recognizeVisualThreat).toHaveBeenCalledWith(file);
+    expect(updateReportDraft).toHaveBeenCalledWith({
+      visualRecognition: expect.objectContaining({
+        photoId: "photo-1",
+        suggestedThreatCode: "ghost_gear",
+        resolution: "unresolved",
+      }),
+    });
+    const recognitionChange = vi.mocked(updateReportDraft).mock.calls.find(([changes]) => "visualRecognition" in changes)?.[0];
+    expect(recognitionChange).not.toHaveProperty("threatCategoryCode");
+  });
+
   it("selects the physical-damage category carried from the threat explorer", async () => {
     vi.mocked(getThreatCategories).mockResolvedValue([{
       threatCategoryId: 44,
@@ -162,6 +199,18 @@ describe("automatic Smart Report Structuring", () => {
       threatCategoryCode: "physical_reef_damage",
       threatCategoryId: 44,
     });
+  });
+
+  it("keeps a dive-plan date advisory and converts it to the editable report format", async () => {
+    render(<ObservationForm plannedDate="2026-10-03" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Your plan is not evidence of a dive. Confirm your Dive Session and site in the location step.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use suggested date" }));
+    expect(updateReportDraft).toHaveBeenCalledWith({ observationDate: "03/10/2026" });
   });
 
   it("waits for the account draft and preserves its observation time when restoring photos", async () => {

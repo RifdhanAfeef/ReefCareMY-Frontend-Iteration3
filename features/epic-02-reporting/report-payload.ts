@@ -32,6 +32,16 @@ function evidenceMetadata(report: ReportDraft) {
   }));
 }
 
+function visualRecognitionAdvisory(report: ReportDraft) {
+  const recognition = report.visualRecognition;
+  return {
+    aiSuggestedThreatCode: recognition?.suggestedThreatCode ?? null,
+    aiSuggestedThreatLabel: recognition?.suggestedThreatLabel ?? null,
+    aiConfidence: recognition?.confidence ?? null,
+    aiWarning: recognition?.warning ?? null,
+  };
+}
+
 function surfaceContextNotes(location: LocationDraft): string | null {
   const notes = [
     location.surfaceEntryContext.trim()
@@ -84,6 +94,7 @@ export function buildReportReviewPayload(
     ...buildReportCompletenessPayload(report, location, evidenceCount),
     evidenceMetadata: evidenceMetadata(report),
     aiSuggestions: resolvedSuggestions(report),
+    ...visualRecognitionAdvisory(report),
   };
 }
 
@@ -126,6 +137,7 @@ export function buildReportSubmissionPayload(
     },
     evidenceMetadata: evidenceMetadata(report),
     aiSuggestions: resolvedSuggestions(report),
+    ...visualRecognitionAdvisory(report),
   };
 
   if (report.estimatedDepthMetres) payload.estimatedDepthMetres = Number(report.estimatedDepthMetres);

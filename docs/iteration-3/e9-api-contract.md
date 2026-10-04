@@ -1,7 +1,7 @@
 # Epic 9 API contract: frontend expectations
 
 Status: frozen E9 frontend/backend contract, confirmed by the backend owner on 4 Oct 2026.
-Frontend types: `lib/api/planningApi.ts`
+Frontend types: `lib/api/planningApi.ts` (public planning) and `lib/api/plansApi.ts` (saved plans)
 Frontend data source: `features/epic-09-planning/planning-source.ts`
 
 The Epic 9 frontend is wired to these routes behind a switch. It stays on sample data until the backend endpoints are available.
@@ -165,7 +165,7 @@ Plan response:
 
 ## US9.6: report handoff
 
-No backend endpoint. The frontend loads the owned plan and passes its site and date into the existing report flow as editable suggested context. It must not imply that the dive occurred or that the planned date is an observation date.
+No backend endpoint. The saved plan provides frontend planning intent only. The selected dive site may prefill the reporting flow, while `plannedDate` stays contextual and is never submitted as `observedAt` automatically: the report form shows it as a suggestion the observer can apply and edit. Final submission uses the existing Observer-owned Dive Session and Report APIs.
 
 ## Confirmed with the backend (4 Oct 2026)
 
@@ -184,4 +184,4 @@ Open outside this contract: an explicit `planning_area` to `dive_site` mapping (
 
 ## Frontend switch
 
-Set `NEXT_PUBLIC_E9_DATA_SOURCE=api` to use these routes. The default is `sample`. The interactive preview at `/plan-a-dive?preview=1` always uses sample data.
+Set `NEXT_PUBLIC_E9_DATA_SOURCE=api` to use these routes, including saved plans. The default is `sample`, where plans stay in browser storage. The interactive preview at `/plan-a-dive?preview=1` always uses sample data.

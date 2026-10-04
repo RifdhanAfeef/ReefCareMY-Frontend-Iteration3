@@ -722,6 +722,48 @@
 .success button {
   margin-left: auto;
 }
+.savedIntent {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: 5px;
+  background: var(--color-surface);
+}
+.savedIntent > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--color-primary);
+}
+.savedIntent > div {
+  flex: 1;
+  min-width: 0;
+}
+.savedIntent h2 {
+  margin: 6px 0 4px;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.savedIntent p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.savedIntent > button {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
 .error {
   background: #fff0e8;
   color: #903d28;
