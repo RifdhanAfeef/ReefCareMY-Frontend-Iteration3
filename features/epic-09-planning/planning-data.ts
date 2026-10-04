@@ -7,6 +7,7 @@ export type Band =
   | "mixed"
   | "less_favourable"
   | "unavailable"
+  | "not_assessable"
   | "out_of_horizon";
 export type Scenario = "normal" | "provider" | "ai" | "context" | "position";
 export type Assessment = {
@@ -30,6 +31,7 @@ export const labels: Record<Band, string> = {
   mixed: "Mixed",
   less_favourable: "Less favourable",
   unavailable: "Unavailable",
+  not_assessable: "Not assessable",
   out_of_horizon: "Outside forecast range",
 };
 export const months = [
@@ -122,7 +124,7 @@ export function assess(
   if (scenario === "position" && siteIndex === 0)
     return {
       ...base,
-      band: "unavailable",
+      band: "not_assessable",
       reason: "Site position unavailable. This site cannot be assessed.",
     };
   const day = Math.round((Date.parse(date) - Date.parse(today)) / 86400000);

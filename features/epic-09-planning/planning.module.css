@@ -383,6 +383,7 @@
   color: var(--plan-status-ink);
 }
 .pill[data-band="unavailable"],
+.pill[data-band="not_assessable"],
 .pill[data-band="out_of_horizon"] {
   background: var(--plan-soft);
   color: var(--plan-status-ink);
@@ -721,74 +722,47 @@
 .success button {
   margin-left: auto;
 }
-.refreshWarning,
-.refreshedAssessment {
+.savedIntent {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
   margin-top: 20px;
+  padding: 18px 20px;
   border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
   border-radius: 5px;
   background: var(--color-surface);
 }
-.refreshWarning {
-  display: flex;
-  gap: 12px;
-  padding: 16px;
-  color: #76521d;
-  background: #fff9e9;
-}
-.refreshWarning svg {
+.savedIntent > svg {
   flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--color-primary);
 }
-.refreshWarning p {
-  margin: 5px 0 0;
-  color: var(--color-muted);
-  font-size: 12px;
+.savedIntent > div {
+  flex: 1;
+  min-width: 0;
 }
-.refreshedAssessment {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(180px, 0.7fr);
-  gap: 20px;
-  padding: 22px;
-  border-left: 4px solid var(--color-primary);
+.savedIntent h2 {
+  margin: 6px 0 4px;
+  font-size: 20px;
+  overflow-wrap: anywhere;
 }
-.refreshedAssessment h2 {
-  margin: 6px 0;
-  font-size: 22px;
-}
-.refreshedAssessment p {
-  margin: 0;
+.savedIntent p {
+  margin: 4px 0 0;
   color: var(--color-muted);
   font-size: 12px;
   line-height: 1.6;
 }
-.refreshSummary {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  padding: 14px;
-  background: var(--plan-soft);
-}
-.refreshSummary span,
-.refreshSites span,
-.refreshSites small {
+.savedIntent > button {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
   color: var(--color-muted);
-  font-size: 11px;
-}
-.refreshSites {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-}
-.refreshSites article {
-  display: grid;
-  gap: 4px;
-  padding: 13px;
-  border: 1px solid var(--color-border);
-}
-.refreshedAssessment > .source {
-  grid-column: 1 / -1;
-  margin: 0;
+  cursor: pointer;
 }
 .error {
   background: #fff0e8;
@@ -1244,6 +1218,11 @@
 }
 .dateFeedback p {
   margin: 4px 0 0;
+  color: var(--color-muted);
+}
+.dateReasons {
+  margin: 6px 0 0;
+  padding-left: 18px;
   color: var(--color-muted);
 }
 .dateFeedback a {
