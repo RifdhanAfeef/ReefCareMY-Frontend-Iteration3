@@ -23,6 +23,16 @@ describe("report submission boundary", () => {
       observationTime: "09:10",
       estimatedDepthMetres: "12.5",
       description: "  Net tangled around coral.  ",
+      visualRecognition: {
+        photoId: "photo-1",
+        photoName: "reef.jpg",
+        status: "recognized" as const,
+        suggestedThreatCode: "marine_debris" as const,
+        suggestedThreatLabel: "Marine debris",
+        confidence: 0.87,
+        warning: null,
+        resolution: "kept" as const,
+      },
     };
     const location = {
       ...initialLocationDraft,
@@ -57,7 +67,12 @@ describe("report submission boundary", () => {
       },
       evidenceMetadata: [],
       aiSuggestions: [],
+      aiSuggestedThreatCode: "marine_debris",
+      aiSuggestedThreatLabel: "Marine debris",
+      aiConfidence: 0.87,
+      aiWarning: null,
     });
+    expect(result.threatCategoryId).toBe(1);
     expect(result.observedAt).toBe(new Date("2026-08-27T09:10:00+08:00").toISOString());
   });
 

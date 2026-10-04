@@ -78,6 +78,7 @@ export const initialReportDraft: ReportDraft = {
   description: "",
   photos: [],
   aiSuggestions: [],
+  visualRecognition: null,
   lastSavedAt: null,
 };
 
@@ -94,6 +95,7 @@ function restoreReportDraft(stored?: Partial<ReportDraft>): ReportDraft {
         observerValue: suggestion.observerValue ?? null,
       }))
       : [],
+    visualRecognition: stored.visualRecognition ?? null,
   };
 }
 

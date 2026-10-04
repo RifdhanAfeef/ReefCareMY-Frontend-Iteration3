@@ -273,6 +273,13 @@ export type AISuggestionState = {
   status: AISuggestionStatus;
 };
 
+export type VisualRecognitionAdvisory = {
+  aiSuggestedThreatCode: string | null;
+  aiSuggestedThreatLabel: string | null;
+  aiConfidence: number | null;
+  aiWarning: string | null;
+};
+
 export type ReportCompletenessLocationInput = {
   namedDiveSiteId?: number | null;
   locationConfidence?: LocationConfidence | null;
@@ -318,7 +325,7 @@ export type LocationCheckResponse = {
   selectedSiteName: string | null;
 };
 
-export type ReportReviewRequest = ReportCompletenessRequest & {
+export type ReportReviewRequest = ReportCompletenessRequest & VisualRecognitionAdvisory & {
   evidenceMetadata: EvidenceMetadataInput[];
   aiSuggestions: AISuggestionState[];
 };
@@ -332,7 +339,7 @@ export type ReportReviewResponse = {
   locationWarning: LocationCheckResponse | null;
 };
 
-export type ReportSubmissionPayload = {
+export type ReportSubmissionPayload = VisualRecognitionAdvisory & {
   threatCategoryId: number;
   observedAt: string;
   estimatedDepthMetres?: number;

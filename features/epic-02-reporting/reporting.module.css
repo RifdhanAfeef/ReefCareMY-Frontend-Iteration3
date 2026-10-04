@@ -120,6 +120,7 @@
 .compactActions { display: flex; gap: 8px; flex-wrap: wrap; }
 .smallButton, .selectedAction { min-height: 34px; padding: 6px 11px; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer; }
 .smallButton { color: var(--color-primary-hover); background: #fff; border: 1px solid var(--color-primary); }
+.smallButton:disabled { cursor: not-allowed; opacity: .55; }
 .selectedAction { color: #fff; background: var(--color-primary); border: 1px solid var(--color-primary); }
 .assistantCard, .completenessCard { display: grid; gap: 16px; margin-top: 24px; padding: 22px; border-radius: 14px; }
 .assistantCard { background: #f1f8fb; border: 1px solid #bddce8; }
@@ -128,6 +129,10 @@
 .assistantHeader h3, .completenessCard h3 { margin: 2px 0 5px; }
 .assistantLabel { color: #27677d !important; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 .assistantMessage { padding: 11px 13px; background: #fff; border-radius: 10px; }
+.visualRecognitionCard { display: grid; gap: 7px; padding: 16px; color: var(--color-ink); background: #f1f8fb; border: 1px solid #bddce8; border-radius: 11px; }
+.visualRecognitionCard h4, .visualRecognitionCard p { margin: 0; }
+.visualRecognitionCard span { color: #27677d; font-weight: 800; }
+.visualRecognitionCard small { color: var(--color-muted); }
 .inlineSuggestionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .inlineSuggestionField { display: grid; gap: 8px; padding: 14px; background: #fff; border: 1px solid #cfe2e8; border-radius: 11px; }
 .inlineSuggestionField input, .inlineSuggestionField select { min-height: 42px; padding: 8px 11px; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-field); }
@@ -162,12 +167,20 @@
 .suggestionEditor { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .suggestionEditor input, .suggestionEditor select { min-width: min(100%, 260px); min-height: 42px; padding: 8px 11px; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-field); }
 .reviewConflict { margin-inline: -12px; padding-inline: 12px; background: #fffaf1; border: 1px solid #efd6a4; border-radius: 10px; }
+.visualReviewCard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; padding: 16px; background: #f8fbfa; border: 1px solid var(--color-border); border-radius: 11px; }
+.visualReviewCard > div:not(.visualReviewActions) { display: grid; gap: 4px; }
+.visualReviewCard span, .suggestionSource { color: var(--color-muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; }
+.visualReviewCard > p, .visualReviewActions { grid-column: 1 / -1; margin: 0; }
+.visualReviewActions { display: grid; gap: 12px; }
+.visualReviewActions label { display: grid; gap: 6px; }
+.visualReviewActions select { min-height: 42px; padding: 8px 11px; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-field); }
+.agreementText { color: #176246; }
 
 @media (max-width: 650px) {
   .reportProgress { grid-template-columns: 1fr; gap: 8px; }
   .selectedSiteNotice { align-items: flex-start; flex-direction: column; gap: 10px; }
   .assistantHeader { align-items: stretch; flex-direction: column; }
-  .inlineSuggestionGrid, .completenessCard, .reviewSuggestionItem { grid-template-columns: 1fr; }
+  .inlineSuggestionGrid, .completenessCard, .reviewSuggestionItem, .visualReviewCard { grid-template-columns: 1fr; }
   .reviewSuggestionHeader { align-items: stretch; flex-direction: column; }
   .dialogActions { align-items: stretch; flex-direction: column-reverse; }
   .dialogActions > * { width: 100%; }
