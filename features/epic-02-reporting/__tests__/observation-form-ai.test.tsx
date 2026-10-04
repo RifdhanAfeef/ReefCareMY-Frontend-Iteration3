@@ -201,6 +201,18 @@ describe("automatic Smart Report Structuring", () => {
     });
   });
 
+  it("keeps a dive-plan date advisory and converts it to the editable report format", async () => {
+    render(<ObservationForm plannedDate="2026-10-03" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Your plan is not evidence of a dive. Confirm your Dive Session and site in the location step.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use suggested date" }));
+    expect(updateReportDraft).toHaveBeenCalledWith({ observationDate: "03/10/2026" });
+  });
+
   it("waits for the account draft and preserves its observation time when restoring photos", async () => {
     const file = new File(["reef"], "reef.jpg", {
       type: "image/jpeg",

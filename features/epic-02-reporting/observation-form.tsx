@@ -7,6 +7,7 @@ import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { useMockAppState } from "@/features/shared/mock-app-state";
 import {
   dateToMalaysiaFormValues,
+  inputDateToDisplayValue,
   isFutureDisplayDate,
   isValidDisplayDate,
 } from "@/lib/format/date";
@@ -474,7 +475,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       {plannedDate && /^\d{4}-\d{2}-\d{2}$/.test(plannedDate) && !Number.isNaN(Date.parse(plannedDate)) && (
         <aside className={styles.selectedSiteNotice} aria-label="Dive plan context">
           <div><strong>Suggested by your dive plan</strong><span>{plannedDate} · Confirm your actual observation date below.</span></div>
-          <button type="button" onClick={() => updateReportDraft({ observationDate: plannedDate })}>Use suggested date</button>
+          <button type="button" onClick={() => updateReportDraft({ observationDate: inputDateToDisplayValue(plannedDate) })}>Use suggested date</button>
           <p>Your plan is not evidence of a dive. Confirm your Dive Session and site in the location step.</p>
         </aside>
       )}
