@@ -36,11 +36,15 @@ export type PlanningContext = { today: string; scenario: Scenario };
 export type SeasonMonthView = { state: SeasonState; headline: string; detail: string };
 export type SeasonView = { source: string; months: SeasonMonthView[] };
 
+export type DaySignalsView = { waves: number | null; wind: number | null; rain: number | null };
+
 export type DaySummaryView = {
   band: Band;
   count: number;
   total: number;
   breakdown: { more_favourable: number; mixed: number; less_favourable: number };
+  signals: DaySignalsView | null;
+  reasons: string[];
 };
 
 export type ContextItemView = { title: string; summary: string; meta: string | null };
@@ -129,7 +133,27 @@ const sampleSource: PlanningSource = {
     };
   },
   async dateSummaries(area, dates, { today, scenario }) {
-    return Object.fromEntries(dates.map((date) => [date, daySummary(date, area, today, scenario)]));
+    return Object.fromEntries(
+      dates.map((date) => {
+        const summary = daySummary(date, area, today, scenario);
+        const usable = sitesIn(area)
+          .map((_, index) => assess(date, area, today, scenario, index))
+          .filter((item) => item.waves !== null && item.wind !== null);
+        const signals = usable.length
+          ? {
+              waves: Math.max(...usable.map((item) => item.waves as number)),
+              wind: Math.max(...usable.map((item) => item.wind as number)),
+              rain: null,
+            }
+          : null;
+        const reasons = usable.length
+          ? [
+              `The area is classified as ${labels[summary.band].toLowerCase()} from ${summary.count} of ${summary.total} configured site(s). The least favourable assessable site determines the area band.`,
+            ]
+          : [];
+        return [date, { ...summary, signals, reasons }];
+      }),
+    );
   },
   async siteAssessments(area, date, { today, scenario }) {
     return Object.fromEntries(
@@ -199,7 +223,14 @@ function planFromDto(dto: PlanDto): Plan | null {
     return site ? [site.id] : [];
   });
   if (!siteIds.length) return null;
-  return { planId: dto.planId, name: dto.name, area, plannedDate: dto.plannedDate, siteIds, updatedAt: dto.updatedAt };
+  return { planId: String(dto.planId), name: dto.name, area, plannedDate: dto.plannedDate, siteIds, updatedAt: dto.updatedAt };
+}
+
+// The UI keeps plan ids as strings (sample plans use local ids); the API uses numbers.
+function backendPlanId(planId: string): number {
+  const id = Number(planId);
+  if (!Number.isSafeInteger(id)) throw new Error("This plan has not been saved to the server.");
+  return id;
 }
 
 function planWriteFor(plan: Plan) {
@@ -254,6 +285,14 @@ const apiSource: PlanningSource = {
             mixed: day.breakdown.mixed,
             less_favourable: day.breakdown.lessFavourable,
           },
+          signals: day.signals
+            ? {
+                waves: day.signals.waveHeightMaxM,
+                wind: day.signals.windSpeedMaxKmh,
+                rain: day.signals.precipitationProbabilityMaxPct,
+              }
+            : null,
+          reasons: day.reasons ?? [],
         },
       ]),
     );
@@ -309,13 +348,13 @@ const apiSource: PlanningSource = {
   },
   async savePlan(_owner, plan, exists) {
     const payload = planWriteFor(plan);
-    const dto = exists ? await updatePlan(plan.planId, payload) : await createPlan(payload);
+    const dto = exists ? await updatePlan(backendPlanId(plan.planId), payload) : await createPlan(payload);
     const saved = planFromDto(dto);
     if (!saved) throw new Error("The saved plan could not be read back.");
     return saved;
   },
   async deletePlan(_owner, planId) {
-    await deletePlan(planId);
+    await deletePlan(backendPlanId(planId));
   },
 };
 

@@ -183,10 +183,19 @@ export function DateComparison({
       count: 0,
       total,
       breakdown: { more_favourable: 0, mixed: 0, less_favourable: 0 },
+      signals: null,
+      reasons: [],
     };
   const current = summaryFor(selected);
   const waves = siteAssessments.flatMap((item) => item.waves === null ? [] : [item.waves]);
   const winds = siteAssessments.flatMap((item) => item.wind === null ? [] : [item.wind]);
+  const signalText = summaries.status === "ready" && current.signals
+    ? [
+        current.signals.waves !== null ? `waves ${current.signals.waves} m` : null,
+        current.signals.wind !== null ? `wind ${current.signals.wind} km/h` : null,
+        current.signals.rain !== null ? `rain chance ${current.signals.rain}%` : null,
+      ].filter(Boolean).join(" · ")
+    : "";
   const range = (values: number[]) => Math.min(...values) === Math.max(...values)
     ? String(Math.min(...values))
     : `${Math.min(...values)}–${Math.max(...values)}`;
@@ -257,9 +266,17 @@ export function DateComparison({
           )}
           {waves.length > 0 && winds.length > 0 ? (
             <p>Across assessable sites: waves {range(waves)} m · wind {range(winds)} km/h</p>
-          ) : summaries.status === "ready" ? (
+          ) : summaries.status === "ready" && !signalText ? (
             <p>No forecast values available for this date.</p>
           ) : null}
+          {signalText && <p>Area daily maximum: {signalText}</p>}
+          {current.reasons.length > 0 && (
+            <ul className={styles.dateReasons}>
+              {current.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
         </div>
         <a href="#site-results">View sites for this day <ArrowRight size={16} /></a>
       </div>

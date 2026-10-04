@@ -383,6 +383,7 @@
   color: var(--plan-status-ink);
 }
 .pill[data-band="unavailable"],
+.pill[data-band="not_assessable"],
 .pill[data-band="out_of_horizon"] {
   background: var(--plan-soft);
   color: var(--plan-status-ink);
@@ -1175,6 +1176,11 @@
 }
 .dateFeedback p {
   margin: 4px 0 0;
+  color: var(--color-muted);
+}
+.dateReasons {
+  margin: 6px 0 0;
+  padding-left: 18px;
   color: var(--color-muted);
 }
 .dateFeedback a {

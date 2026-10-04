@@ -1,21 +1,20 @@
 import { apiRequest } from "./client";
 
-// Epic 9 contracts. The Backend Design & Integration Standard v0.1 marks these routes as
-// proposed, so the response shapes below are the frontend's expectation until the backend
-// owner agrees them. Keep any reshaping in this file so the UI never sees raw responses.
+// Epic 9 contracts, frozen with the backend owner on 4 Oct 2026 (see docs/iteration-3/e9-api-contract.md). Keep any reshaping in this file so the UI never sees raw responses.
 
 export type PlanningBand =
   | "more_favourable"
   | "mixed"
   | "less_favourable"
   | "unavailable"
+  | "not_assessable"
   | "out_of_horizon";
 
 export type SeasonState = "monsoon" | "transition" | "typical" | "unreviewed";
 
 export type SeasonalityMonthDto = {
   month: number;
-  state: SeasonState | null;
+  state: SeasonState;
   headline: string | null;
   detail: string | null;
 };
@@ -28,16 +27,26 @@ export type SeasonalityDto = {
   months: SeasonalityMonthDto[];
 };
 
+// One aggregated object per date. Per-site values come from the /sites endpoint.
+export type DateSignalsDto = {
+  waveHeightMaxM: number | null;
+  windSpeedMaxKmh: number | null;
+  precipitationProbabilityMaxPct: number | null;
+};
+
 export type DateSummaryDto = {
   date: string;
   band: PlanningBand;
   assessableSites: number;
   totalSites: number;
   breakdown: { moreFavourable: number; mixed: number; lessFavourable: number };
+  signals: DateSignalsDto | null;
+  reasons: string[];
 };
 
 export type AreaDatesDto = {
   areaCode: string;
+  source?: string | null;
   ruleVersion: string;
   retrievedAt: string | null;
   days: DateSummaryDto[];
@@ -54,6 +63,7 @@ export type SiteAssessmentDto = {
 export type AreaSitesDto = {
   areaCode: string;
   date: string;
+  source?: string | null;
   ruleVersion: string;
   retrievedAt: string | null;
   sites: SiteAssessmentDto[];
@@ -68,7 +78,7 @@ export type PlanningBriefDto = {
 };
 
 export type PlanDto = {
-  planId: string;
+  planId: number;
   name: string;
   areaCode: string;
   plannedDate: string;
@@ -132,22 +142,26 @@ export function createPlanningBrief(
 }
 
 export async function listPlans(signal?: AbortSignal): Promise<PlanDto[]> {
-  const result = await apiRequest<PlanDto[] | { items: PlanDto[] }>({ path: "/api/v1/plans", signal });
-  return Array.isArray(result) ? result : result.items;
+  const result = await apiRequest<{ items: PlanDto[] }>({ path: "/api/v1/plans", signal });
+  return result.items;
+}
+
+export function getPlan(planId: number, signal?: AbortSignal): Promise<PlanDto> {
+  return apiRequest<PlanDto>({ path: `/api/v1/plans/${planId}`, signal });
 }
 
 export function createPlan(payload: PlanWrite): Promise<PlanDto> {
   return apiRequest<PlanDto>({ path: "/api/v1/plans", method: "POST", body: payload });
 }
 
-export function updatePlan(planId: string, payload: PlanWrite): Promise<PlanDto> {
+export function updatePlan(planId: number, payload: PlanWrite): Promise<PlanDto> {
   return apiRequest<PlanDto>({
-    path: `/api/v1/plans/${encodeURIComponent(planId)}`,
+    path: `/api/v1/plans/${planId}`,
     method: "PATCH",
     body: payload,
   });
 }
 
-export function deletePlan(planId: string): Promise<void> {
-  return apiRequest<void>({ path: `/api/v1/plans/${encodeURIComponent(planId)}`, method: "DELETE" });
+export function deletePlan(planId: number): Promise<void> {
+  return apiRequest<void>({ path: `/api/v1/plans/${planId}`, method: "DELETE" });
 }

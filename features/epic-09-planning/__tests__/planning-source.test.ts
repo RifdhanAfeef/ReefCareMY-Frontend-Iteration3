@@ -61,7 +61,7 @@ describe("API source", () => {
       ruleVersion: "v1",
       retrievedAt: null,
       days: [
-        { date: today, band: "mixed", assessableSites: 10, totalSites: 12, breakdown: { moreFavourable: 4, mixed: 5, lessFavourable: 1 } },
+        { date: today, band: "mixed", assessableSites: 10, totalSites: 12, breakdown: { moreFavourable: 4, mixed: 5, lessFavourable: 1 }, signals: { waveHeightMaxM: 1, windSpeedMaxKmh: 14, precipitationProbabilityMaxPct: 30 }, reasons: ["Least favourable site sets the band."] },
       ],
     });
     const result = await source.dateSummaries("Tioman", [today, "2026-10-04"], context);
@@ -71,6 +71,8 @@ describe("API source", () => {
       count: 10,
       total: 12,
       breakdown: { more_favourable: 4, mixed: 5, less_favourable: 1 },
+      signals: { waves: 1, wind: 14, rain: 30 },
+      reasons: ["Least favourable site sets the band."],
     });
   });
 
@@ -94,7 +96,7 @@ describe("API source", () => {
     const source = await loadApiSource();
     const [site] = sitesIn("Perhentian");
     vi.mocked(planningApi.createPlan).mockImplementation(async (payload) => ({
-      planId: "server-1",
+      planId: 1,
       ...payload,
       updatedAt: "2026-10-03T00:00:00Z",
     }));
@@ -109,18 +111,18 @@ describe("API source", () => {
       plannedDate: today,
       diveSiteIds: [site.backendDiveSiteId],
     });
-    expect(saved).toMatchObject({ planId: "server-1", area: "Perhentian", siteIds: [site.id] });
+    expect(saved).toMatchObject({ planId: "1", area: "Perhentian", siteIds: [site.id] });
   });
 
   it("drops saved plans that reference unknown areas or sites", async () => {
     const source = await loadApiSource();
     vi.mocked(planningApi.listPlans).mockResolvedValue([
-      { planId: "a", name: "Unknown area", areaCode: "atlantis", plannedDate: today, diveSiteIds: [1], updatedAt: "" },
-      { planId: "b", name: "Unknown site", areaCode: "redang", plannedDate: today, diveSiteIds: [9999], updatedAt: "" },
-      { planId: "c", name: "Good", areaCode: "redang", plannedDate: today, diveSiteIds: [reefSites.find((s) => s.island === "Redang")!.backendDiveSiteId], updatedAt: "" },
+      { planId: 1, name: "Unknown area", areaCode: "atlantis", plannedDate: today, diveSiteIds: [1], updatedAt: "" },
+      { planId: 2, name: "Unknown site", areaCode: "redang", plannedDate: today, diveSiteIds: [9999], updatedAt: "" },
+      { planId: 3, name: "Good", areaCode: "redang", plannedDate: today, diveSiteIds: [reefSites.find((s) => s.island === "Redang")!.backendDiveSiteId], updatedAt: "" },
     ]);
     const plans = await source.listPlans("user-1");
-    expect(plans.map((plan) => plan.planId)).toEqual(["c"]);
+    expect(plans.map((plan) => plan.planId)).toEqual(["3"]);
   });
 
   it("reports an unavailable brief when the backend returns no text", async () => {
