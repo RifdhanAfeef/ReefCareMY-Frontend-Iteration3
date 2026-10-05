@@ -61,6 +61,23 @@ export function BandPill({ band }: { band: Band }) {
     </span>
   );
 }
+function BreakdownBar({ breakdown }: { breakdown: DaySummaryView["breakdown"] }) {
+  const parts = [
+    { band: "more_favourable", value: breakdown.more_favourable },
+    { band: "mixed", value: breakdown.mixed },
+    { band: "less_favourable", value: breakdown.less_favourable },
+  ] as const;
+  const description = `${breakdown.more_favourable} more favourable, ${breakdown.mixed} mixed, ${breakdown.less_favourable} less favourable`;
+  return (
+    <span className={styles.breakdown} role="img" aria-label={description} title={description}>
+      {parts.map((part) =>
+        part.value > 0 ? (
+          <span key={part.band} data-band={part.band} style={{ flexGrow: part.value }} />
+        ) : null,
+      )}
+    </span>
+  );
+}
 export function Signals({ assessment }: { assessment: Assessment }) {
   return (
     <div className={styles.signals}>
@@ -97,9 +114,8 @@ export function Seasonality({
     <section className={styles.panel} aria-labelledby="season-heading">
       <div className={styles.sectionHeading}>
         <div>
-          <span className={styles.eyebrow}>THE BIGGER PICTURE</span>
           <h2 id="season-heading">A year around {area}</h2>
-          <p>Explore the seasonal rhythm before choosing your dates.</p>
+          <p>Typical conditions by month. Not a forecast.</p>
         </div>
         <CalendarDays size={25} />
       </div>
@@ -203,12 +219,8 @@ export function DateComparison({
     <section className={styles.panel} aria-labelledby="dates-heading">
       <div className={styles.sectionHeading}>
         <div>
-          <span className={styles.eyebrow}>01 / CHOOSE YOUR DAY</span>
-          <h2 id="dates-heading">Find your window</h2>
-          <p>
-            Compare forecast conditions across the area, then look closer at
-            each site.
-          </p>
+          <h2 id="dates-heading">Compare dates</h2>
+          <p>Pick a day to see conditions at each site.</p>
         </div>
         <span className={styles.smallTag}>
           {sample ? "7-day sample forecast" : "7-day forecast"}
@@ -235,23 +247,19 @@ export function DateComparison({
             >
               <span className={styles.dateTop}>
                 {dateLabel(date)}
-                {selected === date && <span className={styles.selectedDateLabel}><Check size={14} />Selected</span>}
+                {selected === date && <span className={styles.selectedDateLabel}><Check size={18} aria-hidden="true" /><span className="sr-only">Selected</span></span>}
               </span>
               {loading ? (
                 <span className={styles.dateCount}>Loading conditions…</span>
               ) : (
                 <>
                   <BandPill band={summary.band} />
-                  <span className={styles.dateCount}>
-                    {summary.count} of {summary.total} sites assessable
-                  </span>
                   {summary.count > 0 && (
-                    <span className={styles.breakdown}>
-                      {summary.breakdown.more_favourable} favourable ·{" "}
-                      {summary.breakdown.mixed} mixed ·{" "}
-                      {summary.breakdown.less_favourable} less favourable
-                    </span>
+                    <BreakdownBar breakdown={summary.breakdown} />
                   )}
+                  <span className={styles.dateCount}>
+                    {summary.count}/{summary.total} sites assessed
+                  </span>
                 </>
               )}
             </button>
@@ -260,28 +268,39 @@ export function DateComparison({
       </div>
       <div className={styles.dateFeedback}>
         <div role="status" aria-live="polite" aria-atomic="true">
-          <strong>Showing conditions for {dateLabel(selected, true)}</strong>
-          {summaries.status === "ready" && (
-            <p>{labels[current.band]} · {current.count} of {current.total} sites assessable</p>
-          )}
+          <strong>
+            {dateLabel(selected, true)}
+            {summaries.status === "ready" && ` · ${labels[current.band]}`}
+          </strong>
           {waves.length > 0 && winds.length > 0 ? (
-            <p>Across assessable sites: waves {range(waves)} m · wind {range(winds)} km/h</p>
+            <p className={styles.dateSignals}>
+              <span><Waves size={16} />{range(waves)} m</span>
+              <span><Wind size={16} />{range(winds)} km/h</span>
+            </p>
           ) : summaries.status === "ready" && !signalText ? (
             <p>No forecast values available for this date.</p>
           ) : null}
-          {signalText && <p>Area daily maximum: {signalText}</p>}
-          {current.reasons.length > 0 && (
-            <ul className={styles.dateReasons}>
-              {current.reasons.map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
+          {summaries.status === "ready" && current.count > 0 && (
+            <p>
+              {current.breakdown.more_favourable} more favourable ·{" "}
+              {current.breakdown.mixed} mixed ·{" "}
+              {current.breakdown.less_favourable} less favourable · from{" "}
+              {current.count} of {current.total} sites
+            </p>
           )}
         </div>
-        <a href="#site-results">View sites for this day <ArrowRight size={16} /></a>
+        <a href="#site-results">View sites <ArrowRight size={16} /></a>
       </div>
       <details className={styles.details}>
         <summary>How are these conditions assessed?</summary>
+        {signalText && <p>Area daily maximum: {signalText}.</p>}
+        {current.reasons.length > 0 && (
+          <ul className={styles.dateReasons}>
+            {current.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        )}
         {sample ? (
           <>
             <p>
@@ -328,7 +347,6 @@ export function AreaOverview({ area }: { area: Area }) {
       </div>
       <figcaption>
         <strong>{photo.caption}</strong>
-        <p>A coastal view of the region. Individual dive sites are shown below.</p>
         <details>
           <summary>Photo credit & source</summary>
           <p>

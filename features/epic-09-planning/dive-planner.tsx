@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -513,46 +512,19 @@ export function DivePlanner() {
           <ChevronRight size={13} />
           <span>Plan a dive</span>
         </div>
-        <section className={styles.hero}>
-          <div className={styles.heroCopy}>
-            <span className={styles.eyebrow}>REEF-AWARE DIVE PLANNING</span>
-            <h1
-              tabIndex={-1}
-              style={{ outline: "none", outlineOffset: 0, boxShadow: "none" }}
-            >
-              A little planning.
-              <br />A deeper connection.
-            </h1>
-            <p>
-              Find your window, get to know the reef, and arrive with a little
-              more awareness.
-            </p>
-            <div className={styles.heroMeta}>
-              <span>
-                <Compass size={17} />3 Malaysian reef areas
-              </span>
-              <span>
-                <Waves size={18} />
-                Conditions with context
-              </span>
-            </div>
-          </div>
-          <div className={styles.heroImage}>
-            <Image
-              src="/images/reef-sites/surface/redang.jpg"
-              alt="Turquoise water, white sand and palm trees along the coast of Redang Island"
-              fill
-              priority
-              sizes="(max-width: 700px) 100vw, 45vw"
-            />
-            <span>
-              Discover with care.
-              <small>
-                Redang Island · <a href="https://commons.wikimedia.org/wiki/File:Redang_Sea_Beach.jpg" target="_blank" rel="noreferrer">Mukherjeesaikat</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA 3.0</a> · Cropped
-              </small>
-            </span>
-          </div>
-        </section>
+        <header className={styles.hero}>
+          <p className={styles.eyebrow}>Reef-aware dive planning</p>
+          <h1
+            tabIndex={-1}
+            style={{ outline: "none", outlineOffset: 0, boxShadow: "none" }}
+          >
+            Plan a dive
+          </h1>
+          <p>
+            Compare forecast conditions, pick your sites and get a reef-aware
+            brief before you go.
+          </p>
+        </header>
         <div className={styles.tabs} aria-label="Planning sections">
           {(
             [
@@ -695,13 +667,9 @@ export function DivePlanner() {
               <section aria-labelledby="sites-heading">
                 <div className={styles.sectionHeading}>
                   <div>
-                    <span className={styles.eyebrow}>
-                      02 / GET TO KNOW YOUR OPTIONS
-                    </span>
-                    <h2 id="sites-heading">A closer look at {area}</h2>
+                    <h2 id="sites-heading">Dive sites in {area}</h2>
                     <p>
-                      {dateLabel(selectedDate, true)} · {sites.length} supported
-                      dive sites
+                      {dateLabel(selectedDate, true)} · {sites.length} sites
                     </p>
                   </div>
                 </div>
@@ -750,11 +718,10 @@ export function DivePlanner() {
               </section>
               <aside className={styles.sidebar}>
                 <div className={styles.planSummary}>
-                  <span className={styles.eyebrow}>YOUR DIVE PLAN</span>
-                  <h2>{area}</h2>
+                  <h2>Your dive plan</h2>
                   <p>
                     <CalendarDays size={16} />
-                    {dateLabel(selectedDate, true)}
+                    {area} · {dateLabel(selectedDate, true)}
                   </p>
                   <div className={styles.selectedList}>
                     {selectedProfiles.length ? (
@@ -776,10 +743,7 @@ export function DivePlanner() {
                     ) : (
                       <div className={styles.emptySelection}>
                         <Plus size={24} />
-                        <p>
-                          Add the sites you would like to explore using the + on
-                          each card.
-                        </p>
+                        <p>Tap + on a site to add it.</p>
                       </div>
                     )}
                   </div>
@@ -797,17 +761,17 @@ export function DivePlanner() {
                       ? sample
                         ? "Saved on this device."
                         : "Saved privately to your Observer account."
-                      : "Sign in to save your dive plan."}
+                      : "Sign in to save."}
                   </small>
                 </div>
                 <div className={styles.careNote}>
                   <div className={styles.careIcon}>
                     <Waves size={24} />
                   </div>
-                  <h3>A forecast is a starting point.</h3>
+                  <h3>A forecast is a starting point</h3>
                   <p>
-                    Conditions can change. Speak to a local dive operator about
-                    current conditions, access and your experience.
+                    Conditions change. Check with a local dive operator before
+                    you go.
                   </p>
                   <Link href="/reef-threats">
                     Dive with reef awareness <ArrowRight size={16} />
@@ -821,14 +785,8 @@ export function DivePlanner() {
           <section className={styles.panel}>
             <div className={styles.sectionHeading}>
               <div>
-                <span className={styles.eyebrow}>
-                  KEEP YOUR NEXT ADVENTURE CLOSE
-                </span>
                 <h2>My dive plans</h2>
-                <p>
-                  Revisit your ideas. Refresh your conditions. Record what you
-                  observed.
-                </p>
+                <p>Revisit a plan or report what you saw.</p>
               </div>
               <button
                 type="button"
@@ -951,9 +909,8 @@ export function DivePlanner() {
         <div className={styles.bottomNote}>
           <Info size={17} />
           <p>
-            ReefCare helps you understand conditions and reef context. It does
-            not provide dive clearance or replace local operator and authority
-            guidance.
+            ReefCare is a planning aid, not dive clearance. Local operator and
+            authority guidance always comes first.
           </p>
         </div>
       </div>
@@ -1021,7 +978,6 @@ export function DivePlanner() {
       {saveDialog && (
         <Modal title="Name your dive plan" onClose={() => setSaveDialog(false)}>
           <form className={styles.dialogContent} onSubmit={savePlan}>
-            <span className={styles.eyebrow}>SAVE YOUR INTENTION</span>
             <h2>
               {editing ? "Update your plan" : "Make it your next adventure"}
             </h2>
