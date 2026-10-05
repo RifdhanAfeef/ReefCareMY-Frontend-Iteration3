@@ -213,6 +213,9 @@ describe("automatic Smart Report Structuring", () => {
     await act(async () => { await Promise.resolve(); });
 
     expect(screen.getByRole("heading", { name: "IMAGE ANALYSIS" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Two checks, using two different inputs" })).toBeInTheDocument();
+    expect(screen.getByText("From your uploaded photo")).toBeInTheDocument();
+    expect(screen.getByText("From your written description")).toBeInTheDocument();
     expect(screen.queryByText("Possible visual threat")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use image suggestion" }));
 

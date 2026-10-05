@@ -551,21 +551,6 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                   </div>}
                 </article>;
               })}</div>}
-              {(visualRecognitionBusy || reportDraft.visualRecognition) && <aside className={styles.visualRecognitionCard} aria-labelledby="visual-recognition-heading">
-                <div><h4 id="visual-recognition-heading">IMAGE ANALYSIS</h4></div>
-                {visualRecognitionBusy ? <p role="status">{visualRecognitionMessage}</p> : reportDraft.visualRecognition && <>
-                  <strong>{reportDraft.visualRecognition.suggestedThreatLabel ?? "No suggestion available"}</strong>
-                  {reportDraft.visualRecognition.status === "recognized" && <span>{confidenceLabel(reportDraft.visualRecognition.confidence)}</span>}
-                  <p>{reportDraft.visualRecognition.warning ?? visualRecognitionMessage}</p>
-                  <small>AI suggestion only — this does not verify the image or replace your final threat choice.</small>
-                  {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution === "unresolved" && <div className={styles.imageAnalysisActions}>
-                    <button className={styles.smallButton} type="button" disabled={!categoryOptions.some((item) => item.code === reportDraft.visualRecognition?.suggestedThreatCode)} onClick={useVisualSuggestion}>Use image suggestion</button>
-                    <button className={styles.smallButton} type="button" disabled={!reportDraft.threatCategoryId} onClick={keepSelectedThreat}>Keep my selected threat</button>
-                    <small>You can also choose a different possible threat type in the structured fields below.</small>
-                  </div>}
-                  {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution !== "unresolved" && <p className={styles.reviewedAnalysis}>Reviewed. Your selected possible threat type remains the report’s final value.</p>}
-                </>}
-              </aside>}
             </div>
           </section>
 
@@ -574,8 +559,38 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <label className={`${styles.field} ${styles.fullWidth}`}><span className={styles.fieldLabel}>Describe what you saw *</span><span className={styles.fieldHelp}>You do not need to know the threat type. Include approximate size, depth, contact with coral or marine animals if you remember them.</span><textarea value={reportDraft.description} onChange={(event) => updateField({ description: event.target.value }, "description")} aria-invalid={Boolean(errors.description)} placeholder="Example: Large fishing net tangled around coral north of D'Lagoon, around 10-15 m deep." />{errors.description && <span className={styles.errorText} role="alert">{errors.description}</span>}</label>
         </div>
 
-        <section className={styles.assistantCard} aria-labelledby="smart-report-heading">
-          <div className={styles.assistantHeader}><div><p className={styles.assistantLabel}>Automatic AI assistance</p><h3 id="smart-report-heading">Structured report details</h3><p>ReefCare structures the written description when available. AI suggestions remain clearly marked and are not accepted automatically.</p></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
+        <section className={styles.aiWorkspace} aria-labelledby="ai-assistance-heading">
+          <header className={styles.aiWorkspaceHeader}>
+            <p className={styles.assistantLabel}>Optional AI assistance</p>
+            <h2 id="ai-assistance-heading">Two checks, using two different inputs</h2>
+            <p>Image Analysis reads one uploaded photo. Smart Report Structuring reads only your written description. Neither one makes the final decision.</p>
+            <div className={styles.aiInputGuide} aria-label="Difference between the two AI features">
+              <div><strong>Photo</strong><span>Suggests a possible threat type</span></div>
+              <div><strong>Written description</strong><span>Organises useful report details</span></div>
+            </div>
+          </header>
+
+          <section className={styles.imageAnalysisPanel} aria-labelledby="visual-recognition-heading">
+            <div className={styles.aiFeatureHeader}>
+              <span className={styles.aiStep} aria-hidden="true">1</span>
+              <div><p className={styles.assistantLabel}>From your uploaded photo</p><h3 id="visual-recognition-heading">IMAGE ANALYSIS</h3><p>Checks the first new photo for one of ReefCare’s supported threat categories.</p></div>
+            </div>
+            {visualRecognitionBusy ? <p className={styles.assistantMessage} role="status">{visualRecognitionMessage}</p> : reportDraft.visualRecognition ? <div className={styles.imageAnalysisResult}>
+              <div><small>Suggested possible threat</small><strong>{reportDraft.visualRecognition.suggestedThreatLabel ?? "No suggestion available"}</strong></div>
+              {reportDraft.visualRecognition.status === "recognized" && <div><small>Model confidence</small><strong>{confidenceLabel(reportDraft.visualRecognition.confidence)}</strong></div>}
+              <p>{reportDraft.visualRecognition.warning ?? visualRecognitionMessage}</p>
+              <small>Suggestion only — it does not verify the image or replace your final choice.</small>
+              {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution === "unresolved" && <div className={styles.imageAnalysisActions}>
+                <button className={styles.smallButton} type="button" disabled={!categoryOptions.some((item) => item.code === reportDraft.visualRecognition?.suggestedThreatCode)} onClick={useVisualSuggestion}>Use image suggestion</button>
+                <button className={styles.smallButton} type="button" disabled={!reportDraft.threatCategoryId} onClick={keepSelectedThreat}>Keep my selected threat</button>
+                <small>You can also choose a different possible threat type in the structured fields below.</small>
+              </div>}
+              {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution !== "unresolved" && <p className={styles.reviewedAnalysis}>Reviewed. Your selected possible threat type remains the report’s final value.</p>}
+            </div> : <p className={styles.aiEmptyState}>Upload a photo above to start Image Analysis automatically.</p>}
+          </section>
+
+          <section className={styles.assistantCard} aria-labelledby="smart-report-heading">
+          <div className={styles.assistantHeader}><div className={styles.aiFeatureHeader}><span className={styles.aiStep} aria-hidden="true">2</span><div><p className={styles.assistantLabel}>From your written description</p><h3 id="smart-report-heading">SMART REPORT STRUCTURING</h3><p>Organises details such as possible threat type, depth, size, interactions and site reference. Suggestions are not accepted automatically.</p></div></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
           {assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
           <div className={styles.inlineSuggestionGrid}>{smartReportFields.map(({ field, label }) => {
             const suggestionIndex = reportDraft.aiSuggestions.findIndex((item) => item.field === field);
@@ -611,6 +626,8 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
               <div className={styles.optionButtons}>{question.options.map((option) => <button type="button" key={option} onClick={() => answerFollowUp(question, option)}>{option}</button>)}</div>
             </fieldset>)}
           </div>}
+          </section>
+          <p className={styles.aiDecisionNote}><strong>You stay in control.</strong> Review every suggestion and keep, edit or replace it before submitting.</p>
         </section>
 
         <div className={styles.formFooter}>
