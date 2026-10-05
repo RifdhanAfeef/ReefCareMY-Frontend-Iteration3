@@ -23,9 +23,11 @@ export type SmartReportField =
   | "site_reference";
 
 export type ReportAISuggestion = {
+  source: "smart_report";
   field: SmartReportField;
   label: string;
   suggestedValue: string | null;
+  confidence: null;
   status: "unresolved" | "confirmed" | "corrected" | "removed";
   conflict: boolean;
   observerValue: string | null;

@@ -5,6 +5,7 @@ import { structureReportDescription } from "@/lib/api/smartReportApi";
 import { getThreatCategories } from "@/lib/api/referenceApi";
 import { clearDraftPhotos, loadDraftPhotos } from "@/features/epic-02-reporting/draft-storage";
 import { recognizeVisualThreat } from "@/lib/api/visualRecognitionApi";
+import type { ReportDraft } from "../types";
 
 const { resetReportDraft, updateReportDraft, runtime } = vi.hoisted(() => ({
   resetReportDraft: vi.fn(),
@@ -22,7 +23,7 @@ const { resetReportDraft, updateReportDraft, runtime } = vi.hoisted(() => ({
       aiSuggestions: [],
       visualRecognition: null,
       lastSavedAt: null,
-    },
+    } as ReportDraft,
   },
 }));
 
@@ -179,6 +180,47 @@ describe("automatic Smart Report Structuring", () => {
     });
     const recognitionChange = vi.mocked(updateReportDraft).mock.calls.find(([changes]) => "visualRecognition" in changes)?.[0];
     expect(recognitionChange).not.toHaveProperty("threatCategoryCode");
+  });
+
+  it("lets the observer review image analysis on the photo-upload page", async () => {
+    runtime.reportDraft = {
+      ...runtime.reportDraft,
+      threatCategoryCode: "ghost_gear",
+      threatCategoryId: 41,
+      visualRecognition: {
+        photoId: "photo-1",
+        photoName: "reef.jpg",
+        status: "recognized",
+        suggestedThreatCode: "coral_bleaching",
+        suggestedThreatLabel: "Coral bleaching",
+        confidence: 0.9,
+        warning: null,
+        resolution: "unresolved",
+      },
+    };
+    vi.mocked(getThreatCategories).mockResolvedValue([
+      {
+        threatCategoryId: 42,
+        code: "coral_bleaching",
+        label: "Coral bleaching",
+        shortExplanation: "Pale coral.",
+        usefulEvidence: "A photograph.",
+        safetyReminder: "Observe safely.",
+        iconReference: null,
+      },
+    ]);
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByRole("heading", { name: "IMAGE ANALYSIS" })).toBeInTheDocument();
+    expect(screen.queryByText("Possible visual threat")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use image suggestion" }));
+
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
+      threatCategoryCode: "coral_bleaching",
+      threatCategoryId: 42,
+      visualRecognition: expect.objectContaining({ resolution: "accepted" }),
+    }));
   });
 
   it("selects the physical-damage category carried from the threat explorer", async () => {

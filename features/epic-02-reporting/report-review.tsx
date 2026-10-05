@@ -38,7 +38,6 @@ export function ReportReview() {
   const [categoryReferences, setCategoryReferences] = useState<ThreatCategoryReference[]>([]);
   const [editingSuggestion, setEditingSuggestion] = useState<number | null>(null);
   const [editedSuggestionValue, setEditedSuggestionValue] = useState("");
-  const [visualThreatChoice, setVisualThreatChoice] = useState("");
   const threat = getThreatCategory(reportDraft.threatCategoryCode);
   const session = locationDraft.sessions.find((item) => item.id === locationDraft.selectedSessionId);
 
@@ -97,7 +96,9 @@ export function ReportReview() {
     if (!session?.backendId || !locationDraft.confidence) items.push("Dive Session, location and confidence");
     return items;
   }, [locationDraft.confidence, photos.length, reportDraft, session, threat]);
-  const unresolvedSuggestions = backendReview?.unresolvedSuggestions ?? (reportDraft.aiSuggestions ?? []).filter((suggestion) => suggestion.status === "unresolved");
+  const unresolvedSuggestions = backendReview
+    ? backendReview.unresolvedSuggestions.filter((suggestion) => suggestion.source === "smart_report")
+    : (reportDraft.aiSuggestions ?? []).filter((suggestion) => suggestion.status === "unresolved");
   const visualRecognitionNeedsReview = reportDraft.visualRecognition?.status === "recognized"
     && reportDraft.visualRecognition.resolution === "unresolved";
   const backendBlocking = backendReview ? !backendReview.isSubmittable : false;
@@ -111,27 +112,6 @@ export function ReportReview() {
     && reportDraft.visualRecognition?.suggestedThreatLabel
     && textThreatSuggestion.suggestedValue.trim().toLowerCase() === reportDraft.visualRecognition.suggestedThreatLabel.trim().toLowerCase(),
   );
-
-  function selectFinalVisualThreat(code: string) {
-    const category = categoryReferences.find((item) => item.code === code);
-    const recognition = reportDraft.visualRecognition;
-    if (!category || !recognition) return;
-    updateReportDraft({
-      threatCategoryCode: category.code as typeof reportDraft.threatCategoryCode,
-      threatCategoryId: category.threatCategoryId,
-      visualRecognition: {
-        ...recognition,
-        resolution: category.code === recognition.suggestedThreatCode ? "accepted" : "changed",
-      },
-    });
-    setVisualThreatChoice("");
-  }
-
-  function keepObserverThreat() {
-    const recognition = reportDraft.visualRecognition;
-    if (!recognition || !reportDraft.threatCategoryId) return;
-    updateReportDraft({ visualRecognition: { ...recognition, resolution: "kept" } });
-  }
 
   function resolveSuggestion(index: number, action: "accept" | "keep" | "remove" | "unsure") {
     const suggestion = reportDraft.aiSuggestions[index];
@@ -244,7 +224,7 @@ export function ReportReview() {
       {reviewing && <section className={styles.infoBox} role="status"><strong>Checking report completeness…</strong><p>Required fields, suggestions and location guidance are being checked.</p></section>}
       {reviewError && <section className={styles.errorBox} role="alert"><strong>Server review unavailable</strong><p>{reviewError}</p></section>}
       {unresolvedSuggestions.length > 0 && <section className={styles.warningBox} role="status"><strong>AI-assisted details need your review</strong><p>Resolve the highlighted fields below before submitting.</p></section>}
-      {visualRecognitionNeedsReview && <section className={styles.warningBox} role="status"><strong>Image suggestion needs your decision</strong><p>Confirm the image suggestion, keep your current choice, choose another category or select Unsure before submitting.</p></section>}
+      {visualRecognitionNeedsReview && <section className={styles.warningBox} role="status"><strong>Image suggestion needs your decision</strong><p>Return to observation details to confirm the image suggestion or keep your selected possible threat type.</p><Link className={styles.textButton} href="/report-a-reef">Review image analysis</Link></section>}
       {backendReview?.locationWarning?.hasWarning && <section className={styles.warningBox} role="status"><strong>Location guidance</strong><p>{backendReview.locationWarning.message}</p><small>This warning does not block submission.</small></section>}
 
       <div className={styles.reviewLayout}>
@@ -260,7 +240,7 @@ export function ReportReview() {
               <div className={styles.fullWidth}><dt>Description</dt><dd className={styles.description}>{reportDraft.description.trim() || "Not provided"}</dd></div>
             </dl>
             {reportDraft.visualRecognition && <section className={styles.reviewSuggestions} aria-labelledby="visual-review-heading">
-              <div className={styles.reviewSuggestionHeader}><div><p className={styles.assistantLabel}>Image analysis</p><h3 id="visual-review-heading">Review visual threat suggestion</h3><p>AI can suggest a supported category, but it cannot verify the image or make the final decision.</p></div></div>
+              <div className={styles.reviewSuggestionHeader}><div><h3 id="visual-review-heading">IMAGE ANALYSIS</h3><p>AI can suggest a supported category, but it cannot verify the image or make the final decision.</p></div></div>
               <article className={`${styles.visualReviewCard} ${visualRecognitionNeedsReview ? styles.reviewConflict : ""}`}>
                 <div><span>Analysed photo</span><strong>{reportDraft.visualRecognition.photoName}</strong></div>
                 <div><span>Suggested threat</span><strong>{reportDraft.visualRecognition.suggestedThreatLabel ?? "No supported suggestion"}</strong></div>
@@ -270,14 +250,7 @@ export function ReportReview() {
                   ? "Text analysis and image analysis suggest the same category. You still need to confirm the final choice."
                   : `Text analysis suggests ${textThreatSuggestion.suggestedValue}, while image analysis suggests ${reportDraft.visualRecognition.suggestedThreatLabel}. Choose the final category yourself.`}</p>}
                 {reportDraft.visualRecognition.status !== "recognized" && <p>This result does not block the report. Continue using your own observation.</p>}
-                {visualRecognitionNeedsReview && <div className={styles.visualReviewActions}>
-                  <div className={styles.compactActions}>
-                    {reportDraft.visualRecognition.suggestedThreatCode && <button className={styles.smallButton} type="button" onClick={() => selectFinalVisualThreat(reportDraft.visualRecognition?.suggestedThreatCode ?? "")}>Use image suggestion</button>}
-                    <button className={styles.smallButton} type="button" disabled={!reportDraft.threatCategoryId} onClick={keepObserverThreat}>Keep my selected threat</button>
-                  </div>
-                  <label><span>Choose another final threat</span><select aria-label="Choose another final threat" value={visualThreatChoice} onChange={(event) => setVisualThreatChoice(event.target.value)}><option value="">Select a category</option>{categoryReferences.map((category) => <option key={category.code} value={category.code}>{category.label}</option>)}</select></label>
-                  <button className={styles.smallButton} type="button" disabled={!visualThreatChoice} onClick={() => selectFinalVisualThreat(visualThreatChoice)}>Use selected category</button>
-                </div>}
+                {visualRecognitionNeedsReview && <p className={styles.conflictText}>Review this image analysis on the observation page before submitting.</p>}
                 {!visualRecognitionNeedsReview && reportDraft.visualRecognition.status === "recognized" && <p className={styles.agreementText}>Reviewed. Your selected threat category remains the report’s final value.</p>}
               </article>
             </section>}

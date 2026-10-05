@@ -277,7 +277,19 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           : { ...suggestion, observerValue: null, status: "unresolved" as const, conflict: false };
       })
       : reportDraft.aiSuggestions;
-    updateReportDraft({ ...changes, aiSuggestions });
+    const recognition = reportDraft.visualRecognition;
+    const selectedThreatCode = changes.threatCategoryCode;
+    const visualRecognition = recognition?.status === "recognized" && selectedThreatCode !== undefined
+      ? {
+          ...recognition,
+          resolution: !selectedThreatCode
+            ? "unresolved" as const
+            : selectedThreatCode === recognition.suggestedThreatCode
+              ? "accepted" as const
+              : "changed" as const,
+        }
+      : recognition;
+    updateReportDraft({ ...changes, aiSuggestions, visualRecognition });
     if (errorField) setErrors((current) => ({ ...current, [errorField]: undefined }));
   }
 
@@ -393,9 +405,11 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     const existingIndex = reportDraft.aiSuggestions.findIndex((suggestion) => suggestion.field === field);
     const label = smartReportFields.find((item) => item.field === field)?.label ?? question.field;
     const answerSuggestion: ReportDraft["aiSuggestions"][number] = {
+      source: "smart_report",
       field,
       label,
       suggestedValue: answer,
+      confidence: null,
       status: "corrected",
       conflict: false,
       observerValue: answer,
@@ -406,6 +420,28 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
         : [...reportDraft.aiSuggestions, answerSuggestion],
     });
     setFollowUpQuestions((current) => current.filter((item) => item.field !== question.field));
+  }
+
+  function useVisualSuggestion() {
+    const recognition = reportDraft.visualRecognition;
+    const category = categoryOptions.find(
+      (item) => item.code === recognition?.suggestedThreatCode,
+    );
+    if (!recognition || !category) return;
+    updateReportDraft({
+      threatCategoryCode: category.code as ReportDraft["threatCategoryCode"],
+      threatCategoryId: category.threatCategoryId,
+      visualRecognition: { ...recognition, resolution: "accepted" },
+    });
+    setErrors((current) => ({ ...current, threat: undefined }));
+  }
+
+  function keepSelectedThreat() {
+    const recognition = reportDraft.visualRecognition;
+    if (!recognition || !reportDraft.threatCategoryId) return;
+    updateReportDraft({
+      visualRecognition: { ...recognition, resolution: "kept" },
+    });
   }
 
   function validate() {
@@ -516,12 +552,18 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                 </article>;
               })}</div>}
               {(visualRecognitionBusy || reportDraft.visualRecognition) && <aside className={styles.visualRecognitionCard} aria-labelledby="visual-recognition-heading">
-                <div><p className={styles.assistantLabel}>Image analysis</p><h4 id="visual-recognition-heading">Possible visual threat</h4></div>
+                <div><h4 id="visual-recognition-heading">IMAGE ANALYSIS</h4></div>
                 {visualRecognitionBusy ? <p role="status">{visualRecognitionMessage}</p> : reportDraft.visualRecognition && <>
                   <strong>{reportDraft.visualRecognition.suggestedThreatLabel ?? "No suggestion available"}</strong>
                   {reportDraft.visualRecognition.status === "recognized" && <span>{confidenceLabel(reportDraft.visualRecognition.confidence)}</span>}
                   <p>{reportDraft.visualRecognition.warning ?? visualRecognitionMessage}</p>
                   <small>AI suggestion only — this does not verify the image or replace your final threat choice.</small>
+                  {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution === "unresolved" && <div className={styles.imageAnalysisActions}>
+                    <button className={styles.smallButton} type="button" disabled={!categoryOptions.some((item) => item.code === reportDraft.visualRecognition?.suggestedThreatCode)} onClick={useVisualSuggestion}>Use image suggestion</button>
+                    <button className={styles.smallButton} type="button" disabled={!reportDraft.threatCategoryId} onClick={keepSelectedThreat}>Keep my selected threat</button>
+                    <small>You can also choose a different possible threat type in the structured fields below.</small>
+                  </div>}
+                  {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution !== "unresolved" && <p className={styles.reviewedAnalysis}>Reviewed. Your selected possible threat type remains the report’s final value.</p>}
                 </>}
               </aside>}
             </div>

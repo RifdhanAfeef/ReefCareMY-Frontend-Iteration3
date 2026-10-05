@@ -133,6 +133,9 @@
 .visualRecognitionCard h4, .visualRecognitionCard p { margin: 0; }
 .visualRecognitionCard span { color: #27677d; font-weight: 800; }
 .visualRecognitionCard small { color: var(--color-muted); }
+.imageAnalysisActions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 5px; padding-top: 12px; border-top: 1px solid #bddce8; }
+.imageAnalysisActions small { flex-basis: 100%; }
+.reviewedAnalysis { color: #2f6d48; font-weight: 700; }
 .inlineSuggestionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .inlineSuggestionField { display: grid; gap: 8px; padding: 14px; background: #fff; border: 1px solid #cfe2e8; border-radius: 11px; }
 .inlineSuggestionField input, .inlineSuggestionField select { min-height: 42px; padding: 8px 11px; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-field); }

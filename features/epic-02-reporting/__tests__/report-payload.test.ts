@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { initialLocationDraft, initialReportDraft } from "@/features/shared/mock-app-state";
-import { buildReportCompletenessPayload, buildReportSubmissionPayload } from "../report-payload";
+import { buildReportCompletenessPayload, buildReportReviewPayload, buildReportSubmissionPayload } from "../report-payload";
 
 describe("report submission boundary", () => {
   it("includes a completed observation date and time in the completeness request", () => {
@@ -66,14 +66,60 @@ describe("report submission boundary", () => {
         relocationNotes: "Surface entry context: Entered from the boat north of the site\nSurface exit context: Surfaced beside the mooring line",
       },
       evidenceMetadata: [],
-      aiSuggestions: [],
-      aiSuggestedThreatCode: "marine_debris",
-      aiSuggestedThreatLabel: "Marine debris",
-      aiConfidence: 0.87,
-      aiWarning: null,
+      aiSuggestions: [{
+        source: "visual_recognition",
+        field: "possible_threat",
+        suggestedValue: "Marine debris",
+        confidence: 0.87,
+        status: "corrected",
+      }],
     });
     expect(result.threatCategoryId).toBe(1);
     expect(result.observedAt).toBe(new Date("2026-08-27T09:10:00+08:00").toISOString());
+  });
+
+  it("sends explicit provenance for both AI services to review", () => {
+    const result = buildReportReviewPayload({
+      ...initialReportDraft,
+      aiSuggestions: [{
+        source: "smart_report",
+        field: "possible_threat",
+        label: "Possible threat type",
+        suggestedValue: "Ghost fishing gear",
+        confidence: null,
+        status: "confirmed",
+        conflict: false,
+        observerValue: "Ghost fishing gear",
+      }],
+      visualRecognition: {
+        photoId: "photo-1",
+        photoName: "reef.jpg",
+        status: "recognized",
+        suggestedThreatCode: "coral_bleaching",
+        suggestedThreatLabel: "Coral bleaching",
+        confidence: 0.9,
+        warning: null,
+        resolution: "unresolved",
+      },
+    }, initialLocationDraft, 1);
+
+    expect(result.aiSuggestions).toEqual([
+      {
+        source: "smart_report",
+        field: "possible_threat",
+        suggestedValue: "Ghost fishing gear",
+        confidence: null,
+        status: "confirmed",
+      },
+      {
+        source: "visual_recognition",
+        field: "possible_threat",
+        suggestedValue: "Coral bleaching",
+        confidence: 0.9,
+        status: "unresolved",
+      },
+    ]);
+    expect(result).not.toHaveProperty("aiSuggestedThreatCode");
   });
 
   it("omits relocation notes when the optional surface fields are empty", () => {

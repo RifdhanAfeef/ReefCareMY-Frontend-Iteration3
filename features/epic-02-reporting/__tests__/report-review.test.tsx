@@ -84,9 +84,11 @@ it("still navigates to confirmation when local photo cleanup fails after API suc
 
 it("accepts all non-conflicting AI suggestions together at final review", async () => {
   scenario.aiSuggestions = [{
+    source: "smart_report",
     field: "approximate_size",
     label: "Approximate size",
     suggestedValue: "5-10 m",
+    confidence: null,
     status: "unresolved",
     conflict: false,
     observerValue: null,
@@ -117,11 +119,9 @@ it("blocks submission until a recognized image suggestion is explicitly resolved
 
   expect(await screen.findByText("Image suggestion needs your decision")).toBeInTheDocument();
   expect(screen.getByText("High confidence (87%)")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "IMAGE ANALYSIS" })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeDisabled());
-  fireEvent.click(screen.getByRole("button", { name: "Use image suggestion" }));
-
-  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
-  expect(screen.getByText("Marine debris", { selector: "dd" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Review image analysis" })).toHaveAttribute("href", "/report-a-reef");
 });
 
 it("keeps visual recognition failures non-blocking", async () => {

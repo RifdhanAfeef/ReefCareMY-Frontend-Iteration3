@@ -268,16 +268,11 @@ export type EvidenceMetadataInput = {
 export type AISuggestionStatus = "unresolved" | "confirmed" | "corrected" | "removed";
 
 export type AISuggestionState = {
+  source: "smart_report" | "visual_recognition";
   field: string;
   suggestedValue: string | null;
+  confidence: number | null;
   status: AISuggestionStatus;
-};
-
-export type VisualRecognitionAdvisory = {
-  aiSuggestedThreatCode: string | null;
-  aiSuggestedThreatLabel: string | null;
-  aiConfidence: number | null;
-  aiWarning: string | null;
 };
 
 export type ReportCompletenessLocationInput = {
@@ -325,7 +320,7 @@ export type LocationCheckResponse = {
   selectedSiteName: string | null;
 };
 
-export type ReportReviewRequest = ReportCompletenessRequest & VisualRecognitionAdvisory & {
+export type ReportReviewRequest = ReportCompletenessRequest & {
   evidenceMetadata: EvidenceMetadataInput[];
   aiSuggestions: AISuggestionState[];
 };
@@ -339,7 +334,7 @@ export type ReportReviewResponse = {
   locationWarning: LocationCheckResponse | null;
 };
 
-export type ReportSubmissionPayload = VisualRecognitionAdvisory & {
+export type ReportSubmissionPayload = {
   threatCategoryId: number;
   observedAt: string;
   estimatedDepthMetres?: number;

@@ -69,9 +69,11 @@ export function mergeSmartReportSuggestions(
         : "unresolved";
 
     return [{
+      source: "smart_report",
       field,
       label: suggestion.label || smartReportFields.find((item) => item.field === field)?.label || field,
       suggestedValue: value,
+      confidence: null,
       status,
       conflict: Boolean(observerValue) && !matchesObserver,
       observerValue,

@@ -91,6 +91,8 @@ function restoreReportDraft(stored?: Partial<ReportDraft>): ReportDraft {
     aiSuggestions: Array.isArray(stored.aiSuggestions)
       ? stored.aiSuggestions.map((suggestion) => ({
         ...suggestion,
+        source: "smart_report" as const,
+        confidence: null,
         conflict: Boolean(suggestion.conflict),
         observerValue: suggestion.observerValue ?? null,
       }))

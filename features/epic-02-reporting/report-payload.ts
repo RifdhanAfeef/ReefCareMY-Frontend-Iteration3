@@ -23,23 +23,43 @@ function pointFor(location: LocationDraft) {
 }
 
 function resolvedSuggestions(report: ReportDraft): AISuggestionState[] {
-  return (report.aiSuggestions ?? []).map(({ field, suggestedValue, status }) => ({ field, suggestedValue, status }));
+  const smartReportSuggestions = (report.aiSuggestions ?? []).map(
+    ({ source, field, suggestedValue, confidence, status }) => ({
+      source,
+      field,
+      suggestedValue,
+      confidence,
+      status,
+    }),
+  );
+  const recognition = report.visualRecognition;
+  if (recognition?.status !== "recognized" || !recognition.suggestedThreatLabel) {
+    return smartReportSuggestions;
+  }
+  const status: AISuggestionState["status"] =
+    recognition.resolution === "accepted"
+      ? "confirmed"
+      : recognition.resolution === "unresolved"
+        ? "unresolved"
+        : recognition.resolution === "not_required"
+          ? "removed"
+          : "corrected";
+  return [
+    ...smartReportSuggestions,
+    {
+      source: "visual_recognition",
+      field: "possible_threat",
+      suggestedValue: recognition.suggestedThreatLabel,
+      confidence: recognition.confidence,
+      status,
+    },
+  ];
 }
 
 function evidenceMetadata(report: ReportDraft) {
   return (report.photos ?? []).map((photo) => ({
     capturedAt: photo.capturedAtConfirmed ? (photo.capturedAt ?? null) : null,
   }));
-}
-
-function visualRecognitionAdvisory(report: ReportDraft) {
-  const recognition = report.visualRecognition;
-  return {
-    aiSuggestedThreatCode: recognition?.suggestedThreatCode ?? null,
-    aiSuggestedThreatLabel: recognition?.suggestedThreatLabel ?? null,
-    aiConfidence: recognition?.confidence ?? null,
-    aiWarning: recognition?.warning ?? null,
-  };
 }
 
 function surfaceContextNotes(location: LocationDraft): string | null {
@@ -94,7 +114,6 @@ export function buildReportReviewPayload(
     ...buildReportCompletenessPayload(report, location, evidenceCount),
     evidenceMetadata: evidenceMetadata(report),
     aiSuggestions: resolvedSuggestions(report),
-    ...visualRecognitionAdvisory(report),
   };
 }
 
@@ -137,7 +156,6 @@ export function buildReportSubmissionPayload(
     },
     evidenceMetadata: evidenceMetadata(report),
     aiSuggestions: resolvedSuggestions(report),
-    ...visualRecognitionAdvisory(report),
   };
 
   if (report.estimatedDepthMetres) payload.estimatedDepthMetres = Number(report.estimatedDepthMetres);
