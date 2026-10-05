@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  CloudRain,
   ExternalLink,
   Info,
   MapPin,
@@ -205,6 +206,7 @@ export function DateComparison({
   const current = summaryFor(selected);
   const waves = siteAssessments.flatMap((item) => item.waves === null ? [] : [item.waves]);
   const winds = siteAssessments.flatMap((item) => item.wind === null ? [] : [item.wind]);
+  const rain = summaries.status === "ready" ? current.signals?.rain ?? null : null;
   const signalText = summaries.status === "ready" && current.signals
     ? [
         current.signals.waves !== null ? `waves ${current.signals.waves} m` : null,
@@ -272,10 +274,11 @@ export function DateComparison({
             {dateLabel(selected, true)}
             {summaries.status === "ready" && ` · ${labels[current.band]}`}
           </strong>
-          {waves.length > 0 && winds.length > 0 ? (
+          {waves.length > 0 || winds.length > 0 || rain !== null ? (
             <p className={styles.dateSignals}>
-              <span><Waves size={16} />{range(waves)} m</span>
-              <span><Wind size={16} />{range(winds)} km/h</span>
+              {waves.length > 0 && <span><Waves size={16} />{range(waves)} m</span>}
+              {winds.length > 0 && <span><Wind size={16} />{range(winds)} km/h</span>}
+              {rain !== null && <span><CloudRain size={16} />{rain}% rain chance</span>}
             </p>
           ) : summaries.status === "ready" && !signalText ? (
             <p>No forecast values available for this date.</p>
