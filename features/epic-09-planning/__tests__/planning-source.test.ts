@@ -44,16 +44,22 @@ describe("API source", () => {
     vi.mocked(planningApi.getAreaSites).mockResolvedValue({
       areaCode: "redang",
       date: today,
+      source: "Open-Meteo",
       ruleVersion: "v1",
       retrievedAt: "2026-10-03T08:00:00+08:00",
       sites: [
-        { diveSiteId: first.backendDiveSiteId, band: "mixed", waveHeightMaxM: 1.1, windSpeedMaxKmh: 14, reason: "r" },
+        { diveSiteId: first.backendDiveSiteId, band: "mixed", waveHeightMaxM: 1.1, windSpeedMaxKmh: 14, precipitationProbabilityMaxPct: 60, reason: "r" },
       ],
     });
     const result = await source.siteAssessments("Redang", today, context);
     expect(planningApi.getAreaSites).toHaveBeenCalledWith("redang", today);
-    expect(result[first.id]).toMatchObject({ band: "mixed", waves: 1.1, wind: 14, ruleVersion: "v1" });
-    expect(result[second.id]).toMatchObject({ band: "unavailable", waves: null });
+    expect(result[first.id]).toMatchObject({
+      band: "mixed", waves: 1.1, wind: 14, rain: 60, source: "Open-Meteo",
+      retrievedAt: "2026-10-03T08:00:00+08:00", ruleVersion: "v1",
+    });
+    expect(result[second.id]).toMatchObject({
+      band: "unavailable", waves: null, rain: null, source: null, retrievedAt: null, ruleVersion: null,
+    });
   });
 
   it("maps date summaries to the view shape", async () => {
@@ -151,7 +157,7 @@ describe("API source", () => {
     vi.mocked(planningApi.createPlanningBrief).mockResolvedValue({
       siteId: site.backendDiveSiteId, plannedDate: today, status: "unavailable", text: null, generatedAt: null,
     });
-    const assessment = { band: "mixed" as const, waves: 1, wind: 10, reason: "", retrievedAt: "", ruleVersion: "v1" };
+    const assessment = { band: "mixed" as const, waves: 1, wind: 10, rain: null, reason: "", source: null, retrievedAt: null, ruleVersion: "v1" };
     expect(await source.brief(site, today, assessment, context, true)).toEqual({ status: "unavailable" });
   });
 });

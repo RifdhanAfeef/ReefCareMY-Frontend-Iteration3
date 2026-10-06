@@ -17,7 +17,9 @@ const site = (waves: number | null, wind: number | null): Assessment => ({
   band: "less_favourable",
   waves,
   wind,
+  rain: null,
   reason: "Wind above the mixed threshold.",
+  source: "Open-Meteo",
   retrievedAt: "2026-10-06T02:44:24+08:00",
   ruleVersion: "i3-draft-1",
 });

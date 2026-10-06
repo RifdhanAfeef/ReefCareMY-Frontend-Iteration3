@@ -70,7 +70,7 @@ export function SiteHeader({
 
   return (
     <header className={styles.header}>
-      <div className={styles.inner}>
+      <div className={`${styles.inner} ${resolvedIdentity ? styles.signedIn : ""}`}>
         <Brand />
 
         <nav className={styles.navigation} aria-label="Primary navigation">

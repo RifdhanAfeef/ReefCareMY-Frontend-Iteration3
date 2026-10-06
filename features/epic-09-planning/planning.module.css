@@ -1301,6 +1301,22 @@
     padding: 9px 14px;
     white-space: nowrap;
   }
+  /* Keep all three section tabs visible on phones instead of scrolling one off-screen. */
+  .tabs {
+    gap: 4px;
+  }
+  .tabs > button {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 2px 12px;
+    font-size: 13px;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .dateCard,

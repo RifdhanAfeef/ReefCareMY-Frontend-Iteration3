@@ -21,6 +21,8 @@ import {
   dateLabel,
   labels,
   months,
+  retrievedLabel,
+  signalValue,
   type Area,
   type Assessment,
   type Band,
@@ -84,16 +86,34 @@ export function Signals({ assessment }: { assessment: Assessment }) {
     <div className={styles.signals}>
       <span>
         <Waves size={17} />
-        {assessment.waves === null ? "—" : `${assessment.waves.toFixed(1)} m`}
+        {assessment.waves === null ? "—" : `${signalValue(assessment.waves)} m`}
         <small>Wave height</small>
       </span>
       <span>
         <Wind size={17} />
-        {assessment.wind === null ? "—" : `${assessment.wind} km/h`}
+        {assessment.wind === null ? "—" : `${signalValue(assessment.wind)} km/h`}
         <small>Wind speed</small>
       </span>
+      {assessment.rain !== null && (
+        <span>
+          <CloudRain size={17} />
+          {`${assessment.rain}%`}
+          <small>Rain chance</small>
+        </span>
+      )}
     </div>
   );
+}
+// Source, retrieval time and rule version, omitting any part the provider did not supply.
+export function forecastProvenance(assessment: Assessment, sample: boolean): string {
+  const retrieved = retrievedLabel(assessment.retrievedAt);
+  return [
+    sample ? "Sample forecast fixture" : `Source: ${assessment.source ?? "forecast provider"}`,
+    retrieved ? `retrieved ${retrieved}` : null,
+    assessment.ruleVersion ? `rule ${assessment.ruleVersion}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 export function Seasonality({
   area,
@@ -209,14 +229,14 @@ export function DateComparison({
   const rain = summaries.status === "ready" ? current.signals?.rain ?? null : null;
   const signalText = summaries.status === "ready" && current.signals
     ? [
-        current.signals.waves !== null ? `waves ${current.signals.waves} m` : null,
-        current.signals.wind !== null ? `wind ${current.signals.wind} km/h` : null,
+        current.signals.waves !== null ? `waves ${signalValue(current.signals.waves)} m` : null,
+        current.signals.wind !== null ? `wind ${signalValue(current.signals.wind)} km/h` : null,
         current.signals.rain !== null ? `rain chance ${current.signals.rain}%` : null,
       ].filter(Boolean).join(" · ")
     : "";
   const range = (values: number[]) => Math.min(...values) === Math.max(...values)
-    ? String(Math.min(...values))
-    : `${Math.min(...values)}–${Math.max(...values)}`;
+    ? signalValue(Math.min(...values))
+    : `${signalValue(Math.min(...values))}–${signalValue(Math.max(...values))}`;
   return (
     <section className={styles.panel} aria-labelledby="dates-heading">
       <div className={styles.sectionHeading}>
@@ -434,9 +454,8 @@ export function SiteCard({
           </a>
           {assessment && (
             <p>
-              {mode === "sample" ? "Sample forecast fixture" : "Forecast data"}{" "}
-              · retrieval time {assessment.retrievedAt} · Rule{" "}
-              {assessment.ruleVersion}. No exact underwater conditions inferred.
+              {forecastProvenance(assessment, mode === "sample")}. No exact
+              underwater conditions inferred.
             </p>
           )}
           <a href={site.images[0].sourceUrl} target="_blank" rel="noreferrer">
@@ -510,8 +529,7 @@ export function BriefPanel({
             <Signals assessment={assessment} />
             <p>{assessment.reason}</p>
             <p className={styles.source}>
-              {sample ? "Synthetic provider fixture" : "Forecast provider"} ·{" "}
-              {assessment.retrievedAt} · {assessment.ruleVersion}
+              {forecastProvenance(assessment, sample)}
             </p>
           </>
         ) : (

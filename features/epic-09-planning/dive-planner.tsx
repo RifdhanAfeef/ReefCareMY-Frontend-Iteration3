@@ -993,7 +993,7 @@ export function DivePlanner() {
             </label>
             <p>
               {area} · {dateLabel(selectedDate, true)} · {selectedSites.length}{" "}
-              selected sites
+              selected {selectedSites.length === 1 ? "site" : "sites"}
             </p>
             <p>
               We save your area, date and sites. Forecast values are refreshed
