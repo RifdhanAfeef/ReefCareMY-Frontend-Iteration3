@@ -11,7 +11,7 @@ import type {
   ReportDetail as ReportDetailData,
 } from "@/lib/api/types";
 import { userFacingError } from "@/lib/api/user-facing-error";
-import { formatDateTime } from "@/lib/format/date";
+import { formatDateTime, inputDateToDisplayValue } from "@/lib/format/date";
 import {
   readSubmittedStructuredDetails,
   type SubmittedStructuredDetails,
@@ -205,6 +205,26 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
       )}
 
       {responseSuccess && <p className={styles.responseSuccess} role="status">{responseSuccess}</p>}
+
+      {report.contribution && (
+        <section className={styles.descriptionBlock} aria-labelledby="report-contribution-heading">
+          <h3 id="report-contribution-heading">Your contribution</h3>
+          <p className={styles.description}><strong>{report.contribution.label}</strong></p>
+          {report.contribution.detail && <p className={styles.description}>{report.contribution.detail}</p>}
+          {report.contribution.recordedAt && (
+            <p className={styles.requestedAt}>
+              Recorded <time dateTime={report.contribution.recordedAt}>{formatDateTime(new Date(report.contribution.recordedAt))}</time>
+            </p>
+          )}
+          {report.contribution.nextFollowUpRequired && (
+            <p className={styles.description}>
+              Next follow-up: {report.contribution.nextFollowUpDate
+                ? <time dateTime={report.contribution.nextFollowUpDate}>{inputDateToDisplayValue(report.contribution.nextFollowUpDate)}</time>
+                : "Required; date not yet recorded."}
+            </p>
+          )}
+        </section>
+      )}
 
       {report.closure && (
         <section className={styles.closure} aria-labelledby="report-outcome-heading">

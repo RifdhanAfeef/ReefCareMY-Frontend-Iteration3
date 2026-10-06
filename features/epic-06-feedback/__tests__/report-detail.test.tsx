@@ -223,3 +223,43 @@ describe("US6.2 AC3 — closure reason is visible", () => {
     ).toBeInTheDocument();
   });
 });
+
+
+describe("Observer contribution feedback", () => {
+  it("shows the backend's safe referral explanation without claiming completed action", async () => {
+    mockedGetReportDetail.mockResolvedValue(baseReport({
+      contribution: {
+        contributionType: "referral", state: "referred",
+        label: "Your report informed a referral",
+        detail: "A referral was recorded. This does not mean an action has been completed.",
+        recordedAt: "2026-10-05T10:00:00Z",
+        nextFollowUpRequired: false, nextFollowUpDate: null,
+      },
+    }));
+    render(<ReportDetail reportReference="RC-0241" />);
+    expect(await screen.findByRole("heading", { name: "Your contribution" })).toBeInTheDocument();
+    expect(screen.getByText("Your report informed a referral")).toBeInTheDocument();
+    expect(screen.getByText(/A referral was recorded/)).toHaveTextContent("This does not mean an action has been completed.");
+    expect(screen.queryByText(/Next follow-up/)).not.toBeInTheDocument();
+  });
+
+  it("shows a required next follow-up date from recorded monitoring", async () => {
+    mockedGetReportDetail.mockResolvedValue(baseReport({
+      contribution: {
+        contributionType: "monitoring", state: "recorded",
+        label: "Your report informed monitoring", detail: null, recordedAt: null,
+        nextFollowUpRequired: true, nextFollowUpDate: "2026-10-12",
+      },
+    }));
+    render(<ReportDetail reportReference="RC-0241" />);
+    expect(await screen.findByText(/Next follow-up/)).toHaveTextContent("12");
+    expect(screen.getByText(/Next follow-up/).querySelector("time")).toHaveAttribute("dateTime", "2026-10-12");
+  });
+
+  it("does not invent contribution feedback when none is returned", async () => {
+    mockedGetReportDetail.mockResolvedValue(baseReport({ contribution: null }));
+    render(<ReportDetail reportReference="RC-0241" />);
+    await screen.findByText("Ghost fishing gear");
+    expect(screen.queryByRole("heading", { name: "Your contribution" })).not.toBeInTheDocument();
+  });
+});

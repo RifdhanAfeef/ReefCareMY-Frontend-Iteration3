@@ -1,5 +1,16 @@
 import { apiRequest } from "./client";
-import type { PublicReportHandoffResponse, PublicSiteActivityResponse } from "./types";
+import type { PublicReportHandoffResponse, PublicSiteActivityResponse, PublicSiteContextResponse } from "./types";
+
+export async function getPublicSiteContext(
+  diveSiteId: number,
+  signal?: AbortSignal,
+): Promise<PublicSiteContextResponse> {
+  return apiRequest<PublicSiteContextResponse>({
+    path: `/api/v1/public/dive-sites/${diveSiteId}/context`,
+    auth: false,
+    signal,
+  });
+}
 
 export async function getPublicSiteActivity(
   diveSiteId: number,

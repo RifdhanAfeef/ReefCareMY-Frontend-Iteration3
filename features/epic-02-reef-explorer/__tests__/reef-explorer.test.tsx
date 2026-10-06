@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReefExplorer } from "../reef-explorer";
 import { diveSiteCatalog } from "../dive-site-catalog";
 import { reefSites } from "../reef-sites";
-import { getPublicReportHandoff, getPublicSiteActivity } from "@/lib/api/publicApi";
+import { getPublicReportHandoff, getPublicSiteContext } from "@/lib/api/publicApi";
 
-const { routerPush, authState } = vi.hoisted(() => ({
+const { routerPush, authState, getContext } = vi.hoisted(() => ({
+  getContext: vi.fn(),
   routerPush: vi.fn(),
   authState: {
     status: "unauthenticated" as "unauthenticated" | "authenticated",
@@ -27,23 +28,25 @@ vi.mock("next/dynamic", () => ({
 vi.mock("@/features/epic-01-access/auth-context", () => ({
   useAuth: () => authState,
 }));
-vi.mock("@/lib/api/publicApi");
+vi.mock("@/lib/api/publicApi", () => ({
+  getPublicReportHandoff: vi.fn(),
+  getPublicSiteContext: getContext,
+}));
 
 beforeEach(() => {
+  getContext.mockReset();
+  getContext.mockResolvedValue({
+    diveSiteId: 3, siteName: "Renggis Island", publicAreaLabel: "Tioman Island",
+    state: "no_public_context", message: "No public context is currently available.",
+    assessmentSummary: { acceptedObservations: 0, observationsUnderReview: 0 },
+    threats: [], activity: [],
+    interpretationNote: "This is not evidence that a site is safe or free of reef threats.",
+  });
   window.localStorage.clear();
   routerPush.mockReset();
   authState.status = "unauthenticated";
   authState.user = null;
-  vi.mocked(getPublicSiteActivity).mockReset();
   vi.mocked(getPublicReportHandoff).mockReset();
-  vi.mocked(getPublicSiteActivity).mockResolvedValue({
-    diveSiteId: 3,
-    diveSiteName: "Renggis Island",
-    publicAreaLabel: "Tioman Island",
-    hasActivity: false,
-    items: [],
-    message: "No public ReefCare activity is currently available for this site.",
-  });
   vi.mocked(getPublicReportHandoff).mockResolvedValue({
     selectedDiveSiteId: 19,
     selectedDiveSiteName: "D'Lagoon",
@@ -176,25 +179,28 @@ describe("Epic 2 Reef Explorer", () => {
       });
   });
 
-  it("shows an honest no-activity state", async () => {
+  it("shows an honest no-public-context state", async () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
     await user.click(screen.getByRole("button", { name: /Renggis Island/i }));
 
-    expect(await screen.findByText("No public ReefCare activity is currently available")).toBeInTheDocument();
+    expect(await screen.findByText("No public context is currently available.")).toBeInTheDocument();
     expect(screen.getByText(/Only approved, privacy-safe updates appear here/i)).toBeInTheDocument();
-    expect(getPublicSiteActivity).toHaveBeenCalledWith(3, expect.any(AbortSignal));
+    expect(getPublicSiteContext).toHaveBeenCalledWith(3, expect.any(AbortSignal));
   });
 
   it("shows approved public-safe activity returned by the backend", async () => {
-    vi.mocked(getPublicSiteActivity).mockResolvedValueOnce({
+    vi.mocked(getPublicSiteContext).mockResolvedValueOnce({
       diveSiteId: 19,
-      diveSiteName: "D'Lagoon",
+      siteName: "D'Lagoon",
       publicAreaLabel: "Perhentian Islands",
-      hasActivity: true,
-      items: [{
-        activityId: 101,
+      state: "available",
+      assessmentSummary: { acceptedObservations: 0, observationsUnderReview: 0 },
+      threats: [],
+      interpretationNote: "This is not evidence that a site is safe or free of reef threats.",
+      activity: [{
+        activityId: null,
         activityType: "community_update",
         title: "ReefCare observation reviewed",
         summary: "An approved, general site update is available for this area.",
@@ -213,15 +219,15 @@ describe("Epic 2 Reef Explorer", () => {
     expect(screen.getByText(/12 Sept 2026.*ReefCare MY/)).toBeInTheDocument();
   });
 
-  it("distinguishes an API failure from a genuine no-activity state", async () => {
-    vi.mocked(getPublicSiteActivity).mockRejectedValueOnce(new Error("offline"));
+  it("distinguishes an API failure from a genuine no-public-context state", async () => {
+    vi.mocked(getPublicSiteContext).mockRejectedValueOnce(new Error("offline"));
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Public activity is temporarily unavailable");
-    expect(screen.queryByText("No public ReefCare activity is currently available")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Public context is temporarily unavailable");
+    expect(screen.queryByText("No public context is currently available.")).not.toBeInTheDocument();
   });
 
   it("uses one stable guidance panel instead of expanding cards in the grid", async () => {
@@ -239,4 +245,43 @@ describe("Epic 2 Reef Explorer", () => {
       "/reef-threats?threat=marine_debris",
     );
   });
+});
+
+
+describe("Public site context", () => {
+  it("shows accepted threat counts and month precision even without conservation activity", async () => {
+    getContext.mockResolvedValueOnce({
+      diveSiteId: 19, siteName: "D'Lagoon", publicAreaLabel: "Perhentian Islands",
+      state: "available", message: "Reviewed observations are available.",
+      assessmentSummary: { acceptedObservations: 10, observationsUnderReview: 2 },
+      threats: [{ threatCategoryCode: "ghost_gear", threatCategoryLabel: "Ghost fishing gear",
+        acceptedReportCount: 10, mostRecentMonth: "2026-10" }],
+      activity: [], interpretationNote: "This is not evidence that a site is safe or free of reef threats.",
+      reportReference: "RC-PRIVATE", observerEmail: "private@example.com",
+    });
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+    await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
+    expect(await screen.findByText(/10 accepted observations/)).toBeInTheDocument();
+    expect(screen.getByText(/2 observations under review/)).toBeInTheDocument();
+    expect(screen.getByText("2026-10").closest("small")).toHaveTextContent("Most recent: 2026-10");
+    expect(screen.getByText(/not evidence that a site is safe/)).toBeInTheDocument();
+    expect(screen.queryByText(/No public context is currently available./)).not.toBeInTheDocument();
+    expect(screen.queryByText(/RC-PRIVATE|private@example.com/)).not.toBeInTheDocument();
+  });
+});
+
+it("keeps pending observation counts visible when no category is eligible for publication", async () => {
+  getContext.mockResolvedValueOnce({
+    diveSiteId: 19, siteName: "D'Lagoon", publicAreaLabel: "Perhentian Islands",
+    state: "no_public_context", message: "No reviewed category or activity is available.",
+    assessmentSummary: { acceptedObservations: 0, observationsUnderReview: 3 },
+    threats: [], activity: [],
+    interpretationNote: "This is not evidence that a site is safe or free of reef threats.",
+  });
+  const user = userEvent.setup();
+  render(<ReefExplorer />);
+  await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
+  expect(await screen.findByText(/3 observations under review/)).toBeInTheDocument();
+  expect(screen.getByText("No reviewed category or activity is available.")).toBeInTheDocument();
 });
