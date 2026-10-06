@@ -14,9 +14,11 @@ export type Assessment = {
   band: Band;
   waves: number | null;
   wind: number | null;
+  rain: number | null;
   reason: string;
-  retrievedAt: string;
-  ruleVersion: string;
+  source: string | null;
+  retrievedAt: string | null;
+  ruleVersion: string | null;
 };
 export type Plan = {
   planId: string;
@@ -76,6 +78,27 @@ export function dateLabel(date: string, long = false) {
     timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00Z`));
 }
+// One precision for forecast numbers everywhere they appear (cards, date summary, brief):
+// at most two decimals, as sent by the provider, without padding zeros.
+export function signalValue(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+// Provider timestamps are shown as a Malaysia local time, e.g. "6 Oct 2026, 4:20 pm MYT".
+export function retrievedLabel(value: string | null): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const text = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kuala_Lumpur",
+  }).format(parsed);
+  return `${text} MYT`;
+}
 export function dateRange(from: string, to: string): string[] {
   if (!validDate(from) || !validDate(to) || to < from) return [];
   const count = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
@@ -104,6 +127,8 @@ export function assess(
   const base = {
     waves: null,
     wind: null,
+    rain: null,
+    source: null,
     retrievedAt: `${today}T08:00:00+08:00`,
     ruleVersion: "prototype-v1",
   };

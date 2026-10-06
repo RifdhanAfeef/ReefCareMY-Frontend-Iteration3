@@ -78,7 +78,16 @@ export function planningModeFor(previewMode: boolean): PlanningMode {
 }
 
 export function unavailableAssessment(reason: string): Assessment {
-  return { band: "unavailable", waves: null, wind: null, reason, retrievedAt: "unknown", ruleVersion: "unknown" };
+  return {
+    band: "unavailable",
+    waves: null,
+    wind: null,
+    rain: null,
+    reason,
+    source: null,
+    retrievedAt: null,
+    ruleVersion: null,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -276,8 +285,10 @@ const apiSource: PlanningSource = {
               band: found.band,
               waves: found.waveHeightMaxM,
               wind: found.windSpeedMaxKmh,
+              rain: found.precipitationProbabilityMaxPct ?? null,
               reason: found.reason,
-              retrievedAt: dto.retrievedAt ?? "unknown",
+              source: dto.source ?? null,
+              retrievedAt: dto.retrievedAt,
               ruleVersion: dto.ruleVersion,
             }
           : unavailableAssessment("No assessment is available for this site.");
