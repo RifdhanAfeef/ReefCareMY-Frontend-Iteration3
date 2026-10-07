@@ -60,6 +60,11 @@ export function LoginForm() {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
+      {requestedPath?.startsWith("/report-a-reef") && (
+        <p className={styles.context}>
+          Log in to start or continue your reef report. Any draft you saved stays on this device.
+        </p>
+      )}
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -99,7 +104,7 @@ export function LoginForm() {
       <p className={styles.accountPrompt}>
         Don&apos;t have an account?{" "}
         <Link href={requestedPath ? `/register?next=${encodeURIComponent(requestedPath)}` : "/register"}>
-          Click here to register
+          Create a free observer account
         </Link>.
       </p>
     </form>

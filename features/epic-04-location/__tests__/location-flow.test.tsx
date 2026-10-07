@@ -48,8 +48,9 @@ const appState = vi.hoisted(() => ({
 vi.mock("@/features/shared/mock-app-state", () => ({
   useMockAppState: () => appState,
 }));
+const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ back: vi.fn(), push }),
 }));
 vi.mock("next/dynamic", () => ({
   default: () => () => <div data-testid="map-placeholder" />,
@@ -61,6 +62,7 @@ vi.mock("@/lib/api/reportsApi");
 beforeEach(() => {
   window.localStorage.clear();
   appState.updateLocationDraft.mockReset();
+  push.mockReset();
   Object.assign(appState.locationDraft, {
     step: "session",
     sessions: [],
@@ -95,22 +97,22 @@ describe("Finding 4 — no-session journey", () => {
     const user = userEvent.setup();
     render(<LocationFlow />);
 
-    expect(await screen.findByRole("heading", { name: "Create your first Dive Session" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Use selected session" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Add the dive where you saw this" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use this dive" })).not.toBeInTheDocument();
 
-    const createButton = screen.getByRole("button", { name: "Create Dive Session" });
+    const createButton = screen.getByRole("button", { name: "Add a dive" });
     expect(createButton).toBeEnabled();
     await user.click(createButton);
 
     expect(appState.updateLocationDraft).toHaveBeenCalledWith({ step: "create" });
   });
 
-  it("marks Dive Session as the current location-flow step", async () => {
+  it("marks dive and location as the current report step", async () => {
     render(<LocationFlow />);
-    await screen.findByRole("heading", { name: "Create your first Dive Session" });
+    await screen.findByRole("heading", { name: "Add the dive where you saw this" });
 
     await waitFor(() => {
-      expect(screen.getByText("Dive Session").closest("li")).toHaveAttribute("aria-current", "step");
+      expect(screen.getByText("Dive & location").closest("li")).toHaveAttribute("aria-current", "step");
     });
   });
 
@@ -119,8 +121,8 @@ describe("Finding 4 — no-session journey", () => {
 
     render(<LocationFlow />);
 
-    expect(await screen.findByRole("heading", { name: "Create your first Dive Session" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Choose a Dive Session first" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Add the dive where you saw this" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Choose a dive first" })).not.toBeInTheDocument();
   });
 
   it("displays the selected general dive site as read-only text rather than a dropdown", async () => {
@@ -145,9 +147,9 @@ describe("Finding 4 — no-session journey", () => {
 
     render(<LocationFlow />);
 
-    expect(await screen.findByRole("heading", { name: "Where on the reef did you observe it?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Where on the reef was it?" })).toBeInTheDocument();
     expect(screen.getByText("Batu Nisan — Perhentian Islands")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: /Named dive site/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /Dive site/i })).not.toBeInTheDocument();
   });
 });
 
@@ -197,9 +199,9 @@ describe("US4.6 — optional surface entry and exit context", () => {
     const user = userEvent.setup();
     render(<LocationFlow />);
 
-    await user.click(await screen.findByRole("button", { name: "Confirm location" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to review" }));
 
-    expect(appState.updateLocationDraft).toHaveBeenCalledWith({ step: "privacy" });
+    expect(push).toHaveBeenCalledWith("/report-a-reef/review");
   });
 });
 
@@ -276,7 +278,7 @@ describe("Location validation", () => {
   it("blocks a map pin outside the supported Malaysia area on the Location step", async () => {
     appState.locationDraft.pin = { x: 50, y: 50, latitude: 10.06723, longitude: 108.56992 };
     render(<LocationFlow />);
-    await screen.findByRole("heading", { name: "Where on the reef did you observe it?" });
+    await screen.findByRole("heading", { name: "Where on the reef was it?" });
     appState.updateLocationDraft.mockClear();
 
     await userEvent.click(screen.getByRole("button", { name: "Confirm map pin" }));
@@ -299,7 +301,7 @@ describe("Location validation", () => {
       selectedSiteName: "Batu Nisan",
     });
     render(<LocationFlow />);
-    await screen.findByRole("heading", { name: "Where on the reef did you observe it?" });
+    await screen.findByRole("heading", { name: "Where on the reef was it?" });
     appState.updateLocationDraft.mockClear();
 
     await userEvent.click(screen.getByRole("button", { name: "Confirm map pin" }));
@@ -311,7 +313,7 @@ describe("Location validation", () => {
   it("asks for confirmation between 5 km and 15 km and allows the user to continue", async () => {
     appState.locationDraft.pin = { x: 50, y: 50, latitude: 3.04, longitude: 104.12 };
     render(<LocationFlow />);
-    await screen.findByRole("heading", { name: "Where on the reef did you observe it?" });
+    await screen.findByRole("heading", { name: "Where on the reef was it?" });
     appState.updateLocationDraft.mockClear();
 
     await userEvent.click(screen.getByRole("button", { name: "Confirm map pin" }));
@@ -324,7 +326,7 @@ describe("Location validation", () => {
     vi.mocked(window.confirm).mockReturnValue(false);
     appState.locationDraft.pin = { x: 50, y: 50, latitude: 3.04, longitude: 104.12 };
     render(<LocationFlow />);
-    await screen.findByRole("heading", { name: "Where on the reef did you observe it?" });
+    await screen.findByRole("heading", { name: "Where on the reef was it?" });
     appState.updateLocationDraft.mockClear();
 
     await userEvent.click(screen.getByRole("button", { name: "Confirm map pin" }));
