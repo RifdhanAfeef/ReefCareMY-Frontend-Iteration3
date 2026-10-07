@@ -7,8 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { threatCategories } from "@/features/epic-02-reporting/threat-data";
-import { getPublicReportHandoff, getPublicSiteActivity } from "@/lib/api/publicApi";
-import type { PublicActivityItem } from "@/lib/api/types";
+import { getPublicReportHandoff, getPublicSiteContext } from "@/lib/api/publicApi";
+import type { PublicSiteContextResponse } from "@/lib/api/types";
 import { diveSiteCatalog } from "./dive-site-catalog";
 import { reefIslands, reefSites } from "./reef-sites";
 import { storeSelectedReefSite } from "./selected-site-storage";
@@ -123,19 +123,20 @@ function BasicSiteDetail({
 }
 
 function ActivityPanel({ site }: { site: ReefSite }) {
-  const [items, setItems] = useState<PublicActivityItem[]>([]);
+  const [context, setContext] = useState<PublicSiteContextResponse | null>(null);
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    getPublicSiteActivity(site.backendDiveSiteId, controller.signal)
+    getPublicSiteContext(site.backendDiveSiteId, controller.signal)
       .then((result) => {
-        setItems(result.items);
+        if (controller.signal.aborted) return;
+        setContext(result);
         setState("loaded");
       })
       .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
         setState("error");
       });
     return () => controller.abort();
@@ -143,11 +144,11 @@ function ActivityPanel({ site }: { site: ReefSite }) {
 
   const retry = () => {
     setState("loading");
-    setItems([]);
+    setContext(null);
     setReloadKey((value) => value + 1);
   };
 
-  const dateLabel = (item: PublicActivityItem) => [
+  const dateLabel = (item: PublicSiteContextResponse["activity"][number]) => [
     item.activityDate
       ? new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeZone: "UTC" })
         .format(new Date(`${item.activityDate}T00:00:00Z`))
@@ -159,42 +160,65 @@ function ActivityPanel({ site }: { site: ReefSite }) {
     <section className={styles.activity} aria-labelledby="site-activity-heading">
       <div className={styles.sectionTitleRow}>
         <div>
-          <p className={styles.eyebrow}>Public-safe activity</p>
-          <h3 id="site-activity-heading">Recent ReefCare activity</h3>
+          <p className={styles.eyebrow}>Public-safe site context</p>
+          <h3 id="site-activity-heading">ReefCare observations and activity</h3>
         </div>
         <span className={styles.generalisedBadge}>General area only</span>
       </div>
+      {state === "loaded" && context && (
+        <p>
+          {context.assessmentSummary.acceptedObservations} accepted {context.assessmentSummary.acceptedObservations === 1 ? "observation" : "observations"}
+          {" · "}{context.assessmentSummary.observationsUnderReview} {context.assessmentSummary.observationsUnderReview === 1 ? "observation" : "observations"} under review
+        </p>
+      )}
       {state === "loading" ? (
         <div className={styles.emptyActivity} role="status">
-          <strong>Loading public ReefCare activity…</strong>
+          <strong>Loading public ReefCare context…</strong>
         </div>
       ) : state === "error" ? (
         <div className={styles.emptyActivity} role="alert">
-          <strong>Public activity is temporarily unavailable</strong>
+          <strong>Public context is temporarily unavailable</strong>
           <p>Try again to load the approved public updates for this site.</p>
           <button className={styles.activityRetry} type="button" onClick={retry}>Try again</button>
         </div>
-      ) : items.length > 0 ? (
-        <ul className={styles.activityList}>
-          {items.map((item) => (
-            <li key={item.activityId}>
-              <span className={styles.activityDot} aria-hidden="true" />
-              <div>
-                <strong>{item.title}</strong>
-                <small>{dateLabel(item)}</small>
-                <p>{item.summary}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+      ) : context?.state === "available" ? (
+        <>
+          {context.threats.length > 0 && (
+            <ul className={styles.activityList} aria-label="Reviewed threat observations">
+              {context.threats.map((threat) => (
+                <li key={threat.threatCategoryCode}>
+                  <span className={styles.activityDot} aria-hidden="true" />
+                  <div>
+                    <strong>{threat.threatCategoryLabel}</strong>
+                    <small>{threat.acceptedReportCount} accepted {threat.acceptedReportCount === 1 ? "report" : "reports"}</small>
+                    {threat.mostRecentMonth && <small>Most recent: <time dateTime={threat.mostRecentMonth}>{threat.mostRecentMonth}</time></small>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {context.activity.length > 0 && (
+            <ul className={styles.activityList} aria-label="Approved conservation and monitoring updates">
+              {context.activity.map((item, index) => (
+                <li key={item.activityId != null ? `activity-${item.activityId}` : `follow-up-${index}`}>
+                  <span className={styles.activityDot} aria-hidden="true" />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <small>{dateLabel(item)}</small>
+                    <p>{item.summary}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       ) : (
         <div className={styles.emptyActivity} role="status">
-          <strong>No public ReefCare activity is currently available</strong>
-          <p>
-            This does not mean there are no observations. Only approved, privacy-safe updates appear here.
-          </p>
+          <strong>{context?.message ?? "No public ReefCare context is currently available"}</strong>
+          <p>Only approved, privacy-safe updates appear here.</p>
         </div>
       )}
+      {state === "loaded" && context && <p className={styles.sourceNote}>{context.interpretationNote}</p>}
     </section>
   );
 }

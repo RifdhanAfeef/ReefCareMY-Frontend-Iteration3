@@ -123,6 +123,26 @@ export type PublicSiteActivityResponse = {
   message: string;
 };
 
+export type PublicSiteContextResponse = {
+  diveSiteId: number;
+  siteName: string;
+  publicAreaLabel: string;
+  state: "available" | "no_public_context";
+  message: string;
+  assessmentSummary: {
+    acceptedObservations: number;
+    observationsUnderReview: number;
+  };
+  threats: Array<{
+    threatCategoryCode: string;
+    threatCategoryLabel: string;
+    acceptedReportCount: number;
+    mostRecentMonth: string | null;
+  }>;
+  activity: Array<Omit<PublicActivityItem, "activityId"> & { activityId: number | null }>;
+  interpretationNote: string;
+};
+
 export type PublicReportHandoffResponse = {
   selectedDiveSiteId: number;
   selectedDiveSiteName: string;
@@ -162,6 +182,15 @@ export type ReportDetail = {
   status: ReportStatusCode;
   statusLabel: string;
   outcome: string | null;
+  contribution?: {
+    contributionType: string;
+    state: string;
+    label: string;
+    detail: string | null;
+    recordedAt: string | null;
+    nextFollowUpRequired: boolean;
+    nextFollowUpDate: string | null;
+  } | null;
   informationRequestReason: string | null;
   closure: ReportClosureSummary | null;
   submittedAt: string;

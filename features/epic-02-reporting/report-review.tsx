@@ -255,7 +255,7 @@ export function ReportReview() {
               </article>
             </section>}
             {(reportDraft.aiSuggestions ?? []).length > 0 && <section className={styles.reviewSuggestions} aria-labelledby="ai-review-heading">
-              <div className={styles.reviewSuggestionHeader}><div><h3 id="ai-review-heading">Review AI-assisted information</h3><p>{unresolvedSuggestions.length} field{unresolvedSuggestions.length === 1 ? "" : "s"} still need your review.</p></div>{reportDraft.aiSuggestions.some((item) => item.status === "unresolved" && !item.conflict) && <button className={styles.secondaryButton} type="button" onClick={acceptAllNonConflicting}>Accept AI suggestions</button>}</div>
+              <div className={styles.reviewSuggestionHeader}><div><h3 id="ai-review-heading">Review AI-assisted information</h3><p>{unresolvedSuggestions.length} field{unresolvedSuggestions.length === 1 ? "" : "s"} still {unresolvedSuggestions.length === 1 ? "needs" : "need"} your review.</p></div>{reportDraft.aiSuggestions.some((item) => item.status === "unresolved" && !item.conflict) && <button className={styles.secondaryButton} type="button" onClick={acceptAllNonConflicting}>Accept AI suggestions</button>}</div>
               {reportDraft.aiSuggestions.map((suggestion, index) => <article className={`${styles.reviewSuggestionItem} ${suggestion.conflict && suggestion.status === "unresolved" ? styles.reviewConflict : ""}`} key={`${suggestion.field}-${index}`}>
                 <div><span>{suggestion.label}</span><small className={styles.suggestionSource}>Text analysis</small><em>{suggestionStateLabel(suggestion)}</em></div>
                 {editingSuggestion === index ? <div className={styles.suggestionEditor}>
