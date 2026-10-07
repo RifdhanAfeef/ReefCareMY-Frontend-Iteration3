@@ -8,6 +8,13 @@ import { userFacingError } from "@/lib/api/user-facing-error";
 import styles from "./my-reports-list.module.css";
 
 type LoadState = "loading" | "loaded" | "error";
+
+// The status chip carries its meaning in text; tone only adds a second cue.
+function statusTone(status: string) {
+  if (status === "needs_more_info") return "action";
+  if (status === "closed" || status.startsWith("closed")) return "closed";
+  return "progress";
+}
 const pageSize = 20;
 
 export function MyReportsList() {
@@ -53,7 +60,12 @@ export function MyReportsList() {
   }
 
   if (state === "loading") {
-    return <p>Loading your reports…</p>;
+    return (
+      <div className={styles.loading} role="status">
+        <span className="sr-only">Loading your reports…</span>
+        {[0, 1, 2].map((item) => <div className={styles.skeleton} key={item} aria-hidden="true" />)}
+      </div>
+    );
   }
 
   if (state === "error") {
@@ -67,7 +79,13 @@ export function MyReportsList() {
   }
 
   if (!result || result.items.length === 0) {
-    return <p>You haven&apos;t submitted any reports yet.</p>;
+    return (
+      <section className={styles.empty} aria-labelledby="no-reports-heading">
+        <h2 id="no-reports-heading">You haven&apos;t submitted any reports yet.</h2>
+        <p>When you spot ghost gear, bleaching, debris or damage on a dive, report it here and follow what happens next.</p>
+        <Link className={styles.primaryLink} href="/report-a-reef">Report what you saw</Link>
+      </section>
+    );
   }
 
   const actualPageSize = result.pageSize || pageSize;
@@ -83,7 +101,7 @@ export function MyReportsList() {
             <Link href={`/my-reports/${report.reportReference}`} className={styles.link}>
               <div className={styles.headline}>
                 <span className={styles.reference}>{report.reportReference}</span>
-                <span className={styles.status}>{report.statusLabel}</span>
+                <span className={styles.status} data-tone={statusTone(report.status)}>{report.statusLabel}</span>
               </div>
               <p className={styles.threat}>{report.threatCategory}</p>
               <p className={styles.location}>{report.generalLocation}</p>

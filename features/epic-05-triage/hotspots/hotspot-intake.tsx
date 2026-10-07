@@ -60,7 +60,7 @@ export function HotspotIntakePage({ reportReference }: { reportReference: string
 
   return <div className={styles.page}>
     <Link href={back} className={styles.textLink}>← Back to geographic analysis</Link>
-    <header className={styles.pageHeading}><div><p className={styles.eyebrow}>Geographic analysis / Report intake</p><h1>{report?.nextAction === "claim" && !claimed ? "Claim this report" : "Report intake summary"}</h1><p>Inspect permitted information before entering the case workflow.</p></div></header>
+    <header className={styles.pageHeading}><div><h1>{report?.nextAction === "claim" && !claimed ? "Claim this report" : "Report intake summary"}</h1><p>Inspect permitted information before entering the case workflow.</p></div></header>
     {result.loading && !latest ? <HotspotLoading message="Checking current report ownership…" /> : !report ? <HotspotError title="Report summary unavailable" error={result.error} onRetry={refresh} /> : <section className={`${styles.card} ${styles.intakeCard}`}>
       <div className={styles.sectionHeading}><h2>{report.reportReference}</h2><span className={styles.badge}>{report.statusLabel}</span></div>
       <dl className={styles.intakeDetails}><div><dt>Reported threat</dt><dd>{report.threat}</dd></div><div><dt>Named dive site</dt><dd>{report.site?.name ?? "Not recorded"}</dd></div><div><dt>General area</dt><dd>{report.site?.area ?? "Not recorded"}</dd></div><div><dt>Observed · Malaysia time</dt><dd>{malaysiaTime(report.observedAt)}</dd></div><div><dt>Submitted · Malaysia time</dt><dd>{malaysiaTime(report.submittedAt)}</dd></div><div><dt>Ownership</dt><dd>{report.ownerDisplayName ?? (report.ownership === "unclaimed" ? "Unclaimed" : "Assigned")}</dd></div></dl>

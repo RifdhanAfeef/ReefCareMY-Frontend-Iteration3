@@ -356,8 +356,7 @@ export function ConservationActionPanel({
     <section className={styles.panel} aria-labelledby="conservation-action-heading">
       <header className={styles.panelHeading}>
         <div>
-          <p className={styles.eyebrow}>Conservation action</p>
-          <h2 id="conservation-action-heading">Action record</h2>
+                    <h2 id="conservation-action-heading">Conservation action record</h2>
         </div>
         <p>Record what is planned separately from what has actually happened.</p>
       </header>

@@ -114,7 +114,7 @@
   display: block;
   margin: 0 0 8px;
   color: var(--color-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -163,7 +163,7 @@
   color: var(--color-primary-hover);
   background: var(--color-info);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .tabNote {
   margin-left: auto;
@@ -205,7 +205,7 @@
   height: 50px;
   padding: 0 15px;
   color: var(--color-ink);
-  background: #f8fbfa;
+  background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-field);
   font-size: 16px;
@@ -310,7 +310,7 @@
   color: var(--color-primary-hover);
   background: var(--color-info);
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -335,7 +335,7 @@
   transition: border-color 160ms ease, background-color 160ms ease;
 }
 .dateCard:hover {
-  background: #f8fbfa;
+  background: var(--color-surface-muted);
   border-color: var(--color-primary);
 }
 .dateCard[aria-pressed="true"] {
@@ -357,7 +357,7 @@
   color: var(--color-primary-hover);
 }
 .dateCard .pill {
-  font-size: 13px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .dateCount {
@@ -387,7 +387,7 @@
   align-items: center;
   gap: 7px;
   padding: 5px 10px;
-  color: #3f6468;
+  color: var(--color-muted);
   background: #eef3f3;
   border-radius: 999px;
   font-size: 14px;
@@ -573,7 +573,7 @@
   color: #fff;
   background: rgba(11, 52, 64, 0.78);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .selectSite {
   position: absolute;
@@ -639,7 +639,7 @@
 .signals small {
   grid-column: 2;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
 }
 .siteReason {
@@ -760,7 +760,7 @@
 }
 .careNote p {
   margin: 8px 0 0;
-  color: #3f6468;
+  color: var(--color-muted);
   font-size: 15px;
 }
 .careNote a {
@@ -821,7 +821,7 @@
 }
 .month small {
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
 }
 .seasonBar {
@@ -864,7 +864,7 @@
 .source {
   margin-top: 18px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -887,8 +887,8 @@
 }
 .error {
   padding: 12px 16px;
-  color: #8f241f;
-  background: #fff0ee;
+  color: var(--color-danger-ink);
+  background: var(--color-danger-soft);
   border: 1px solid #e5aaa5;
   border-radius: var(--radius-button);
   font-size: 15px;
@@ -921,7 +921,7 @@
 }
 .savedIntent p {
   margin: 4px 0 0;
-  color: #3f6468;
+  color: var(--color-muted);
   font-size: 15px;
 }
 .savedIntent > button {
@@ -1152,7 +1152,7 @@
   .demoBar {
     gap: 8px;
     padding: 8px 16px;
-    font-size: 13px;
+    font-size: 14px;
   }
   .demoDescription {
     display: none;
@@ -1312,7 +1312,7 @@
     justify-content: center;
     gap: 4px;
     padding: 10px 2px 12px;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.2;
     text-align: center;
     white-space: normal;

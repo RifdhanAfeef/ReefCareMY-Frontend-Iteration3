@@ -8,7 +8,6 @@ export const metadata: Metadata = { title: "Role requests" };
 export default function RoleRequestsPage() {
   return (
     <PageTemplate
-      eyebrow="Administration / Access requests"
       title="Role requests"
       description="Review requests for Case Coordinator access and record each approval decision."
     >

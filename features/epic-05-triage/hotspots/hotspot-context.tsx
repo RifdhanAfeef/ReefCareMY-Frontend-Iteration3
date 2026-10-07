@@ -25,7 +25,7 @@ export function HotspotCaseContext({ reportReference }: { reportReference: strin
 
   return <section className={styles.context} aria-labelledby="area-context-heading">
     <div className={styles.contextHeader}>
-      <div><p className={styles.eyebrow}>Compact area context</p><h2 id="area-context-heading">Reporting around this observation</h2></div>
+      <div><h2 id="area-context-heading">Reporting around this observation</h2></div>
       <p>Generalised reporting activity supports triage; it does not verify this report.</p>
     </div>
     {result.loading ? <div className={styles.contextState}><HotspotLoading message="Checking area reporting context…" /><p>Case evidence and review controls remain available while this loads.</p></div> : !context || context.state === "unavailable" ? <div className={styles.contextState} role="status"><strong>Area context unavailable</strong><p>Continue reviewing the evidence and case details. Area analysis is not required to make progress.</p><button className={styles.textButton} type="button" onClick={() => setRevision((value) => value + 1)}>Retry area context</button></div> : <>

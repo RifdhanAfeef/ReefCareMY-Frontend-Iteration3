@@ -94,14 +94,14 @@
   display: block;
   margin-top: 4px;
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .empty {
   margin: 0;
   padding: 18px;
   border-radius: 10px;
-  background: #f5faf9;
+  background: var(--color-surface-muted);
 }
 
 @media (max-width: 640px) {

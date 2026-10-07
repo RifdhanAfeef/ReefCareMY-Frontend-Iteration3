@@ -156,7 +156,7 @@ export function ReportQueue() {
   return (
     <section className={styles.page}>
       <header className={`${styles.heading} ${styles.queuePageHeading}`}>
-        <p className={styles.eyebrow}>Coordinator workspace / Report intake</p>
+        
         <h1>Submitted reports</h1>
         <p>Review every submitted report and see whether it is unclaimed, claimed or already progressing through review.</p>
       </header>

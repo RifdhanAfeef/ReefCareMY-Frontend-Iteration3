@@ -7,7 +7,6 @@ export const metadata: Metadata = { title: "My cases" };
 export default function MyCasesPage() {
   return (
     <PageTemplate
-      eyebrow="My cases / Ownership"
       title="My cases"
       description="View the reports you currently own, or filter your closed-case and referral history."
     >
