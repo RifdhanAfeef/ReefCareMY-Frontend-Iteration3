@@ -124,6 +124,9 @@ export function createPlanningBrief(
     path: "/api/v1/public/planning/brief",
     method: "POST",
     body: { siteId, plannedDate },
+    // Allow forecast retrieval and the backend's 21s default AI fallback,
+    // plus database/network overhead, before giving up on the optional brief.
+    timeoutMs: 60_000,
     auth: false,
     signal,
   });
