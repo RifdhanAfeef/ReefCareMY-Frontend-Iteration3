@@ -47,11 +47,11 @@ export const threatExplorerItems: ThreatExplorerItem[] = [
     recognitionCues: ["Mesh or rope wrapped around coral", "Animals trapped or restricted", "Gear with no vessel or diver attending it"],
     evidenceGuidance: "A photo showing the gear and the coral it is touching. How large it looks. Whether any animal is trapped.",
     safety: "Keep clear of hooks and loose lines. Photograph it from a safe distance and never attempt removal unless trained and authorised.",
-    image: "/images/threats/generated-v2/ghost-gear.webp",
-    imageAlt: "Fishing net mesh and loose rope tangled around branching coral",
+    image: "/images/threats/open/net-reef.webp",
+    imageAlt: "A lost fishing net draped over coral on a reef slope",
     examples: [
-      { image: "/images/threats/generated-v2/ghost-gear-affected.webp", alt: "Coral entangled in derelict fishing net", caption: "Coral entangled in lost fishing net" },
-      { image: "/images/threats/generated-v2/ghost-gear-healthy.webp", alt: "Healthy coral nearby, free of any netting", caption: "Healthy coral for comparison" },
+      { image: "/images/threats/open/net-divers.webp", alt: "Two divers working around a large mass of derelict fishing net on a reef", caption: "Trained divers removing a lost net" },
+      { image: "/images/reef-sites/profiles/tioman-malang-rock-1.jpg", alt: "Plate and branching corals on a reef with no netting", caption: "Healthy reef for comparison" },
     ],
   },
   {
@@ -66,11 +66,11 @@ export const threatExplorerItems: ThreatExplorerItem[] = [
     recognitionCues: ["Unusually white or washed-out tissue", "Several nearby colonies showing similar paling", "A visible contrast with normally coloured coral"],
     evidenceGuidance: "A close photo of the pale coral, roughly an arm's length away. A wider photo showing how much of the area is affected.",
     safety: "Observe without touching. Keep good buoyancy, avoid stirring sediment, and capture both a close and wider view if safe.",
-    image: "/images/threats/generated-v2/coral-bleaching.webp",
-    imageAlt: "White bleached branching coral beside naturally coloured healthy coral",
+    image: "/images/threats/open/bleaching-acropora.webp",
+    imageAlt: "A bleached white branching Acropora coral colony on a rock in blue water",
     examples: [
-      { image: "/images/threats/generated-v2/coral-bleaching-affected.webp", alt: "Fully bleached white branching coral", caption: "Bleached coral losing its colour" },
-      { image: "/images/threats/generated-v2/coral-bleaching-healthy.webp", alt: "Naturally coloured healthy coral nearby", caption: "Healthy coral for comparison" },
+      { image: "/images/reef-sites/profiles/tioman-labas-island-1.jpg", alt: "A wide area of branching coral that has turned white", caption: "A bleached branching reef" },
+      { image: "/images/reef-sites/profiles/tioman-labas-island-2.jpg", alt: "Living branching and table corals with their natural colour", caption: "Healthy branching reef for comparison" },
     ],
   },
   {
@@ -85,11 +85,11 @@ export const threatExplorerItems: ThreatExplorerItem[] = [
     recognitionCues: ["Clearly human-made material", "Waste touching or covering coral", "Sharp, hazardous or entangling objects"],
     evidenceGuidance: "A photo of the debris where it lies, including what surrounds it. Roughly how large it is and how much there is.",
     safety: "Do not handle sharp, chemical, medical or entangling waste. Record the type, amount and location from a safe position.",
-    image: "/images/threats/generated-v2/marine-debris.webp",
-    imageAlt: "A transparent plastic bag and silver aluminium can lodged beside coral",
+    image: "/images/threats/open/debris-indonesia.webp",
+    imageAlt: "A purple plastic wrapper caught on coral",
     examples: [
-      { image: "/images/threats/generated-v2/marine-debris-affected.webp", alt: "Plastic bag and aluminium can resting on the reef", caption: "Debris resting on the reef" },
-      { image: "/images/threats/generated-v2/marine-debris-healthy.webp", alt: "Healthy coral nearby, free of debris", caption: "Healthy coral for comparison" },
+      { image: "/images/threats/open/debris-indonesia.webp", alt: "A purple plastic wrapper caught on coral", caption: "Plastic caught on the reef" },
+      { image: "/images/reef-sites/profiles/tioman-pirate-reef-2.jpg", alt: "Colourful corals and reef fish with no visible waste", caption: "Healthy reef for comparison" },
     ],
   },
   {
@@ -104,11 +104,11 @@ export const threatExplorerItems: ThreatExplorerItem[] = [
     recognitionCues: ["Fresh-looking white break surfaces", "Loose fragments below a damaged colony", "A track or impact pattern with a nearby possible cause"],
     evidenceGuidance: "A photo of the damaged area. Whether the breaks look recent. Any visible cause, such as an anchor, chain or contact.",
     safety: "Do not move fragments or confront anyone. Maintain safe buoyancy and document only what you can observe safely.",
-    image: "/images/threats/generated-v2/physical-damage.webp",
-    imageAlt: "Snapped coral branches with pale fracture surfaces and loose fragments on the reef floor",
+    image: "/images/threats/open/broken-corals.webp",
+    imageAlt: "Broken coral fragments heaped on the reef floor",
     examples: [
-      { image: "/images/threats/generated-v2/physical-damage-affected.webp", alt: "Snapped coral branches with pale fracture surfaces", caption: "Broken coral with fresh fracture surfaces" },
-      { image: "/images/threats/generated-v2/physical-damage-healthy.webp", alt: "An intact healthy coral colony nearby", caption: "Healthy coral for comparison" },
+      { image: "/images/threats/open/broken-coral.webp", alt: "Broken coral pieces caught in a derelict net on a reef flat", caption: "Coral broken off and caught in a net" },
+      { image: "/images/reef-sites/profiles/perhentian-batu-nisan-1.jpg", alt: "An intact branching Acropora colony", caption: "Intact coral for comparison" },
     ],
   },
 ];
