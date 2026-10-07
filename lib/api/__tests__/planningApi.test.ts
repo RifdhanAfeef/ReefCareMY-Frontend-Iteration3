@@ -43,6 +43,7 @@ describe("Epic 9 planning API", () => {
       path: "/api/v1/public/planning/brief",
       method: "POST",
       body: { siteId: 13, plannedDate: "2026-10-03" },
+      timeoutMs: 60_000,
       auth: false,
       signal: undefined,
     });
