@@ -93,7 +93,7 @@ beforeEach(() => {
     },
   ]);
   vi.mocked(getDiveSessions).mockResolvedValue([]);
-  vi.mocked(checkReportLocation).mockResolvedValue({
+  vi.mocked(checkReportLocation).mockReset().mockResolvedValue({
     checkAvailable: true,
     hasWarning: false,
     warningCode: null,
