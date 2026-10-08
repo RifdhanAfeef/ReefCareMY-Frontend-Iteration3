@@ -199,6 +199,7 @@ export function DateComparison({
   summaries,
   onRetry,
   siteAssessments,
+  sitesLoading = false,
   total,
   selected,
   onSelect,
@@ -208,6 +209,8 @@ export function DateComparison({
   summaries: AsyncData<Record<string, DaySummaryView>>;
   onRetry: () => void;
   siteAssessments: Assessment[];
+  /** True while the selected date's site assessments load; wave and wind ranges come from them. */
+  sitesLoading?: boolean;
   total: number;
   selected: string;
   onSelect: (date: string) => void;
@@ -294,7 +297,13 @@ export function DateComparison({
             {dateLabel(selected, true)}
             {summaries.status === "ready" && ` · ${labels[current.band]}`}
           </strong>
-          {waves.length > 0 || winds.length > 0 || rain !== null ? (
+          {summaries.status === "ready" && sitesLoading ? (
+            // Rain comes from the date summary but wave and wind ranges from the site request, so hold
+            // all three until both have loaded rather than showing a partial line that fills in later.
+            <p className={`${styles.dateSignals} ${styles.dateSignalsLoading}`}>
+              <span>Loading wave, wind and rain values…</span>
+            </p>
+          ) : waves.length > 0 || winds.length > 0 || rain !== null ? (
             <p className={styles.dateSignals}>
               {waves.length > 0 && <span><Waves size={16} />{range(waves)} m</span>}
               {winds.length > 0 && <span><Wind size={16} />{range(winds)} km/h</span>}

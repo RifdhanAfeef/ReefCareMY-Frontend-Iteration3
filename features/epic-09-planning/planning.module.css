@@ -440,6 +440,10 @@
 .dateSignals svg {
   color: var(--color-muted);
 }
+.dateFeedback .dateSignalsLoading {
+  color: var(--color-muted);
+  font-weight: 400;
+}
 .dateFeedback a {
   min-height: 44px;
   display: inline-flex;

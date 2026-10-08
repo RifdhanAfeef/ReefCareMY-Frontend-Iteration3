@@ -651,6 +651,7 @@ export function DivePlanner() {
               summaries={summaries}
               onRetry={retrySummaries}
               siteAssessments={siteAssessments}
+              sitesLoading={siteState.status === "loading"}
               total={sites.length}
               selected={selectedDate}
               onSelect={setSelectedDate}
