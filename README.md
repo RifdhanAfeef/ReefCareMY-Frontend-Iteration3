@@ -8,7 +8,7 @@ remain subject to observer or coordinator confirmation.
 
 ## Live Website Link
 
-[Iteration 3 website](https://reef-care-my-frontend-iteration3.vercel.app/)
+[https://reef-care-my-frontend-iteration3.vercel.app/](https://reef-care-my-frontend-iteration3.vercel.app/) 
 
 
 ## Run locally
