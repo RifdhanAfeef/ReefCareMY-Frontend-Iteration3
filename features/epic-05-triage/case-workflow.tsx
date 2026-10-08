@@ -90,8 +90,8 @@ function clearStoredDecision(reportReference: string) {
   }
 }
 
-function Heading({ reference, title, description }: { reference?: string; title: string; description: string }) {
-  return <header className={styles.heading}><h1>{title}</h1>{reference && <p className={styles.headingReference}>Report {reference}</p>}<p>{description}</p></header>;
+function Heading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+  return <header className={styles.heading}><p className={styles.eyebrow}>{eyebrow}</p><h1>{title}</h1><p>{description}</p></header>;
 }
 
 function displayDateTime(value?: string | null) {
@@ -130,7 +130,7 @@ function displayAiValue(value: unknown): string {
   return "Not specified";
 }
 
-function aiStructuredItems(suggestions: CoordinatorAiAssisted["suggestions"] | undefined): AiStructuredItem[] {
+function aiStructuredItems(suggestions: CoordinatorAiAssisted["suggestions"] | undefined, legacySource?: string | null): AiStructuredItem[] {
   if (!Array.isArray(suggestions)) return [];
 
   return suggestions.flatMap((item, index) => {
@@ -146,22 +146,16 @@ function aiStructuredItems(suggestions: CoordinatorAiAssisted["suggestions"] | u
     // US5.2 only permits Observer-reviewed values in the case view. Raw,
     // unresolved or removed model output must not be presented as case facts.
     if (status !== "confirmed" && status !== "corrected") return [];
-    const provenanceLabel = status === "corrected"
-      ? "AI-assisted · edited by Observer"
-      : "AI-assisted · accepted by Observer";
+    // A suggestion's own source takes priority over the legacy report-level source.
+    const source = item.source === undefined ? legacySource : item.source;
+    const sourceLabel = source === "visual_recognition" ? "Visual Recognition"
+      : source === "smart_report" || source === "smart_report_structuring" ? "Smart Report"
+      : "AI-assisted";
+    const confidence = typeof item.confidence === "number" && Number.isFinite(item.confidence)
+      && item.confidence >= 0 && item.confidence <= 1
+      ? ` · Model confidence: ${Math.round(item.confidence * 100)}%` : "";
+    const provenanceLabel = `${sourceLabel} · ${status === "corrected" ? "edited" : "accepted"} by Observer${confidence}`;
     return [{ key: `${field}-${index}`, field, label, value: displayAiValue(value), provenanceLabel }];
-  });
-}
-
-function normaliseAiField(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function findAiItem(items: AiStructuredItem[], aliases: string[]): AiStructuredItem | undefined {
-  const normalisedAliases = aliases.map(normaliseAiField);
-  return items.find((item) => {
-    const candidates = [normaliseAiField(item.field), normaliseAiField(item.label)];
-    return candidates.some((candidate) => normalisedAliases.includes(candidate));
   });
 }
 
@@ -294,7 +288,7 @@ export function CoordinatorCaseRoute({ reportReference, startWithClaim = false }
   }
 
   if (routeState === "claim") return <section className={styles.page}>
-    <Heading reference={reportReference} title="Claim this report" description="Become the active Case Coordinator before opening protected evidence and decision controls." />
+    <Heading eyebrow={`Report intake / ${reportReference}`} title="Claim this report" description="Become the active Case Coordinator before opening protected evidence and decision controls." />
     <section className={styles.card}>
       <h2>Incoming report</h2>
       <div className={styles.summaryGrid}><div><span>Report reference</span><strong>{reportReference}</strong></div><div><span>Current queue state</span><strong>Available to claim</strong></div></div>
@@ -304,10 +298,10 @@ export function CoordinatorCaseRoute({ reportReference, startWithClaim = false }
     </section>
   </section>;
 
-  if (routeState === "loading") return <section className={styles.page}><Heading title="Loading case" description="Retrieving the latest protected case details from ReefCare MY." /><div className={styles.queueMessage} role="status"><strong>Loading report {reportReference}…</strong></div></section>;
+  if (routeState === "loading") return <section className={styles.page}><Heading eyebrow="Coordinator workspace" title="Loading case" description="Retrieving the latest protected case details from ReefCare MY." /><div className={styles.queueMessage} role="status"><strong>Loading report {reportReference}…</strong></div></section>;
 
   if (routeState === "error" || !report) return <section className={styles.page}>
-    <Heading title="Case unavailable" description="This case could not be opened for the signed-in coordinator." />
+    <Heading eyebrow="Coordinator workspace" title="Case unavailable" description="This case could not be opened for the signed-in coordinator." />
     <section className={styles.card}><div className={styles.errorBox} role="alert"><strong>Unable to open report {reportReference}</strong><p>{error}</p></div><div className={styles.actions}><Link className={styles.secondaryButton} href="/coordinator/report-queue">Return to report queue</Link><button className={styles.primaryButton} type="button" onClick={() => { setRouteState("loading"); setError(""); setReloadKey((value) => value + 1); }}>Try again</button></div></section>
   </section>;
 
@@ -554,42 +548,38 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
   const triage = report.triageContext;
   const priorityReasons = triage?.priorityReasons ?? [];
   const informationExchange = report.informationExchange;
-  const structuredAiItems = aiStructuredItems(report.aiAssisted?.suggestions);
-  const threatAiItem = findAiItem(structuredAiItems, ["possible_threat", "threat_type", "threat"]);
-  const depthAiItem = findAiItem(structuredAiItems, ["estimated_depth", "estimated_depth_metres"]);
-  const embeddedAiItemKeys = new Set([threatAiItem?.key, depthAiItem?.key].filter((key): key is string => Boolean(key)));
-  const additionalAiItems = structuredAiItems.filter((item) => !embeddedAiItemKeys.has(item.key));
-  const displayedThreat = threatAiItem
-    ? (/^[a-z0-9_-]+$/i.test(threatAiItem.value) ? formatFieldName(threatAiItem.value) : threatAiItem.value)
-    : report.threat;
-  const displayedDepth = depthAiItem
-    ? (/^-?\d+(\.\d+)?$/.test(depthAiItem.value.trim()) ? `${depthAiItem.value} m` : depthAiItem.value)
-    : report.estimatedDepthMetres == null ? "Not provided" : `${report.estimatedDepthMetres} m`;
+  const structuredAiItems = aiStructuredItems(report.aiAssisted?.suggestions, report.aiAssisted?.source);
+  const displayedDepth = report.estimatedDepthMetres == null ? "Not provided" : `${report.estimatedDepthMetres} m`;
   const observerEvidence = report.evidence.filter((item) => !actionEvidenceIds.includes(item.evidenceId));
 
   if (activeStage === "detail") return <section className={styles.page}>
     <Link className={styles.backLink} href="/coordinator/my-cases">← Back to My Cases</Link>
-    <Heading reference={report.reportReference} title="Review reef observation" description="Review the submitted evidence, observation details and protected location before making a decision." />
+    <Heading eyebrow={`My Cases / ${report.reportReference}`} title="Review reef observation" description="Review the submitted evidence, observation details and protected location before making a decision." />
     <span className={styles.ownerChip}>Owned by {report.owner.displayName}</span>
     {claimConfirmation && <div className={styles.successBox} role="status"><strong>{claimConfirmation.statusLabel}: report assigned successfully</strong><p>Claimed at {displayDateTime(claimConfirmation.claimedAt)}. You can now begin reviewing its evidence.</p></div>}
     <div className={styles.caseContextStack} aria-label="Additional case context">
       <details className={styles.caseDisclosure}><summary><span><strong>Area reporting context</strong><small>Generalised activity near this observation</small></span></summary><HotspotCaseContext reportReference={report.reportReference} /></details>
       <details className={styles.caseDisclosure}><summary><span><strong>Potentially related reports</strong><small>Compare reports and record any relationship</small></span></summary><RelatedReportsPanel reportReference={report.reportReference} /></details>
-      {triage && <details className={styles.caseDisclosure}><summary><span><strong>Priority and triage cues</strong><small>{formatFieldName(triage.priority ?? "not set")} priority · {triage.evidenceCount ?? report.evidence.length} evidence file{(triage.evidenceCount ?? report.evidence.length) === 1 ? "" : "s"}</small></span></summary><section className={styles.triageContext} aria-labelledby="triage-context-heading"><div><h2 id="triage-context-heading">Priority: {formatFieldName(triage.priority ?? "not set")}</h2><p>{formatFieldName(triage.evidenceCompleteness ?? "not assessed")} evidence · {triage.evidenceCount ?? report.evidence.length} file{(triage.evidenceCount ?? report.evidence.length) === 1 ? "" : "s"} · {triage.hoursInQueue == null ? "Queue age unavailable" : `${Math.round(triage.hoursInQueue)} hours in queue`}</p></div>{priorityReasons.length > 0 && <div><strong>Rules that contributed</strong><ul>{priorityReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}<p className={styles.triageDisclaimer}>Priority helps order review. It does not verify the report or make a conservation decision.</p></section></details>}
+      {triage && <details className={styles.caseDisclosure}><summary><span><strong>Priority and triage cues</strong><small>{formatFieldName(triage.priority ?? "not set")} priority · {triage.evidenceCount ?? report.evidence.length} evidence file{(triage.evidenceCount ?? report.evidence.length) === 1 ? "" : "s"}</small></span></summary><section className={styles.triageContext} aria-labelledby="triage-context-heading"><div><p className={styles.eyebrow}>Transparent triage cues</p><h2 id="triage-context-heading">Priority: {formatFieldName(triage.priority ?? "not set")}</h2><p>{formatFieldName(triage.evidenceCompleteness ?? "not assessed")} evidence · {triage.evidenceCount ?? report.evidence.length} file{(triage.evidenceCount ?? report.evidence.length) === 1 ? "" : "s"} · {triage.hoursInQueue == null ? "Queue age unavailable" : `${Math.round(triage.hoursInQueue)} hours in queue`}</p></div>{priorityReasons.length > 0 && <div><strong>Rules that contributed</strong><ul>{priorityReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}<p className={styles.triageDisclaimer}>Priority helps order review. It does not verify the report or make a conservation decision.</p></section></details>}
       {informationExchange && informationExchange.length > 0 && <details className={styles.caseDisclosure}><summary><span><strong>Information request history</strong><small>{informationExchange.length} recorded update{informationExchange.length === 1 ? "" : "s"}</small></span></summary><section className={styles.informationExchange} aria-labelledby="information-exchange-heading"><h2 id="information-exchange-heading">Information request and response</h2>{informationExchange.map((entry, index) => <div key={`${entry.eventType}-${entry.occurredAt}-${index}`}><strong>{informationExchangeLabel(entry.eventType)}</strong>{entry.message && <p>{entry.message}</p>}<small>{entry.actorDisplayName ? `${entry.actorDisplayName} · ` : ""}{displayDateTime(entry.occurredAt)}</small></div>)}</section></details>}
     </div>
     <div className={styles.reviewGrid}><section className={styles.card}>
       <h2>Submitted evidence</h2><p className={styles.muted}>Evidence provided by the observer with this report.</p><EvidenceRecords reportReference={report.reportReference} evidence={observerEvidence} />
       <dl className={styles.detailList}>
-        <div><dt>Threat type{threatAiItem && <AiProvenanceIndicator item={threatAiItem} />}</dt><dd>{displayedThreat}</dd></div>
+        <div><dt>Threat type</dt><dd>{report.threat}</dd></div>
         <div><dt>Observed</dt><dd>{observationDateMissing ? "Unavailable" : displayDateTime(report.observedAt)}</dd></div>
-        <div><dt>Estimated depth{depthAiItem && <AiProvenanceIndicator item={depthAiItem} />}</dt><dd>{displayedDepth}</dd></div>
-        {additionalAiItems.map((item) => <div key={item.key}><dt>{item.label}<AiProvenanceIndicator item={item} /></dt><dd>{item.value}</dd></div>)}
+        <div><dt>Estimated depth</dt><dd>{displayedDepth}</dd></div>
         <div><dt>Description</dt><dd>{report.description}</dd></div>
         <div><dt>General area</dt><dd>{report.area ?? "Not provided"}</dd></div>
         <div><dt>Submitted</dt><dd>{displayDateTime(report.submittedAt)}</dd></div>
       </dl>
-      {structuredAiItems.length > 0 && <p className={styles.inlineAiDisclaimer}>AI-assisted values were reviewed by the Observer before submission. They do not independently verify that the reported threat is present and are not Coordinator-confirmed findings.</p>}
+      {structuredAiItems.length > 0 && <section aria-labelledby="reviewed-ai-heading">
+        <h3 id="reviewed-ai-heading">Reviewed AI-assisted information</h3>
+        <dl className={styles.detailList}>{structuredAiItems.map((item) => <div key={item.key}>
+          <dt>{item.label}<AiProvenanceIndicator item={item} /></dt><dd>{item.value}</dd>
+        </div>)}</dl>
+        <p className={styles.inlineAiDisclaimer}>AI-assisted values were reviewed by the Observer before submission. They do not independently verify that the reported threat is present and are not Coordinator-confirmed findings. Model confidence describes the AI suggestion, not evidence verification.</p>
+      </section>}
       {observationDateMissing && <div className={styles.warningBox} role="status"><strong>Observation date could not be loaded</strong><p>The observation date is temporarily unavailable. Refresh the case and try again. If it remains unavailable, report the problem to your system administrator.</p></div>}
       <div className={styles.protectedBox}><strong>Submitted location</strong><p>{exactLocation}</p>{report.preciseLocation?.confidenceLabel && <small>Confidence: {report.preciseLocation.confidenceLabel}</small>}{report.preciseLocation?.sourceLabel && <small>Source: {report.preciseLocation.sourceLabel}</small>}{uncertainty && <small>{uncertainty}</small>}{report.preciseLocation?.relocationNotes && <div className={styles.surfaceContext}><strong>Surface entry and exit context</strong><p>{report.preciseLocation.relocationNotes}</p><small>Context only — not an exact underwater location.</small></div>}</div>
     </section><div className={styles.caseSidebar}>
@@ -599,7 +589,7 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
   </section>;
 
   if (activeStage === "assess") return <section className={styles.page}>
-    <Heading title="Assess the submitted evidence" description="Review whether the evidence is usable and plausibly supports the reported threat." />
+    <Heading eyebrow="My Cases / Evidence review" title="Assess the submitted evidence" description="Review whether the evidence is usable and plausibly supports the reported threat." />
     <form className={styles.reviewGrid} onSubmit={saveAssessment}><section className={styles.card}><h2>Report {report.reportReference}</h2>
       <fieldset className={styles.radioGroup}><legend>1. Is the evidence usable?</legend><label><input type="radio" name="usable" checked={usable === "yes"} onChange={() => setUsable("yes")} />Yes — the evidence can be assessed</label><label><input type="radio" name="usable" checked={usable === "no"} onChange={() => { setUsable("no"); setCredible(""); }} />No — more information is required</label></fieldset>
       <fieldset className={styles.radioGroup} disabled={usable !== "yes"}><legend>2. Does the evidence plausibly support the reported threat?</legend><label><input type="radio" name="credible" checked={credible === "yes"} onChange={() => setCredible("yes")} />Yes — continue to a response decision</label><label><input type="radio" name="credible" checked={credible === "no"} onChange={() => setCredible("no")} />No — prepare a Not Substantiated closure</label></fieldset>
@@ -608,22 +598,22 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
   </section>;
 
   if (activeStage === "request") return <section className={styles.page}>
-    <Heading title="Request more information" description="Tell the observer what is missing so the report can continue through review." />
+    <Heading eyebrow="My Cases / Information request" title="Request more information" description="Tell the observer what is missing so the report can continue through review." />
     <form className={styles.reviewGrid} onSubmit={sendRequest}><section className={styles.card}><h2>What information is missing?</h2><div className={styles.checkboxGroup}>{requestChoices.map(([value, label]) => <label key={value}><input type="checkbox" checked={requestItems.includes(value)} onChange={() => toggleRequestItem(value)} />{label}</label>)}</div><label className={styles.field}>Message to the observer *<textarea value={requestMessage} onChange={(event) => setRequestMessage(event.target.value)} aria-invalid={Boolean(requestError)} /></label>{requestError && <p className={styles.errorText} role="alert">{requestError}</p>}<div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage("detail")} disabled={pendingAction !== null}>Cancel</button><button className={styles.primaryButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "request" ? "Sending…" : "Send request"}</button></div></section><aside className={styles.sidePanel}><h2>Case effect</h2><p className={styles.pendingChip}>Needs More Information</p><div className={styles.purpleBox}><strong>Ownership retained</strong><p>{report.owner.displayName} remains the active Case Coordinator.</p></div></aside></form>
   </section>;
 
-  if (activeStage === "request-sent") return <section className={styles.page}><Heading reference={report.reportReference} title="Information request sent" description="The request was saved and the report remains assigned while the observer response is outstanding." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>More information needed</h2><div className={styles.infoBox}><strong>Message to observer</strong><p>{requestMessage}</p></div><div className={styles.actions}><Link className={styles.secondaryButton} href="/coordinator/report-queue">Return to queue</Link><button className={styles.primaryButton} type="button" onClick={returnToDetail} disabled={pendingAction !== null}>{pendingAction === "refresh" ? "Refreshing…" : "Refresh assigned case"}</button></div></section></section>;
+  if (activeStage === "request-sent") return <section className={styles.page}><Heading eyebrow={`My Cases / ${report.reportReference}`} title="Information request sent" description="The request was saved and the report remains assigned while the observer response is outstanding." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>More information needed</h2><div className={styles.infoBox}><strong>Message to observer</strong><p>{requestMessage}</p></div><div className={styles.actions}><Link className={styles.secondaryButton} href="/coordinator/report-queue">Return to queue</Link><button className={styles.primaryButton} type="button" onClick={returnToDetail} disabled={pendingAction !== null}>{pendingAction === "refresh" ? "Refreshing…" : "Refresh assigned case"}</button></div></section></section>;
 
   if (activeStage === "response") return <section className={styles.page}>
-    <Heading title="Choose the next response" description="Select the most appropriate next step after completing the desk review." />
+    <Heading eyebrow="My Cases / Case decision" title="Choose the next response" description="Select the most appropriate next step after completing the desk review." />
     <form className={styles.reviewGrid} onSubmit={saveResponse}><section className={styles.card}><h2>Report {report.reportReference}</h2><p className={styles.muted}>{report.threat} — {report.area ?? "Location not provided"}</p><fieldset className={styles.optionCards}><legend className="sr-only">Response type</legend><label><input type="radio" name="response" checked={responseType === "monitoring_only"} onChange={() => setResponseType("monitoring_only")} /><span><strong>Monitoring Only</strong><small>Record monitoring without promising intervention.</small></span></label><label><input type="radio" name="response" checked={responseType === "refer_or_share"} onChange={() => setResponseType("refer_or_share")} /><span><strong>Refer / Share for Possible Response</strong><small>Choose a contact before the decision is saved.</small></span></label><label><input type="radio" name="response" checked={responseType === "intervention_required"} onChange={() => setResponseType("intervention_required")} /><span><strong>Intervention Required</strong><small>Record a recommendation, not a guarantee.</small></span></label></fieldset><label className={styles.field}>Decision note <span>Optional</span><textarea value={responseNote} onChange={(event) => setResponseNote(event.target.value)} /></label>{responseError && <p className={styles.errorText} role="alert">{responseError}</p>}<div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage("assess")} disabled={pendingAction !== null}>Back to assessment</button><button className={styles.primaryButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "decision" ? "Recording…" : "Record response"}</button></div></section><aside className={styles.sidePanel}><h2>Honest status language</h2><div className={styles.warningBox}><strong>Referral</strong><p>Shared for consideration does not mean accepted.</p></div><div className={styles.infoBox}><strong>Monitoring</strong><p>Monitoring Recommended records the coordinator decision.</p></div></aside></form>
   </section>;
 
-  if (activeStage === "response-saved") return <section className={styles.page}><Heading reference={report.reportReference} title="Response decision recorded" description="The recommendation was saved without promising completed conservation action." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{displayedResponse}</h2><p>{displayedResponseNote}</p>{responseError && <p className={styles.errorText} role="alert">{responseError}</p>}<div className={styles.warningBox}><strong>Case remains open by default</strong><p>A recommendation is not the same as confirmed action. Close only when a valid outcome applies.</p></div><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={returnToDetail} disabled={pendingAction !== null}>{pendingAction === "refresh" ? "Refreshing…" : "Keep case open"}</button><button className={styles.primaryButton} type="button" onClick={openClosure}>Record a closure outcome</button></div></section><FollowUpPanel reportReference={report.reportReference} statusCode={currentStatus} responseType={restoredDecision?.responseType ?? responseType} onEvidenceIdsChange={handleActionEvidenceIds} /></section>;
+  if (activeStage === "response-saved") return <section className={styles.page}><Heading eyebrow={`My Cases / ${report.reportReference}`} title="Response decision recorded" description="The recommendation was saved without promising completed conservation action." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{displayedResponse}</h2><p>{displayedResponseNote}</p>{responseError && <p className={styles.errorText} role="alert">{responseError}</p>}<div className={styles.warningBox}><strong>Case remains open by default</strong><p>A recommendation is not the same as confirmed action. Close only when a valid outcome applies.</p></div><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={returnToDetail} disabled={pendingAction !== null}>{pendingAction === "refresh" ? "Refreshing…" : "Keep case open"}</button><button className={styles.primaryButton} type="button" onClick={openClosure}>Record a closure outcome</button></div></section><FollowUpPanel reportReference={report.reportReference} statusCode={currentStatus} responseType={restoredDecision?.responseType ?? responseType} onEvidenceIdsChange={handleActionEvidenceIds} /></section>;
 
-  if (activeStage === "referral") return <section className={styles.page}><Heading title="Share for possible response" description="Record the recipient and sharing note before saving the referral decision." /><form className={styles.card} onSubmit={confirmReferral}><h2>Sharing summary</h2><p className={styles.muted}>Report {report.reportReference} — {report.threat} — {report.area ?? "Location not provided"}</p><div className={styles.referralGrid}><label className={styles.field}>Recipient organisation or contact *<input type="text" value={responder} onChange={(event) => setResponder(event.target.value)} maxLength={255} placeholder="For example, Tioman Marine Park Department" aria-invalid={Boolean(referralError)} /></label><aside className={styles.warningBox}><strong>Sharing status</strong><p>The observer sees that the case was shared, not that action is guaranteed.</p></aside><label className={`${styles.field} ${styles.fullWidth}`}>Sharing note *<textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} /></label></div>{referralError && <p className={styles.errorText} role="alert">{referralError}</p>}<div className={styles.splitActions}><button className={styles.secondaryButton} type="button" onClick={closeWithoutPartner} disabled={pendingAction !== null}>{pendingAction === "referral" ? "Recording…" : "No partner available"}</button><button className={styles.primaryButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "referral" ? "Recording…" : "Record referral"}</button></div></form></section>;
+  if (activeStage === "referral") return <section className={styles.page}><Heading eyebrow="My Cases / Referral" title="Share for possible response" description="Record the recipient and sharing note before saving the referral decision." /><form className={styles.card} onSubmit={confirmReferral}><h2>Sharing summary</h2><p className={styles.muted}>Report {report.reportReference} — {report.threat} — {report.area ?? "Location not provided"}</p><div className={styles.referralGrid}><label className={styles.field}>Recipient organisation or contact *<input type="text" value={responder} onChange={(event) => setResponder(event.target.value)} maxLength={255} placeholder="For example, Tioman Marine Park Department" aria-invalid={Boolean(referralError)} /></label><aside className={styles.warningBox}><strong>Sharing status</strong><p>The observer sees that the case was shared, not that action is guaranteed.</p></aside><label className={`${styles.field} ${styles.fullWidth}`}>Sharing note *<textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} /></label></div>{referralError && <p className={styles.errorText} role="alert">{referralError}</p>}<div className={styles.splitActions}><button className={styles.secondaryButton} type="button" onClick={closeWithoutPartner} disabled={pendingAction !== null}>{pendingAction === "referral" ? "Recording…" : "No partner available"}</button><button className={styles.primaryButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "referral" ? "Recording…" : "Record referral"}</button></div></form></section>;
 
-  if (activeStage === "close") return <section className={styles.page}><Heading title="Choose a closure reason" description="Choose a reason that matches the recorded assessment and response." /><form className={styles.reviewGrid} onSubmit={submitClosure}><section className={styles.card}><fieldset className={styles.closureList}><legend>Select one closure reason</legend>{closureReasons.map((item) => { const available = allowedClosures.some((allowed) => allowed.value === item.value); return <label key={item.value}><input type="radio" name="closure" checked={closureReason === item.value} disabled={!available} onChange={() => { setClosureReason(item.value); setClosureError(""); }} /><span><strong>{item.label}</strong><small>{item.observer}</small>{!available && <small>Not available for the recorded response decision</small>}</span></label>; })}</fieldset><label className={styles.field}>Public closure note *<textarea value={closureNote} onChange={(event) => setClosureNote(event.target.value)} aria-invalid={Boolean(closureError)} /></label>{closureError && <p className={styles.errorText} role="alert">{closureError}</p>}</section><aside className={styles.sidePanel}><h2>Before closing</h2><ul className={styles.checkList}><li>One compatible reason selected</li><li>Observer-safe explanation recorded</li><li>Your name and completion time will be recorded</li></ul><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage(reviewOutcome === "not_substantiated" ? "assess" : reviewOutcome === "referral" ? "referral" : "response-saved")} disabled={pendingAction !== null}>Back</button><button className={styles.dangerButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "closure" ? "Closing…" : "Close case"}</button></div></aside></form></section>;
+  if (activeStage === "close") return <section className={styles.page}><Heading eyebrow="My Cases / Close report" title="Choose a closure reason" description="Choose a reason that matches the recorded assessment and response." /><form className={styles.reviewGrid} onSubmit={submitClosure}><section className={styles.card}><fieldset className={styles.closureList}><legend>Select one closure reason</legend>{closureReasons.map((item) => { const available = allowedClosures.some((allowed) => allowed.value === item.value); return <label key={item.value}><input type="radio" name="closure" checked={closureReason === item.value} disabled={!available} onChange={() => { setClosureReason(item.value); setClosureError(""); }} /><span><strong>{item.label}</strong><small>{item.observer}</small>{!available && <small>Not available for the recorded response decision</small>}</span></label>; })}</fieldset><label className={styles.field}>Public closure note *<textarea value={closureNote} onChange={(event) => setClosureNote(event.target.value)} aria-invalid={Boolean(closureError)} /></label>{closureError && <p className={styles.errorText} role="alert">{closureError}</p>}</section><aside className={styles.sidePanel}><h2>Before closing</h2><ul className={styles.checkList}><li>One compatible reason selected</li><li>Observer-safe explanation recorded</li><li>Your name and completion time will be recorded</li></ul><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage(reviewOutcome === "not_substantiated" ? "assess" : reviewOutcome === "referral" ? "referral" : "response-saved")} disabled={pendingAction !== null}>Back</button><button className={styles.dangerButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "closure" ? "Closing…" : "Close case"}</button></div></aside></form></section>;
 
-  return <section className={styles.page}><Heading reference={report.reportReference} title="Case outcome recorded" description="The closure reason, public note and time were saved." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{closure?.label ?? "Case closed"}</h2><p>Report {report.reportReference} now has a traceable outcome.</p><div className={styles.infoBox}><strong>Message shown to observer</strong><p>{closureNote}</p></div><div className={styles.actions}><Link className={styles.primaryButton} href="/coordinator/report-queue">Return to queue</Link></div></section></section>;
+  return <section className={styles.page}><Heading eyebrow={`My Cases / ${report.reportReference}`} title="Case outcome recorded" description="The closure reason, public note and time were saved." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{closure?.label ?? "Case closed"}</h2><p>Report {report.reportReference} now has a traceable outcome.</p><div className={styles.infoBox}><strong>Message shown to observer</strong><p>{closureNote}</p></div><div className={styles.actions}><Link className={styles.primaryButton} href="/coordinator/report-queue">Return to queue</Link></div></section></section>;
 }

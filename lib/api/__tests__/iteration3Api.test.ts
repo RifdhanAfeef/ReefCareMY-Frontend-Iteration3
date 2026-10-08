@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../client";
 import {
   claimAndCompare, createFollowUp, createMonitoring, decideRelationship,
-  getExternalContext, getFollowUps, getPublicSiteContext, getRelatedReports, getSiteHistory,
+  setFollowUpPublication, getExternalContext, getFollowUps, getPublicSiteContext, getRelatedReports, getSiteHistory,
 } from "../iteration3Api";
 
 vi.mock("../client", () => ({ apiRequest: vi.fn() }));
@@ -47,4 +47,11 @@ describe("Iteration 3 API boundaries", () => {
     expect(apiRequest).toHaveBeenNthCalledWith(2, { path: "/api/v1/public/dive-sites/12/context", auth: false, signal: undefined });
     expect(apiRequest).toHaveBeenNthCalledWith(3, { path: "/api/v1/public/dive-sites/12/external-context", auth: false, signal: undefined, timeoutMs: 30_000 });
   });
+});
+
+it("publishes and withdraws through the owner-scoped publication route", async () => {
+  await setFollowUpPublication("RC/1", 8, true);
+  await setFollowUpPublication("RC/1", 12, false);
+  expect(apiRequest).toHaveBeenNthCalledWith(1, { path: "/api/v1/coordinator/reports/RC%2F1/follow-ups/8/publication", method: "POST", body: { publish: true } });
+  expect(apiRequest).toHaveBeenNthCalledWith(2, { path: "/api/v1/coordinator/reports/RC%2F1/follow-ups/12/publication", method: "POST", body: { publish: false } });
 });

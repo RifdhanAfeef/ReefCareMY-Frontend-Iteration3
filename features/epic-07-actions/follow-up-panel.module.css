@@ -19,4 +19,11 @@
 .form .checkbox { display:flex; align-items:center; gap:8px; }
 .notice { background:#eaf4f3; border-radius:8px; padding:10px; color:#21545f; }
 .error { color:#992326; } .success { color:#13674c; }
+.publication { border-top:1px solid #d5e4e7; padding-top:12px; margin-top:12px; display:grid; gap:8px; }
+.publication strong { font-size:.9rem; color:#21545f; }
+.publication .textButton { justify-self:start; }
+.publicationConfirmation { background:#eaf4f3; border:1px solid #b8d4d7; border-radius:12px; padding:16px; margin-top:16px; }
+.publicationConfirmation h3 { margin-top:0; }
+.publicationConfirmation p { white-space:pre-wrap; overflow-wrap:anywhere; }
+.panel button:disabled { opacity:.5; cursor:not-allowed; }
 @media(max-width:640px) { .panel { padding:16px; } }

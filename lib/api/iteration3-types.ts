@@ -63,6 +63,9 @@ export type FollowUpEvidence = {
 };
 export type FollowUp = {
   caseActionId: number;
+  // Older deployments may omit this field; do not assume publication status.
+  isPublishable?: boolean;
+  isDemonstration?: boolean;
   caseEventId: number;
   reportReference: string;
   followUpType: FollowUpType;

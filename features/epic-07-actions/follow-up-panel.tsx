@@ -1,16 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { getConservationActionTypes, getCoordinatorEvidence, uploadConservationActionEvidence } from "@/lib/api/coordinatorApi";
 import {
-  correctFollowUp, createFollowUp, createMonitoring, getFollowUps, getMonitoringConditions,
+  correctFollowUp, createFollowUp, createMonitoring, getFollowUps, getMonitoringConditions, setFollowUpPublication,
 } from "@/lib/api/iteration3Api";
 import type { ConservationActionTypeOption } from "@/lib/api/types";
 import type { FollowUp, FollowUpCorrection, MonitoringCondition } from "@/lib/api/iteration3-types";
 import { displayDateToIsoDate, isFutureDisplayDate, isValidDisplayDate } from "@/lib/format/date";
 import { userFacingError } from "@/lib/api/user-facing-error";
+import { ApiError } from "@/lib/api/client";
 import styles from "./follow-up-panel.module.css";
 
 type Mode = "action" | "monitoring" | "sourced_outcome";
@@ -19,6 +20,12 @@ const maxImageSize = 10 * 1024 * 1024;
 const dateLabel = (value: string | null) => value && /^\d{4}-\d{2}-\d{2}$/.test(value)
   ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : "Not recorded";
 const readable = (value: string) => value.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase());
+
+function publicationEligible(record: FollowUp) {
+  return record.isDemonstration === false && !record.supersededByCaseActionId && Boolean(record.recordedOutcome?.trim())
+    && (record.followUpType === "action" && record.followUpState === "action_taken"
+      || record.followUpType === "sourced_outcome" && record.followUpState === "outcome_recorded");
+}
 
 function EvidencePreview({ reportReference, evidenceId }: { reportReference: string; evidenceId: number }) {
   const [url, setUrl] = useState("");
@@ -56,6 +63,10 @@ export function FollowUpPanel({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [publicationTarget, setPublicationTarget] = useState<{ id: number; publish: boolean } | null>(null);
+  const [publicationError, setPublicationError] = useState("");
+  const [publicationNotice, setPublicationNotice] = useState("");
+  const publicationBusy = useRef(false);
   const [mode, setMode] = useState<Mode>("monitoring");
   const [actionState, setActionState] = useState<"action_planned" | "action_taken">("action_planned");
   const [actionTypeCode, setActionTypeCode] = useState("");
@@ -70,7 +81,7 @@ export function FollowUpPanel({
   const [nextDate, setNextDate] = useState("");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
-  const [pendingPhoto, setPendingPhoto] = useState<{ actionId: number; file: File } | null>(null);
+  const [pendingPhoto, setPendingPhoto] = useState<{ eventId: number; file: File } | null>(null);
   const [correctionId, setCorrectionId] = useState<number | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
   const [correctedTeam, setCorrectedTeam] = useState("");
@@ -84,6 +95,36 @@ export function FollowUpPanel({
     setRecords(list.items);
     setEmptyMessage(list.message);
   }, [reportReference]);
+
+  async function savePublication() {
+    if (!publicationTarget || saving || publicationBusy.current || pendingPhoto) return;
+    const current = records.find((record) => record.caseActionId === publicationTarget.id);
+    if (!current || current.isDemonstration !== false || current.supersededByCaseActionId || typeof current.isPublishable !== "boolean"
+      || (publicationTarget.publish && !publicationEligible(current))) return;
+    publicationBusy.current = true;
+    setSaving(true); setPublicationError(""); setPublicationNotice("");
+    try {
+      const saved = await setFollowUpPublication(reportReference, current.caseActionId, publicationTarget.publish);
+      // Publication appends a new version. Use its new ID for future operations.
+      setRecords((items) => [...items.filter((item) => item.caseActionId !== current.caseActionId
+        && item.caseActionId !== saved.caseActionId && item.caseActionId !== saved.supersedesCaseActionId), saved]
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+      setPublicationTarget(null);
+      setPublicationNotice(saved.isPublishable
+        ? "This follow-up is published in public site activity."
+        : "This follow-up was withdrawn from public site activity. Its internal history remains available.");
+    } catch (requestError) {
+      if (requestError instanceof ApiError && (requestError.status === 409 || requestError.status === 404)) {
+        setPublicationTarget(null);
+        setPublicationError("This follow-up has changed. Refreshing its latest history…");
+        try {
+          await reload();
+          setPublicationError("This follow-up has changed. The history has been refreshed; review the latest record before publishing or withdrawing it.");
+        }
+        catch { setPublicationError("This follow-up has changed, but its latest history could not be loaded. Refresh the case before trying again."); }
+      } else setPublicationError(userFacingError(requestError, "The publication change could not be saved. Check the current history before trying again."));
+    } finally { publicationBusy.current = false; setSaving(false); }
+  }
   useEffect(() => {
     let cancelled = false;
     Promise.allSettled([getFollowUps(reportReference), getMonitoringConditions(), getConservationActionTypes()])
@@ -121,8 +162,8 @@ export function FollowUpPanel({
     setPhoto(file);
   }
 
-  async function attachPhoto(actionId: number, file: File) {
-    await uploadConservationActionEvidence(reportReference, actionId, file);
+  async function attachPhoto(eventId: number, file: File) {
+    await uploadConservationActionEvidence(reportReference, eventId, file);
     await reload();
     setPendingPhoto(null);
   }
@@ -130,14 +171,15 @@ export function FollowUpPanel({
   async function retryPhoto() {
     if (!pendingPhoto) return;
     setSaving(true); setError("");
-    try { await attachPhoto(pendingPhoto.actionId, pendingPhoto.file); setNotice("The evidence photo was attached."); }
+    try { await attachPhoto(pendingPhoto.eventId, pendingPhoto.file); setNotice("The evidence photo was attached."); }
     catch (requestError) { setError(userFacingError(requestError, "The photo could not be attached. Try again.")); }
     finally { setSaving(false); }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(""); setNotice("");
+    if (saving || publicationBusy.current) return;
+    setError(""); setNotice(""); setPublicationNotice("");
     if (!date && (mode !== "action" || actionState === "action_taken")) {
       setError("Enter the date of the completed follow-up."); return;
     }
@@ -185,9 +227,9 @@ export function FollowUpPanel({
         : mode === "sourced_outcome" ? "The sourced outcome was recorded."
           : mode === "monitoring" ? "The monitoring visit was recorded." : "The completed action was recorded.");
       if (photo) {
-        try { await attachPhoto(saved.caseActionId, photo); }
+        try { await attachPhoto(saved.caseEventId, photo); }
         catch (requestError) {
-          setPendingPhoto({ actionId: saved.caseActionId, file: photo });
+          setPendingPhoto({ eventId: saved.caseEventId, file: photo });
           setError(userFacingError(requestError, "The record was saved, but its photo could not be attached. Try the upload again."));
         }
       }
@@ -198,6 +240,7 @@ export function FollowUpPanel({
 
   async function saveCorrection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || publicationBusy.current) return;
     if (correctionId == null || !correctionReason.trim()) { setError("Explain the correction before saving."); return; }
     const original = records.find((record) => record.caseActionId === correctionId);
     if (!original) return;
@@ -213,10 +256,10 @@ export function FollowUpPanel({
     if (correctedDate && displayDateToIsoDate(correctedDate) !== original.actionDate) changes.actionDate = displayDateToIsoDate(correctedDate);
     if (correctedNotes.trim() !== (original.notes ?? "")) changes.notes = correctedNotes.trim();
     if (Object.keys(changes).length === 1) { setError("Change at least one field before saving."); return; }
-    setSaving(true); setError("");
+    setSaving(true); setError(""); setPublicationNotice("");
     try {
       await correctFollowUp(reportReference, correctionId, changes);
-      await reload(); setCorrectionId(null); setCorrectionReason(""); setNotice("The correction was recorded; the original remains in the audit history.");
+      await reload(); setCorrectionId(null); setCorrectionReason(""); setNotice("The correction was recorded; the original remains in the audit history. The corrected version is private until published again.");
     } catch (requestError) { setError(userFacingError(requestError, "The correction could not be saved.")); }
     finally { setSaving(false); }
   }
@@ -232,6 +275,8 @@ export function FollowUpPanel({
     {loadError && <div role="alert"><p>{loadError}</p><button type="button" onClick={() => { setLoading(true); setLoadError(""); reload().catch((requestError) => setLoadError(userFacingError(requestError, "Follow-up records could not be loaded."))).finally(() => setLoading(false)); }}>Try again</button></div>}
     {!loading && !loadError && <>
       <h3>Recorded history</h3>
+      {publicationError && <p className={styles.error} role="alert">{publicationError}</p>}
+      {publicationNotice && <p className={styles.success} role="status">{publicationNotice}</p>}
       {records.length === 0 ? <p role="status">{emptyMessage || "No follow-up has been recorded for this case."}</p> : <ol className={styles.history}>
         {records.map((record) => <li key={record.caseActionId}>
           <div className={styles.historyHead}><strong>{record.followUpType === "monitoring" ? "Monitoring visit"
@@ -250,9 +295,24 @@ export function FollowUpPanel({
             : "No follow-up currently scheduled."}</p>}
           {record.followUpState === "action_planned" && <p className={styles.notice}>This action is planned; completion has not been recorded.</p>}
           <small>Recorded by {record.createdByName || "Coordinator"} · {readable(record.recordingLevel || "coordinator_summary")}</small>
+          <div className={styles.publication}>
+            <strong>{record.isDemonstration ? "Demonstration record — stays private" : record.isPublishable === true ? "Published in public site activity"
+              : record.isPublishable === false ? "Private — not published"
+                : "Publication status unavailable"}</strong>
+            {(record.followUpType === "monitoring" || record.followUpState === "action_planned")
+              ? <p>Planned actions and monitoring visits stay private.</p>
+              : !record.recordedOutcome?.trim() && <p>Add a recorded outcome before publishing this follow-up.</p>}
+            {(typeof record.isPublishable !== "boolean" || typeof record.isDemonstration !== "boolean") && <p>Refresh this case once publication status is available.</p>}
+            {record.isDemonstration === false && !record.supersededByCaseActionId && typeof record.isPublishable === "boolean"
+              && (record.isPublishable || publicationEligible(record)) && <button type="button" className={styles.textButton}
+                disabled={saving || correctionId != null || pendingPhoto != null} onClick={() => {
+                  setPublicationTarget({ id: record.caseActionId, publish: !record.isPublishable });
+                  setPublicationError(""); setPublicationNotice("");
+                }}>{record.isPublishable ? "Withdraw from public activity" : "Publish to public activity"}</button>}
+          </div>
           {(record.evidence?.length ?? 0) > 0 && <div className={styles.photos}>{record.evidence.map((evidence) =>
             <EvidencePreview key={evidence.evidenceId} reportReference={reportReference} evidenceId={evidence.evidenceId} />)}</div>}
-          {record.followUpType !== "monitoring" && <button className={styles.textButton} type="button" onClick={() => {
+          {record.followUpType !== "monitoring" && !record.supersededByCaseActionId && <button className={styles.textButton} type="button" disabled={saving || publicationTarget != null} onClick={() => {
             setCorrectionId(record.caseActionId); setCorrectedTeam(record.responsibleTeam ?? "");
             setCorrectedOutcome(record.recordedOutcome ?? "");
             setCorrectedNotes(record.notes ?? "");
@@ -262,8 +322,20 @@ export function FollowUpPanel({
           }}>Correct this record</button>}
         </li>)}
       </ol>}
+      {publicationTarget && <section className={styles.publicationConfirmation} aria-labelledby="publication-confirm-heading">
+        <h3 id="publication-confirm-heading">{publicationTarget.publish ? "Publish this follow-up?" : "Withdraw this follow-up?"}</h3>
+        {publicationTarget.publish ? <>
+          <p>This makes the recorded outcome available in public site activity. Check that the outcome contains no names, contact details, precise report locations or other private information.</p>
+          <p><strong>Recorded outcome:</strong> {records.find((record) => record.caseActionId === publicationTarget.id)?.recordedOutcome}</p>
+          <p>Private notes, team names, source references and evidence are not part of this public summary. An external outcome remains externally reported, not a verified ReefCare action.</p>
+        </> : <p>The follow-up will be removed from public site activity. Its internal record and safe private Observer feedback remain available.</p>}
+        <div className={styles.buttons}>
+          <button type="button" disabled={saving} onClick={() => setPublicationTarget(null)}>Cancel</button>
+          <button type="button" disabled={saving} onClick={savePublication}>{saving ? "Saving publication…" : publicationTarget.publish ? "Confirm publication" : "Confirm withdrawal"}</button>
+        </div>
+      </section>}
       {correctionId != null && <form className={styles.form} onSubmit={saveCorrection}>
-        <h3>Correct recorded details</h3><p>The original record remains in the audit history.</p>
+        <h3>Correct recorded details</h3><p>The original record remains in the audit history. A corrected version must be published again before it appears in public activity.</p>
         {records.find((record) => record.caseActionId === correctionId)?.followUpType === "action" && <label>Action stage
           <select value={correctedState} onChange={(event) => setCorrectedState(event.target.value as typeof correctedState)}>
             <option value="action_planned">Planned — not completed</option><option value="action_taken">Taken</option>

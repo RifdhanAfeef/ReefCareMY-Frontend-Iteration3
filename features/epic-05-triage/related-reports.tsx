@@ -48,6 +48,14 @@ function ReportSide({ report }: { report: ComparedReport }) {
   </article>;
 }
 
+function differentIncidentGroups(comparison: RelatedComparison | null) {
+  const current = comparison?.current.incidentReference;
+  const candidate = comparison?.candidate.incidentReference;
+  return Boolean(current && candidate && current !== candidate);
+}
+
+const INCIDENT_CONFLICT_MESSAGE = "These reports already belong to different incident groups and cannot be linked.";
+
 export function RelatedReportsPanel({ reportReference }: { reportReference: string }) {
   const [result, setResult] = useState<RelatedReports | null>(null);
   const [comparison, setComparison] = useState<RelatedComparison | null>(null);
@@ -57,20 +65,25 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
   const [reasonCode, setReasonCode] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [analysisError, setAnalysisError] = useState("");
   const [success, setSuccess] = useState("");
   const [pending, setPending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const selectedCandidate = result?.candidates.find((candidate) => candidate.candidateReportReference === candidateReference);
   const canDecide = selectedCandidate?.decisionState === "undecided" || selectedCandidate?.reopenedByNewEvidence;
+  const linkingBlocked = differentIncidentGroups(comparison);
 
-  const refresh = useCallback(() => setRefreshKey((key) => key + 1), []);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setRefreshKey((key) => key + 1);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     getRelatedReports(reportReference, controller.signal).then((data) => {
-      if (!controller.signal.aborted) { setResult(data); setError(""); setLoading(false); }
+      if (!controller.signal.aborted) { setResult(data); setAnalysisError(""); setLoading(false); }
     }).catch((requestError) => {
-      if (!controller.signal.aborted) { setError(userFacingError(requestError, "Related reports could not be loaded.")); setLoading(false); }
+      if (!controller.signal.aborted) { setAnalysisError(userFacingError(requestError, "Related reports could not be loaded.")); setLoading(false); }
     });
     return () => controller.abort();
   }, [reportReference, refreshKey]);
@@ -94,6 +107,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
   }
 
   async function chooseDecision(value: "same_incident" | "not_related") {
+    if (value === "same_incident" && linkingBlocked) { setError(INCIDENT_CONFLICT_MESSAGE); return; }
     setDecision(value); setError(""); setReasonCode(""); setNote("");
     if (value === "not_related" && reasons.length === 0) {
       try { setReasons(await getRejectionReasons()); }
@@ -103,6 +117,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
 
   async function saveDecision() {
     if (!comparison || !decision) return;
+    if (decision === "same_incident" && linkingBlocked) { setError(INCIDENT_CONFLICT_MESSAGE); return; }
     const reason = reasons.find((option) => option.code === reasonCode);
     if (decision === "not_related" && (!reason || (reason.requiresNote && !note.trim()))) {
       setError("Select a reason and add a note if required."); return;
@@ -119,8 +134,21 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
         : "The reports were recorded as not related.");
       setComparison(null); setDecision(null); refresh();
     } catch (requestError) {
-      setError(userFacingError(requestError, "The relationship decision could not be saved."));
-      if (requestError instanceof ApiError && requestError.status === 409) refresh();
+      if (requestError instanceof ApiError && requestError.status === 409) {
+        setDecision(null);
+        setComparison(null);
+        setError("The relationship could not be saved because the reports changed. Open the comparison again to review their current details.");
+        refresh();
+        // Re-read membership before attributing a 409 to incident-group merging.
+        try {
+          const latest = await compareReports(reportReference, candidateReference);
+          setComparison(latest);
+          if (decision === "same_incident" && differentIncidentGroups(latest)) setError(INCIDENT_CONFLICT_MESSAGE);
+          else setError("The relationship could not be saved because the reports changed. The comparison has been refreshed; review it before deciding again.");
+        } catch {
+          // Keep the comparison closed if its current details cannot be read.
+        }
+      } else setError(userFacingError(requestError, "The relationship decision could not be saved."));
     } finally { setPending(false); }
   }
 
@@ -132,6 +160,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
     <p className={styles.caveat}>Suggestions help you compare reports; only your decision links them. Candidates are unclaimed or already owned by you.</p>
     {loading && <p role="status">Loading related-report analysis…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
+    {analysisError && <p role="alert" className={styles.error}>{analysisError}</p>}
     {success && <p role="status" className={styles.success}>{success}</p>}
     {result && <p role="status">{result.message || ({
       processing: "Related-report analysis is in progress.",
@@ -161,8 +190,9 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
       {comparison.signals.length > 0 && <div className={styles.matchSummary}><strong>Why they may be related</strong><ul className={styles.signals}>{comparison.signals.map((signal) => <li key={signal.code}>{signal.label}</li>)}</ul></div>}
       {canDecide ? <div className={styles.actions}>
         <button type="button" className={styles.secondary} onClick={() => chooseDecision("not_related")}>Not related</button>
-        <button type="button" className={styles.primary} onClick={() => chooseDecision("same_incident")}>Confirm same incident</button>
+        <button type="button" className={styles.primary} disabled={pending || linkingBlocked} onClick={() => chooseDecision("same_incident")}>Confirm same incident</button>
       </div> : <p>This relationship already has a recorded decision.</p>}
+      {linkingBlocked && <p className={styles.caveat}>{INCIDENT_CONFLICT_MESSAGE} Existing incident groups cannot be merged here.</p>}
       {decision && <div className={styles.decisionBox}>
         <h4>{decision === "same_incident" ? "Confirm the relationship" : "Record why these are not related"}</h4>
         <p>{decision === "same_incident"

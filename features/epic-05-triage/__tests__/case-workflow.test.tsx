@@ -243,11 +243,51 @@ describe("Coordinator case workflow", () => {
     expect(screen.queryByRole("heading", { name: "Observer-confirmed structured information" })).not.toBeInTheDocument();
     expect(screen.getByText("12 metres")).toBeInTheDocument();
     expect(screen.getByText("Branching coral")).toBeInTheDocument();
-    expect(screen.getByText("AI-assisted · accepted by Observer")).toBeInTheDocument();
-    expect(screen.getByText("AI-assisted · edited by Observer")).toBeInTheDocument();
+    expect(screen.getByText("Smart Report · accepted by Observer")).toBeInTheDocument();
+    expect(screen.getByText("Smart Report · edited by Observer")).toBeInTheDocument();
     expect(screen.getByText(/do not independently verify that the reported threat is present/i)).toBeInTheDocument();
     expect(screen.getByText(/not Coordinator-confirmed findings/i)).toBeInTheDocument();
     expect(screen.queryByText(/AI structuring completed/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps both AI sources separate without replacing the submitted threat or depth", async () => {
+    mockedGetCoordinatorCase.mockResolvedValueOnce({
+      ...report,
+      aiAssisted: {
+        available: true, generatedAt: null, source: "smart_report", isUnverifiedAiOutput: true,
+        suggestions: [
+          { field: "possible_threat", label: "Possible threat", value: "Marine debris", status: "confirmed", source: "smart_report" },
+          { field: "possible_threat", label: "Possible threat", value: "Coral bleaching", status: "corrected", source: "visual_recognition", confidence: 0.82 },
+          { field: "estimated_depth", label: "Estimated depth", value: "30 metres", status: "confirmed", source: "smart_report" },
+        ],
+      },
+    });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    expect(await screen.findByRole("heading", { name: "Reviewed AI-assisted information" })).toBeInTheDocument();
+    const threat = screen.getByText("Threat type").closest("div");
+    const depth = screen.getAllByText("Estimated depth")[0].closest("div");
+    expect(threat).toHaveTextContent("Ghost fishing gear");
+    expect(threat).not.toHaveTextContent("Coral bleaching");
+    expect(depth).toHaveTextContent("12 m");
+    expect(depth).not.toHaveTextContent("30 metres");
+    expect(screen.getByText("Marine debris")).toBeInTheDocument();
+    expect(screen.getByText("Coral bleaching")).toBeInTheDocument();
+    expect(screen.getByText("Visual Recognition · edited by Observer · Model confidence: 82%")).toBeInTheDocument();
+    expect(screen.getAllByText("Smart Report · accepted by Observer")).toHaveLength(2);
+  });
+
+  it("does not invent a source or confidence for an explicitly unattributed suggestion", async () => {
+    mockedGetCoordinatorCase.mockResolvedValueOnce({
+      ...report,
+      aiAssisted: {
+        available: true, generatedAt: null, source: "smart_report", isUnverifiedAiOutput: true,
+        suggestions: [{ field: "affected_area", label: "Affected area", value: "Reef edge", status: "confirmed", source: null, confidence: 1.5 }],
+      },
+    });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    expect(await screen.findByText("AI-assisted · accepted by Observer")).toBeInTheDocument();
+    expect(screen.queryByText(/Model confidence:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Smart Report · accepted by Observer")).not.toBeInTheDocument();
   });
 
   it("hides AI-assisted information for reports submitted before provenance was captured", async () => {

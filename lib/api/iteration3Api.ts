@@ -41,6 +41,12 @@ export function createFollowUp(reference: string, body: FollowUpCreate) {
 export function correctFollowUp(reference: string, caseActionId: number, body: FollowUpCorrection) {
   return apiRequest<FollowUp>({ path: `${casePath(reference)}/follow-ups/${caseActionId}`, method: "PATCH", body });
 }
+export function setFollowUpPublication(reference: string, caseActionId: number, publish: boolean) {
+  return apiRequest<FollowUp & { isPublishable: boolean }>({
+    path: `${casePath(reference)}/follow-ups/${caseActionId}/publication`,
+    method: "POST", body: { publish },
+  });
+}
 export function createMonitoring(reference: string, body: MonitoringCreate) {
   return apiRequest<FollowUp>({ path: `${casePath(reference)}/monitoring`, method: "POST", body });
 }
