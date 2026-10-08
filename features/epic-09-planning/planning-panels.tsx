@@ -514,7 +514,6 @@ export function BriefPanel({
   }
   return (
     <div className={styles.brief}>
-      <span className={styles.eyebrow}>YOUR REEF-AWARE BRIEF</span>
       <h2>{site.name}</h2>
       <p>
         {dateLabel(date, true)} · {site.publicAreaLabel}

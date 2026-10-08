@@ -18,7 +18,7 @@ export function HotspotAnalysisPage() {
   const [revision, setRevision] = useState(0);
   const options = useHotspotResource(`options:${revision}`, getHotspotOptions);
   return <div className={styles.page}>
-    <header className={styles.pageHeading}><div><p className={styles.eyebrow}>Coordinator workspace / Geographic analysis</p><h1>Geospatial hotspot analysis</h1><p>Explore where reef observations are reported, and how reporting changes over time.</p></div><Link className={styles.secondaryButton} href="/coordinator/report-queue">Report intake ↗</Link></header>
+    <header className={styles.pageHeading}><div><h1>Geospatial hotspot analysis</h1><p>Explore where reef observations are reported, and how reporting changes over time.</p></div><Link className={styles.secondaryButton} href="/coordinator/report-queue">Report intake ↗</Link></header>
     <aside className={styles.interpretation}><span aria-hidden="true">ⓘ</span><p><strong>Reporting activity, with context.</strong> Counts represent individual reports, not confirmed incidents. More reporting does not establish ecological risk; fewer reports do not establish safety.</p></aside>
     {options.loading ? <HotspotLoading message="Loading sites and observation filters…" /> : !options.data || options.data.state !== "ready" ? <HotspotError error={options.error} title="Analysis options unavailable" onRetry={() => setRevision((value) => value + 1)} /> : <HotspotWorkspace options={options.data} />}
   </div>;
@@ -58,7 +58,7 @@ function HotspotResults({ filters, options, onSelectSite }: { filters: HotspotFi
   const chips = [analysis.filters.region, analysis.filters.area, currentSite?.name ?? (analysis.filters.siteId ? `Site ${analysis.filters.siteId}` : "All dive sites"), selectedThreat?.label ?? "All threats, including Unsure"];
 
   return <div className={styles.results}>
-    <div className={styles.resultsHeading}><div><p className={styles.eyebrow}>Active selection</p><h2>{periodLabel(analysis.filters)}</h2><div className={styles.chips}>{chips.filter(Boolean).map((chip, index) => <span key={`${chip}-${index}`}>{chip}</span>)}<span>{analysis.filters.interval === "day" ? "Daily" : analysis.filters.interval === "week" ? "Weekly" : "Monthly"} intervals</span></div></div><div className={styles.updated}><span>Updated {malaysiaTime(analysis.lastSuccessfulUpdateAt)} MYT</span><button className={styles.textButton} type="button" onClick={() => setRevision((value) => value + 1)}>Refresh analysis ↻</button></div></div>
+    <div className={styles.resultsHeading}><div><h2>{periodLabel(analysis.filters)}</h2><div className={styles.chips}>{chips.filter(Boolean).map((chip, index) => <span key={`${chip}-${index}`}>{chip}</span>)}<span>{analysis.filters.interval === "day" ? "Daily" : analysis.filters.interval === "week" ? "Weekly" : "Monthly"} intervals</span></div></div><div className={styles.updated}><span>Updated {malaysiaTime(analysis.lastSuccessfulUpdateAt)} MYT</span><button className={styles.textButton} type="button" onClick={() => setRevision((value) => value + 1)}>Refresh analysis ↻</button></div></div>
     <div className={styles.statGrid}>
       <div><span>Reports at named sites</span><strong>{summary.reportCount.toLocaleString()}</strong><small>Within the selected observation period</small></div>
       <div><span>Sites with reports</span><strong>{analysis.sites.length.toLocaleString()}</strong><small>Named-site associations</small></div>

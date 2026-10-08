@@ -8,7 +8,7 @@ export default function MyReportsPage() {
   return (
     <PageTemplate
       title="My reports"
-      description="List only the signed-in observer's reports, current statuses and latest updates."
+      description="Follow the status of every report you have submitted and answer any questions from the coordinator."
     >
       <MyReportsList />
     </PageTemplate>

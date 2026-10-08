@@ -90,7 +90,7 @@
 .historyItem {
   padding: 18px;
   border: 1px solid var(--color-border);
-  background: #fbfdfd;
+  background: var(--color-surface-muted);
 }
 
 .historyHeading {
@@ -122,7 +122,7 @@
 }
 
 .action_planned {
-  color: #7b4e00;
+  color: var(--color-warning-ink);
   background: #fff2d6;
 }
 
@@ -162,8 +162,8 @@
 .plannedReminder {
   margin: 14px 0 0;
   padding: 10px 12px;
-  border-left: 4px solid #e5a72b;
-  color: #6c4500;
+  border: 1px solid color-mix(in srgb, #e5a72b 40%, transparent);
+  color: var(--color-warning-ink);
   background: #fff8e9;
   font-size: 0.9rem;
 }
@@ -174,7 +174,7 @@
   padding: 24px;
   border: 1px dashed var(--color-border);
   text-align: center;
-  background: #fbfdfd;
+  background: var(--color-surface-muted);
 }
 
 .emptyState p {
@@ -187,7 +187,7 @@
   gap: 20px;
   padding: 26px;
   border-radius: 16px;
-  background: #f5faf9;
+  background: var(--color-surface-muted);
 }
 
 .actionEvidence {
@@ -304,7 +304,7 @@
 
 .stateOptions small {
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.45;
 }
@@ -347,7 +347,7 @@
 }
 
 .field small {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.45;
 }
@@ -442,8 +442,8 @@
 }
 
 .formError {
-  color: #8f261f;
-  background: #fff0ee;
+  color: var(--color-danger-ink);
+  background: var(--color-danger-soft);
 }
 
 .successMessage {
@@ -499,8 +499,8 @@
 .errorBox {
   margin-top: 18px;
   padding: 18px;
-  color: #8f261f;
-  background: #fff0ee;
+  color: var(--color-danger-ink);
+  background: var(--color-danger-soft);
 }
 
 .errorBox p {

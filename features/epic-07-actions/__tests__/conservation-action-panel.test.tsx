@@ -57,7 +57,7 @@ describe("Epic 7 conservation action record", () => {
     render(<ConservationActionPanel reportReference="RC-0710" />);
 
     expect(screen.queryByText(/Epic 7/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Conservation action")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Conservation action record" })).toBeInTheDocument();
     expect(await screen.findByText("Action planned — not completed")).toBeInTheDocument();
     expect(screen.getByText("This is a plan only. It does not confirm that conservation work has happened.")).toBeInTheDocument();
     expect(screen.getByText("Tioman response team")).toBeInTheDocument();

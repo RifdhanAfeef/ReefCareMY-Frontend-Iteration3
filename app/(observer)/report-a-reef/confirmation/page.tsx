@@ -10,7 +10,6 @@ export const metadata: Metadata = {
 export default function ReportConfirmationPage() {
   return (
     <PageTemplate
-      eyebrow="Report received"
       title="Thank you for reporting what you observed"
       description="Your observation is now recorded and available to the Case Coordinator intake queue."
       showBackButton={false}
