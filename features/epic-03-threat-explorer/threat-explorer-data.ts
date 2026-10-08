@@ -116,9 +116,77 @@ export const threatExplorerItems: ThreatExplorerItem[] = [
 /** Recognition-only notice shown with the education content. (US3.2 AC4) */
 export const recognitionNotice = "This page helps you recognise what you may have seen and observe it safely. It is educational guidance, not a scientific identification or confirmation of any specific observation.";
 
-export const spotTheThreatExamples = [
-  { id: "example-net", threatCode: "ghost_gear" as const, prompt: "Follow the mesh and loose lines", image: "/images/threats/quiz-v3/ghost-gear.png", imageAlt: "Visual guide to net mesh wrapped around living coral", explanation: "The repeating diamond-shaped mesh crosses several branches. Rope trails away from the colony instead of growing from it. These connected threads distinguish lost fishing gear from the coral's natural structure." },
-  { id: "example-bleaching", threatCode: "coral_bleaching" as const, prompt: "Notice the colour, not just the shape", image: "/images/threats/quiz-v3/coral-bleaching.png", imageAlt: "Visual guide comparing white bleached coral with brown neighbouring colonies", explanation: "The pale colony still has an intact branching shape, while nearby coral retains its brown colour. Widespread loss of colour is the visible clue here, rather than snapped branches. A white coral is not automatically dead." },
-  { id: "example-debris", threatCode: "marine_debris" as const, prompt: "Pick out the objects that do not belong", image: "/images/threats/quiz-v3/marine-debris.png", imageAlt: "Visual guide to plastic film and a metal can among coral", explanation: "The bag's folded transparent film and the can's circular metal rim are manufactured shapes. Both sit on the reef rather than forming part of it. Record the material and how it touches the coral without handling hazardous waste." },
-  { id: "example-damage", threatCode: "physical_reef_damage" as const, prompt: "Trace the breaks to the fallen fragments", image: "/images/threats/quiz-v3/physical-damage.png", imageAlt: "Visual guide to fresh coral fractures and detached branches", explanation: "Bright exposed ends mark where branches have snapped. Detached pieces lie below the damaged colony, unlike the intact branches seen in bleaching. Document the breakage without assuming what caused it or moving the fragments." },
+/**
+ * One Spot the Threat question. `questionAlt` describes what is visible without naming the threat, so screen reader
+ * users are not given the answer before they choose; `imageAlt` replaces it once answered. `wrongAnswerNotes` explains,
+ * for each other threat, why this image does not show it. (US3.3 AC1-AC3)
+ */
+export type SpotTheThreatExample = {
+  id: string;
+  threatCode: ThreatExplorerCode;
+  prompt: string;
+  image: string;
+  questionAlt: string;
+  imageAlt: string;
+  explanation: string;
+  wrongAnswerNotes: Partial<Record<ThreatExplorerCode, string>>;
+};
+
+export const spotTheThreatExamples: SpotTheThreatExample[] = [
+  {
+    id: "example-bleaching",
+    threatCode: "coral_bleaching",
+    prompt: "Notice the colour, not just the shape",
+    image: "/images/threats/quiz-v3/coral-bleaching.png",
+    questionAlt: "Illustration of a white branching coral colony next to a brown branching colony",
+    imageAlt: "Visual guide comparing white bleached coral with brown neighbouring colonies",
+    explanation: "The pale colony still has an intact branching shape, while nearby coral retains its brown colour. Widespread loss of colour is the visible clue here, rather than snapped branches. A white coral is not automatically dead.",
+    wrongAnswerNotes: {
+      ghost_gear: "There is no mesh or rope here. The white shape is the coral itself, with every branch still attached.",
+      marine_debris: "Nothing human-made is touching the reef. The white colony has the same branching shape as the brown coral beside it.",
+      physical_reef_damage: "Damage shows snapped ends and fallen pieces. These pale branches are whole and still attached, so the change is in colour, not shape.",
+    },
+  },
+  {
+    id: "example-damage",
+    threatCode: "physical_reef_damage",
+    prompt: "Trace the breaks to the fallen fragments",
+    image: "/images/threats/quiz-v3/physical-damage.png",
+    questionAlt: "Illustration of a tan branching coral colony with white tips, and loose coral pieces on the rock below",
+    imageAlt: "Visual guide to fresh coral fractures and detached branches",
+    explanation: "Bright exposed ends mark where branches have snapped. Detached pieces lie below the damaged colony, unlike the intact branches seen in bleaching. Document the breakage without assuming what caused it or moving the fragments.",
+    wrongAnswerNotes: {
+      coral_bleaching: "The colony keeps its tan colour. Only the broken ends are white, where the inside of the branch is exposed, and the pieces below have fallen off.",
+      ghost_gear: "There is no net or line on this colony. Look at the snapped tips and the fragments lying on the rock below.",
+      marine_debris: "Everything on the rock is coral. The loose pieces below are broken branches, not dropped objects.",
+    },
+  },
+  {
+    id: "example-net",
+    threatCode: "ghost_gear",
+    prompt: "Follow the mesh and loose lines",
+    image: "/images/threats/quiz-v3/ghost-gear.png",
+    questionAlt: "Illustration of pale threads in a diamond pattern and a loose line crossing the branches of a tan coral colony",
+    imageAlt: "Visual guide to net mesh wrapped around living coral",
+    explanation: "The repeating diamond-shaped mesh crosses several branches. Rope trails away from the colony instead of growing from it. These connected threads distinguish lost fishing gear from the coral's natural structure.",
+    wrongAnswerNotes: {
+      coral_bleaching: "The coral keeps its tan colour. The pale lines are threads of net and rope lying over the branches.",
+      marine_debris: "Close, as a lost net is waste too. Netting or rope wrapped around coral is recorded as ghost fishing gear, because it can keep catching wildlife.",
+      physical_reef_damage: "The branches are whole. The threads crossing them are a net and rope caught on the colony, not cracks or breaks.",
+    },
+  },
+  {
+    id: "example-debris",
+    threatCode: "marine_debris",
+    prompt: "Pick out the objects that do not belong",
+    image: "/images/threats/quiz-v3/marine-debris.png",
+    questionAlt: "Illustration of a clear crumpled sheet and a small metal cylinder resting on tan coral",
+    imageAlt: "Visual guide to plastic film and a metal can among coral",
+    explanation: "The bag's folded transparent film and the can's circular metal rim are manufactured shapes. Both sit on the reef rather than forming part of it. Record the material and how it touches the coral without handling hazardous waste.",
+    wrongAnswerNotes: {
+      ghost_gear: "There is no mesh, line or trap. The bag and can are everyday rubbish, not fishing gear.",
+      coral_bleaching: "The clear, pale shape is a plastic bag lying on the coral. The coral under it keeps its normal colour.",
+      physical_reef_damage: "The coral is not broken. The bag and the can sit on the reef rather than being part of it.",
+    },
+  },
 ];

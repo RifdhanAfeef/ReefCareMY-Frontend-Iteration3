@@ -2,14 +2,22 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Camera, ChevronRight, Info, ShieldCheck, ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Info, RotateCcw, ShieldCheck, ExternalLink, X } from "lucide-react";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { recognitionNotice, spotTheThreatExamples, threatExplorerItems, type ThreatExplorerCode } from "./threat-explorer-data";
 import { creditsFor } from "./photo-credits";
 import styles from "./threat-explorer.module.css";
 
 const pagePhotoCredits = creditsFor(threatExplorerItems.flatMap((threat) => [threat.image, ...threat.examples.map((item) => item.image)]));
+
+type QuizState = { index: number; answer: ThreatExplorerCode | null; score: number; finished: boolean };
+
+const initialQuiz: QuizState = { index: 0, answer: null, score: 0, finished: false };
+
+function threatLabel(code: ThreatExplorerCode) {
+  return threatExplorerItems.find((threat) => threat.code === code)?.label ?? code;
+}
 
 function Arrow({ direction }: { direction: "left" | "right" }) {
   const Icon = direction === "left" ? ArrowLeft : ArrowRight;
@@ -22,16 +30,40 @@ export function ThreatExplorer({ initialThreat }: { initialThreat?: ThreatExplor
     ? threatExplorerItems.findIndex((threat) => threat.code === initialThreat)
     : 0;
   const [selectedIndex, setSelectedIndex] = useState(initialIndex >= 0 ? initialIndex : 0);
-  const [exampleIndex, setExampleIndex] = useState(0);
+  const [quiz, setQuiz] = useState<QuizState>(initialQuiz);
+  const quizFocusRef = useRef<HTMLHeadingElement>(null);
+  const moveQuizFocus = useRef(false);
   const selected = threatExplorerItems[selectedIndex];
-  const example = spotTheThreatExamples[exampleIndex];
+  const question = spotTheThreatExamples[quiz.index];
+  const answered = quiz.answer !== null;
+  const answeredCorrectly = quiz.answer === question.threatCode;
+  const isLastQuestion = quiz.index === spotTheThreatExamples.length - 1;
+
+  useEffect(() => {
+    // After "Next question", "See your score" or "Try again" the pressed button is gone, so move focus to the new heading.
+    if (moveQuizFocus.current) {
+      moveQuizFocus.current = false;
+      quizFocusRef.current?.focus();
+    }
+  }, [quiz.index, quiz.finished]);
 
   const selectThreat = (index: number) => {
     setSelectedIndex(index);
   };
 
-  const nextExample = () => {
-    setExampleIndex((exampleIndex + 1) % spotTheThreatExamples.length);
+  const answerQuestion = (code: ThreatExplorerCode) => {
+    if (answered) return;
+    setQuiz({ ...quiz, answer: code, score: quiz.score + (code === question.threatCode ? 1 : 0) });
+  };
+
+  const nextQuestion = () => {
+    moveQuizFocus.current = true;
+    setQuiz(isLastQuestion ? { ...quiz, finished: true } : { ...quiz, index: quiz.index + 1, answer: null });
+  };
+
+  const restartQuiz = () => {
+    moveQuizFocus.current = true;
+    setQuiz(initialQuiz);
   };
 
   const reportHref = (code: ThreatExplorerCode | "unsure") => {
@@ -104,23 +136,68 @@ export function ThreatExplorer({ initialThreat }: { initialThreat?: ThreatExplor
         </section>
 
         <section className={styles.quiz} aria-labelledby="spot-heading">
-          <div className={styles.quizIntro}><h2 id="spot-heading">Spot the threat</h2><p>Small details reveal what is happening on a reef.</p></div>
+          <div className={styles.quizIntro}><h2 id="spot-heading">Spot the threat</h2><p>Small details reveal what is happening on a reef. Look at each illustration and choose the threat it shows.</p></div>
           <div className={styles.quizPanel}>
             <figure className={styles.quizImage}>
-              <Image src={example.image} alt={example.imageAlt} fill sizes="(max-width: 900px) 100vw, 52vw" />
+              <Image key={question.id} src={question.image} alt={answered ? question.imageAlt : question.questionAlt} fill sizes="(max-width: 900px) 100vw, 52vw" />
               <figcaption className={styles.illustrationTag}>Illustration</figcaption>
             </figure>
             <div className={styles.quizCopy}>
-              <div className={styles.answers} role="group" aria-label="Visual threat examples">{spotTheThreatExamples.map((item, index) => <button aria-pressed={exampleIndex === index} key={item.threatCode} type="button" onClick={() => setExampleIndex(index)}>{threatExplorerItems.find((threat) => threat.code === item.threatCode)?.label}<ChevronRight size={18} aria-hidden="true" /></button>)}</div>
-              <div className={styles.feedback} role="status">
-                <h3>{example.prompt}</h3>
-                <p>{example.explanation}</p>
-                <div className={styles.feedbackActions}>
-                  <button type="button" className={styles.nextExample} onClick={nextExample}>
-                    Next example <Arrow direction="right" />
-                  </button>
+              {quiz.finished ? (
+                <div className={styles.feedback} role="status">
+                  <h3 ref={quizFocusRef} tabIndex={-1}>
+                    {quiz.score === spotTheThreatExamples.length
+                      ? `You spotted all ${spotTheThreatExamples.length}`
+                      : `You spotted ${quiz.score} of ${spotTheThreatExamples.length}`}
+                  </h3>
+                  <p>Each threat leaves its own clues: colour for bleaching, snapped branches for damage, mesh and rope for ghost gear, and objects that do not belong for debris. Explore a threat above to compare real photographs.</p>
+                  <div className={styles.feedbackActions}>
+                    <button type="button" className={styles.nextExample} onClick={restartQuiz}>
+                      Try again <RotateCcw size={18} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <p className={styles.quizProgress}>Question {quiz.index + 1} of {spotTheThreatExamples.length}</p>
+                  <h3 ref={quizFocusRef} tabIndex={-1}>Which threat does this image show?</h3>
+                  <div className={styles.answers} role="group" aria-label="Answer options">
+                    {threatExplorerItems.map((threat) => {
+                      const isCorrectOption = answered && threat.code === question.threatCode;
+                      const isWrongChoice = answered && quiz.answer === threat.code && !isCorrectOption;
+                      const optionClass = isCorrectOption ? styles.answerCorrect : isWrongChoice ? styles.answerWrong : answered ? styles.answerMuted : undefined;
+                      return (
+                        <button key={threat.code} className={optionClass} type="button" aria-disabled={answered} onClick={() => answerQuestion(threat.code)}>
+                          <span>{threat.label}</span>
+                          {isCorrectOption && <span className={styles.answerMark}><Check size={16} aria-hidden="true" />{quiz.answer === threat.code ? "Your answer, correct" : "Correct answer"}</span>}
+                          {isWrongChoice && <span className={styles.answerMark}><X size={16} aria-hidden="true" />Your answer</span>}
+                          {!answered && <ChevronRight size={18} aria-hidden="true" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className={styles.feedback} role="status">
+                    {quiz.answer === null ? (
+                      <p className={styles.quizHint}>Tap the threat you think this image shows.</p>
+                    ) : (
+                      <>
+                        <p className={answeredCorrectly ? styles.resultCorrect : styles.resultWrong}>
+                          {answeredCorrectly ? <Check size={20} aria-hidden="true" /> : <X size={20} aria-hidden="true" />}
+                          {answeredCorrectly ? `Correct: ${threatLabel(question.threatCode)}` : `Not quite. This is ${threatLabel(question.threatCode)}.`}
+                        </p>
+                        {!answeredCorrectly && <p className={styles.wrongNote}>{question.wrongAnswerNotes[quiz.answer]}</p>}
+                        <p className={styles.lookFor}><strong>What to look for</strong>{question.prompt}</p>
+                        <p>{question.explanation}</p>
+                        <div className={styles.feedbackActions}>
+                          <button type="button" className={styles.nextExample} onClick={nextQuestion}>
+                            {isLastQuestion ? "See your score" : "Next question"} <Arrow direction="right" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </section>

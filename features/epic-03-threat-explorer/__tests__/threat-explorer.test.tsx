@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthProvider } from "@/features/epic-01-access/auth-context";
 import { ThreatExplorer } from "../threat-explorer";
+import { spotTheThreatExamples, threatExplorerItems } from "../threat-explorer-data";
 
 function renderExplorer() {
   return render(
@@ -63,18 +64,78 @@ describe("Epic 3 Reef Threat Explorer", () => {
     expect(screen.getByRole("button", { name: "Explore Coral bleaching" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("teaches recognition through tap-only Spot the Threat feedback", async () => {
-    const user = userEvent.setup();
+  it("asks a Spot the Threat question before revealing any clue", () => {
     renderExplorer();
 
     expect(screen.getByRole("heading", { name: "Spot the threat" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Ghost fishing gear" }));
+    expect(screen.getByText("Question 1 of 4")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Which threat does this image show?" })).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Answer options" })).getAllByRole("button")).toHaveLength(4);
+    expect(screen.getByRole("status")).toHaveTextContent(/tap the threat you think this image shows/i);
+    expect(screen.getByRole("status")).not.toHaveTextContent(/notice the colour/i);
+    expect(screen.getByAltText(/white branching coral colony next to a brown/i)).toBeInTheDocument();
+    expect(screen.queryByAltText(/bleached/i)).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/mesh/i);
+  it("confirms a right answer and explains the visual cue", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const options = screen.getByRole("group", { name: "Answer options" });
 
-    await user.click(screen.getByRole("button", { name: "Coral bleaching" }));
+    await user.click(within(options).getByRole("button", { name: /^Coral bleaching/ }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("Correct: Coral bleaching");
     expect(screen.getByRole("status")).toHaveTextContent(/notice the colour/i);
     expect(screen.getByRole("status")).toHaveTextContent(/intact branching shape/i);
+    expect(within(options).getByRole("button", { name: /^Coral bleaching.*your answer, correct/i })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByAltText(/bleached coral/i)).toBeInTheDocument();
+
+    await user.click(within(options).getByRole("button", { name: /^Marine debris/ }));
+    expect(screen.getByRole("status")).toHaveTextContent("Correct: Coral bleaching");
+  });
+
+  it("explains why a wrong answer does not fit, then shows the right one", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const options = screen.getByRole("group", { name: "Answer options" });
+
+    await user.click(within(options).getByRole("button", { name: /^Physical reef damage/ }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("Not quite. This is Coral bleaching.");
+    expect(screen.getByRole("status")).toHaveTextContent(/pale branches are whole and still attached/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/intact branching shape/i);
+    expect(within(options).getByRole("button", { name: /^Physical reef damage.*your answer/i })).toBeInTheDocument();
+    expect(within(options).getByRole("button", { name: /^Coral bleaching.*correct answer/i })).toBeInTheDocument();
+  });
+
+  it("scores a full round and lets the visitor try again", async () => {
+    const user = userEvent.setup();
+    renderExplorer();
+    const answers = ["Coral bleaching", "Coral bleaching", "Ghost fishing gear", "Marine debris"];
+
+    for (const [index, answer] of answers.entries()) {
+      expect(screen.getByText(`Question ${index + 1} of 4`)).toBeInTheDocument();
+      await user.click(within(screen.getByRole("group", { name: "Answer options" })).getByRole("button", { name: new RegExp(`^${answer}`) }));
+      await user.click(screen.getByRole("button", { name: index === 3 ? /see your score/i : /next question/i }));
+    }
+
+    const score = screen.getByRole("heading", { name: "You spotted 3 of 4" });
+    expect(score).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(screen.getByText("Question 1 of 4")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Which threat does this image show?" })).toHaveFocus();
+  });
+
+  it("gives every Spot the Threat question a note for each wrong answer", () => {
+    const codes = threatExplorerItems.map((threat) => threat.code);
+
+    expect(spotTheThreatExamples.map((example) => example.threatCode).sort()).toEqual([...codes].sort());
+    for (const example of spotTheThreatExamples) {
+      const wrongCodes = codes.filter((code) => code !== example.threatCode);
+      expect(Object.keys(example.wrongAnswerNotes).sort()).toEqual(wrongCodes.sort());
+      expect(Object.values(example.wrongAnswerNotes).every((note) => note && note.length > 20)).toBe(true);
+    }
   });
 
   it("routes a public visitor through login while preserving the selected threat", async () => {
