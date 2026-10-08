@@ -306,7 +306,8 @@
 /* Date comparison */
 .dates {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  /* 180px keeps "More favourable" / "Less favourable" on one line in the card. */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 .dateCard {
@@ -344,9 +345,14 @@
   align-items: center;
   color: var(--color-primary-hover);
 }
+/* Narrow date cards: let long labels such as "Outside forecast range" wrap
+   inside the card instead of running past its edge. */
 .dateCard .pill {
+  max-width: 100%;
+  gap: 6px;
+  padding: 5px 9px;
   font-size: 14px;
-  white-space: nowrap;
+  white-space: normal;
 }
 .dateCount {
   color: var(--color-muted);
@@ -1125,7 +1131,7 @@
     display: none;
   }
   .dates {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
   .planActions {
     flex-wrap: wrap;

@@ -58,3 +58,32 @@ describe("US9.2 AC2 date signals shown alongside the assessment", () => {
     expect(status).not.toHaveTextContent("No forecast values available");
   });
 });
+
+describe("US9.2 AC4 out-of-range date card", () => {
+  it("uses a short label and explains the forecast range instead of a site count", () => {
+    const outOfRange: DaySummaryView = {
+      band: "out_of_horizon",
+      count: 0,
+      total: 4,
+      breakdown: { more_favourable: 0, mixed: 0, less_favourable: 0 },
+      signals: { waves: null, wind: null, rain: null },
+      reasons: [],
+    };
+    render(
+      <DateComparison
+        dates={[date]}
+        summaries={{ status: "ready", data: { [date]: outOfRange } }}
+        onRetry={() => {}}
+        siteAssessments={[]}
+        total={4}
+        selected={date}
+        onSelect={() => {}}
+        mode="api"
+      />,
+    );
+    const card = screen.getByRole("button", { pressed: true });
+    expect(card).toHaveTextContent("No forecast");
+    expect(card).toHaveTextContent("Outside the 7-day forecast");
+    expect(card).not.toHaveTextContent("sites assessed");
+  });
+});

@@ -27,11 +27,12 @@ import {
   type Assessment,
   type Band,
 } from "./planning-data";
-import type {
-  BriefView,
-  DaySummaryView,
-  PlanningContext,
-  PlanningSource,
+import {
+  FORECAST_HORIZON_DAYS,
+  type BriefView,
+  type DaySummaryView,
+  type PlanningContext,
+  type PlanningSource,
 } from "./planning-source";
 import styles from "./planning.module.css";
 import { surfaceImages } from "./surface-images";
@@ -56,11 +57,11 @@ export function LoadError({
   );
 }
 
-export function BandPill({ band }: { band: Band }) {
+export function BandPill({ band, label }: { band: Band; label?: string }) {
   return (
     <span className={styles.pill} data-band={band}>
       <span aria-hidden="true" className={styles.dot} />
-      {labels[band]}
+      {label ?? labels[band]}
     </span>
   );
 }
@@ -274,15 +275,25 @@ export function DateComparison({
               {loading ? (
                 <span className={styles.dateCount}>Loading conditions…</span>
               ) : (
-                <>
-                  <BandPill band={summary.band} />
-                  {summary.count > 0 && (
-                    <BreakdownBar breakdown={summary.breakdown} />
-                  )}
-                  <span className={styles.dateCount}>
-                    {summary.count}/{summary.total} sites assessed
-                  </span>
-                </>
+                summary.band === "out_of_horizon" ? (
+                  // The full label does not fit a narrow date card; the line below explains it.
+                  <>
+                    <BandPill band={summary.band} label="No forecast" />
+                    <span className={styles.dateCount}>
+                      Outside the {FORECAST_HORIZON_DAYS + 1}-day forecast
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <BandPill band={summary.band} />
+                    {summary.count > 0 && (
+                      <BreakdownBar breakdown={summary.breakdown} />
+                    )}
+                    <span className={styles.dateCount}>
+                      {summary.count}/{summary.total} sites assessed
+                    </span>
+                  </>
+                )
               )}
             </button>
           );
