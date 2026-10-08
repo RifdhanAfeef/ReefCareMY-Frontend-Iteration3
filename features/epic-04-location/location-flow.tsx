@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { BackButton } from "@/components/navigation/back-button";
@@ -43,14 +44,12 @@ const MalaysiaMap = dynamic(
   },
 );
 
-type ProgressStep = "session" | "location" | "confirm" | "privacy" | "review";
+type ProgressStep = "session" | "location" | "confirm";
 
 const progressSteps: Array<{ value: ProgressStep; label: string }> = [
   { value: "session", label: "Dive Session" },
   { value: "location", label: "Location" },
   { value: "confirm", label: "Accuracy" },
-  { value: "privacy", label: "Privacy" },
-  { value: "review", label: "Location saved" },
 ];
 
 function PageHeading({ eyebrow, title, description, currentStep, furthestStep, onNavigate }: { eyebrow: string; title: string; description: string; currentStep: ProgressStep; furthestStep?: number; onNavigate?: (step: ProgressStep) => void }) {
@@ -59,7 +58,7 @@ function PageHeading({ eyebrow, title, description, currentStep, furthestStep, o
   return <>
     <header className={styles.heading}><p className={styles.eyebrow}>{eyebrow}</p><h1 data-location-flow-heading tabIndex={-1}>{title}</h1><p>{description}</p></header>
     <ol className={styles.progress} aria-label="Report location progress">
-      {progressSteps.map((item, index) => <li key={item.value} data-status={index < activeIndex ? "complete" : index === activeIndex ? "current" : "upcoming"} aria-current={index === activeIndex ? "step" : undefined}><button type="button" disabled={!onNavigate || index > (furthestStep ?? activeIndex) || index === activeIndex} onClick={() => onNavigate?.(item.value)}><span aria-hidden="true">{index + 1}</span><strong>{item.label}</strong></button></li>)}
+      {progressSteps.map((item, index) => <li key={item.value} data-status={index < activeIndex ? "complete" : index === activeIndex ? "current" : "upcoming"} aria-current={index === activeIndex ? "step" : undefined}><button type="button" disabled={!onNavigate || index > (furthestStep ?? activeIndex) || index === activeIndex} onClick={() => onNavigate?.(item.value)}><span aria-hidden="true">{index < activeIndex ? "✓" : index + 1}</span><strong>{item.label}</strong></button></li>)}
     </ol>
   </>;
 }
@@ -107,6 +106,7 @@ function distanceMetres(first: MapPin, second: MapPin) {
 }
 
 export function LocationFlow() {
+  const router = useRouter();
   const { reportDraft, locationDraft, updateLocationDraft } = useMockAppState();
   const {
     step,
@@ -144,8 +144,6 @@ export function LocationFlow() {
     x: ((siteProfile.position[1] - malaysiaBounds.west) / (malaysiaBounds.east - malaysiaBounds.west)) * 100,
     y: ((malaysiaBounds.north - siteProfile.position[0]) / (malaysiaBounds.north - malaysiaBounds.south)) * 100,
   } : null, [siteProfile]);
-  const sessionTitle = session ? `${session.site}${session.label ? ` - ${session.label}` : ""}` : "No Dive Session selected";
-  const confidenceLabel = confidenceOptions.find((item) => item.value === confidence)?.label ?? "Not provided";
   const coordinates = mapCoordinates(pin);
   const aiSiteReference = reportDraft?.aiSuggestions?.find((suggestion) =>
     suggestion.field === "site_reference"
@@ -158,11 +156,11 @@ export function LocationFlow() {
   const availableConfidenceOptions = hasExactCoordinates
     ? confidenceOptions.filter((item) => item.value !== "dive_site_only")
     : confidenceOptions.filter((item) => item.value === "dive_site_only" || item.value === "unsure");
-  const currentProgressStep: ProgressStep = step === "saved" ? "review" : step === "create" ? "session" : step;
+  const currentProgressStep: ProgressStep = step === "saved" || step === "privacy" ? "confirm" : step === "create" ? "session" : step;
   const currentProgressIndex = progressSteps.findIndex((item) => item.value === currentProgressStep);
   const [furthestProgressIndex, setFurthestProgressIndex] = useState(currentProgressIndex);
   const setStep = (nextStep: typeof step) => {
-    const nextProgressStep: ProgressStep = nextStep === "saved" ? "review" : nextStep === "create" ? "session" : nextStep;
+    const nextProgressStep: ProgressStep = nextStep === "saved" || nextStep === "privacy" ? "confirm" : nextStep === "create" ? "session" : nextStep;
     const nextIndex = progressSteps.findIndex((item) => item.value === nextProgressStep);
     setFurthestProgressIndex((current) => Math.max(current, nextIndex));
     updateLocationDraft({ step: nextStep });
@@ -170,7 +168,7 @@ export function LocationFlow() {
   const navigateProgress = (target: ProgressStep) => {
     const index = progressSteps.findIndex((item) => item.value === target);
     if (index > furthestProgressIndex) return;
-    setStep(target === "review" ? "saved" : target);
+    setStep(target);
   };
   const updateForm = (changes: Partial<typeof form>) => updateLocationDraft({ form: { ...form, ...changes } });
 
@@ -236,6 +234,11 @@ export function LocationFlow() {
       cancelled = true;
     };
   }, [referenceReloadKey, reportDraft?.observationDate, updateLocationDraft]);
+
+  useEffect(() => {
+    // Drafts saved before this shorter flow may still point to removed screens.
+    if (step === "privacy" || step === "saved") updateLocationDraft({ step: "confirm" });
+  }, [step, updateLocationDraft]);
 
   useEffect(() => {
     const heading = document.querySelector<HTMLElement>("[data-location-flow-heading]");
@@ -360,7 +363,7 @@ export function LocationFlow() {
     event.preventDefault();
     if (!confidence) { setConfidenceError("Select a location-confidence option before continuing."); return; }
     setConfidenceError("");
-    setStep("privacy");
+    router.push("/report-a-reef/review");
   };
   const retryReferences = () => {
     setLoadingReferences(true);
@@ -455,18 +458,6 @@ export function LocationFlow() {
         <div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStep("location")}>Back</button><button className={styles.primaryButton} type="submit" disabled={checkingLocation}>{checkingLocation ? "Checking…" : "Confirm location"}</button></div>
       </aside>
     </form>
-  </section>;
-
-  if (step === "privacy") return <section className={styles.page}>
-    <PageHeading eyebrow="Report a Reef / Location privacy" title="Review your location privacy" description="See how ReefCare protects the precise location you submitted." currentStep="privacy" furthestStep={furthestProgressIndex} onNavigate={navigateProgress} />
-    <div className={styles.privacyGrid}><section className={styles.card}><h2>Your submitted location</h2><MapPreview pin={pin} /><p><strong>{hasExactCoordinates ? `Coordinates within ${session.site}` : session.site}</strong></p><p>Confidence: <strong>{confidenceLabel}</strong></p><p className={styles.supporting}>You will see this location in your own report.</p>{(surfaceEntryContext.trim() || surfaceExitContext.trim()) && <div className={styles.contextNotice}><strong>Surface entry and exit context</strong><p>These optional notes are kept as supporting context and are not treated as the exact underwater threat location.</p></div>}</section><section className={`${styles.card} ${styles.sidePanel}`}><h2>Who can see what?</h2><dl className={styles.accessList}><div><dt>You</dt><dd>Your submitted location</dd></div><div><dt>Claiming Case Coordinator</dt><dd>Your location, accuracy and optional surface context</dd></div><div><dt>Other coordinators</dt><dd>General site until they claim the case</dd></div><div><dt>System Administrator</dt><dd>General site only</dd></div><div><dt>Unauthenticated visitors</dt><dd>Report location is not displayed</dd></div></dl></section></div>
-    <div className={styles.splitActions}><button className={styles.secondaryButton} type="button" onClick={() => setStep("confirm")}>Back</button><button className={styles.primaryButton} type="button" onClick={() => setStep("saved")}>Confirm privacy and continue</button></div>
-  </section>;
-
-  if (step === "saved") return <section className={styles.page}>
-    <PageHeading eyebrow="Report a Reef / Location" title="Location saved to your draft" description="Review the Dive Session, map pin and location accuracy saved with this report draft." currentStep="review" furthestStep={furthestProgressIndex} onNavigate={navigateProgress} />
-    <div className={styles.savedGrid}><section className={styles.card}><h2>Current report draft</h2><p className={styles.supporting}>A report reference will be created after final submission.</p><div className={styles.savedContent}><MapPreview pin={pin} /><dl className={styles.detailList}><div><dt>Dive Session</dt><dd>{sessionTitle}</dd></div><div><dt>Location source</dt><dd>{locationSource === "manual_coordinates" ? "Entered coordinates" : locationSource === "map_pin" ? "Map pin" : confidence === "unsure" ? "Exact location unknown" : "Named dive site"}</dd></div><div><dt>Location confidence</dt><dd>{confidenceLabel}</dd></div>{coordinates && <div><dt>Selected coordinates</dt><dd>{coordinates}</dd></div>}{surfaceEntryContext.trim() && <div><dt>Surface entry context</dt><dd>{surfaceEntryContext.trim()}</dd></div>}{surfaceExitContext.trim() && <div><dt>Surface exit context</dt><dd>{surfaceExitContext.trim()}</dd></div>}</dl></div></section><aside className={styles.sidePanel}><h2>Privacy reminder</h2><p>Exact submitted coordinates are visible only to you and the Case Coordinator who claims the case.</p><div className={styles.purpleBox}><strong>General site</strong><p>{session.site} is retained as the restricted location view.</p></div></aside></div>
-    <div className={styles.splitActions}><button className={styles.secondaryButton} type="button" onClick={() => setStep("privacy")}>Back</button><Link className={styles.primaryButton} href="/report-a-reef/review">Continue to review</Link></div>
   </section>;
 
   return <section className={styles.page}>

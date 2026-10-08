@@ -78,6 +78,7 @@ export function ReportTimeline({ reportReference }: { reportReference: string })
               <span className={styles.marker} aria-hidden="true" />
               <div>
                 <p className={styles.label}>{event.statusLabel}</p>
+                {(event.explanation || event.message) && <p>{event.explanation || event.message}</p>}
                 <time className={styles.date} dateTime={event.occurredAt}>
                   {formatDateTime(new Date(event.occurredAt))}
                 </time>

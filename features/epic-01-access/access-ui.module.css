@@ -915,3 +915,10 @@
     width: 100%;
   }
 }
+
+/* Keep the case lists tabular and their headings visible during scrolling. */
+.caseTableViewport { max-height: min(65vh, 680px); overflow: auto; overscroll-behavior: contain; }
+.responsiveCasesTable { min-width: 1250px; }
+.responsiveCasesTable th, .responsiveCasesTable td { padding: 14px 12px; }
+.responsiveCasesTable th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px var(--color-border); }
+.responsiveCasesTable .priorityCell { flex-wrap: nowrap; }

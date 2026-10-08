@@ -42,4 +42,13 @@ describe("US6.2 AC2 — plain-language status timeline", () => {
     );
     expect(screen.getByRole("alert")).not.toHaveTextContent(/endpoint|backend|API|500/i);
   });
+
+  it("shows the backend's permitted explanation for a follow-up state", async () => {
+    mockedGetReportTimeline.mockResolvedValue({
+      reportReference: "RC-0241",
+      timeline: [{ statusLabel: "Monitoring recorded", occurredAt: "2026-10-05T10:00:00Z", explanation: "A coordinator recorded a monitoring visit." }],
+    });
+    render(<ReportTimeline reportReference="RC-0241" />);
+    expect(await screen.findByText("A coordinator recorded a monitoring visit.")).toBeInTheDocument();
+  });
 });

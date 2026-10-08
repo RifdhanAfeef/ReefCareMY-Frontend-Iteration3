@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { TableViewport } from "@/components/tables/table-viewport";
 import { getCoordinatorQueue } from "@/lib/api/coordinatorApi";
 import type { CoordinatorQueueItem } from "@/lib/api/types";
 import { readStoredAuth } from "@/lib/api/token-store";
@@ -208,21 +209,21 @@ export function ReportQueue() {
             </div>
 
             {reports.length > 0 && (
-              <div className={styles.tableWrap}>
+              <TableViewport className={styles.tableWrap} label="Report intake table">
                 <table>
                   <thead><tr><th>Report reference</th><th>Threat type</th><th>General site</th><th>Evidence</th><th>Priority</th><th>Status</th><th>Age</th><th>Owner</th><th>Action</th></tr></thead>
                   <tbody>
                     {reports.map((report) => (
                       <tr key={report.reportReference}>
-                        <td><strong>{report.reportReference}</strong></td>
-                        <td>{report.threat}</td>
-                        <td>{areaLabel(report.area)}</td>
-                        <td><span className={styles.evidenceChip}>{humanise(report.evidenceCompleteness, "Not assessed")}</span><small className={styles.cellNote}>{report.evidenceCount ?? 0} file{report.evidenceCount === 1 ? "" : "s"}</small></td>
-                        <td><div className={styles.priorityCell}><span className={styles.priorityChip} data-priority={priorityKey(report.priority)}>{humanise(report.priority, "Not set")}</span>{(report.priorityReasons ?? []).length > 0 && <span className={styles.priorityInfo}><button className={styles.priorityInfoButton} type="button" aria-label={`Priority information for ${report.reportReference}`} aria-describedby={`priority-info-${report.reportReference}`}>i</button><span className={styles.priorityTooltip} id={`priority-info-${report.reportReference}`} role="tooltip"><strong>Why this priority?</strong><ul>{report.priorityReasons?.map((reason) => <li key={reason}>{reason}</li>)}</ul></span></span>}</div></td>
-                        <td><span className={styles.receivedChip}>{report.statusLabel}</span></td>
-                        <td><time className={styles.ageValue} dateTime={report.submittedAt} title={`Submitted ${submittedDate(report.submittedAt)}`}>{waitingTime(report.hoursInQueue)}</time></td>
-                        <td>{report.owner?.displayName ?? "Unclaimed"}</td>
-                        <td>
+                        <td data-label="Report reference"><strong>{report.reportReference}</strong></td>
+                        <td data-label="Threat">{report.threat}</td>
+                        <td data-label="Site">{areaLabel(report.area)}</td>
+                        <td data-label="Evidence"><span className={styles.evidenceChip}>{humanise(report.evidenceCompleteness, "Not assessed")}</span><small className={styles.cellNote}>{report.evidenceCount ?? 0} file{report.evidenceCount === 1 ? "" : "s"}</small></td>
+                        <td data-label="Priority"><div className={styles.priorityCell}><span className={styles.priorityChip} data-priority={priorityKey(report.priority)}>{humanise(report.priority, "Not set")}</span>{(report.priorityReasons ?? []).length > 0 && <span className={styles.priorityInfo}><button className={styles.priorityInfoButton} type="button" aria-label={`Priority information for ${report.reportReference}`} title={(report.priorityReasons ?? []).join(" • ")} aria-describedby={`priority-info-${report.reportReference}`}>i</button><span className={styles.priorityTooltip} id={`priority-info-${report.reportReference}`} role="tooltip"><strong>Why this priority?</strong><ul>{report.priorityReasons?.map((reason) => <li key={reason}>{reason}</li>)}</ul></span></span>}</div></td>
+                        <td data-label="Status"><span className={styles.receivedChip}>{report.statusLabel}</span></td>
+                        <td data-label="Age"><time className={styles.ageValue} dateTime={report.submittedAt} title={`Submitted ${submittedDate(report.submittedAt)}`}>{waitingTime(report.hoursInQueue)}</time></td>
+                        <td data-label="Owner">{report.owner?.displayName ?? "Unclaimed"}</td>
+                        <td data-label="Action">
                           {!report.owner && !report.claimedAt ? (
                             <Link className={styles.tableLink} href={`/coordinator/reports/${report.reportReference}?claim=1`}>
                               Review and claim<span className="sr-only"> {report.reportReference}</span>
@@ -239,7 +240,7 @@ export function ReportQueue() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableViewport>
             )}
 
             {reports.length === 0 && (

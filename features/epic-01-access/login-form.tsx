@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import { useAuth } from "./auth-context";
@@ -27,6 +28,7 @@ export function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,18 +81,27 @@ export function LoginForm() {
         />
       </label>
 
-      <label className={styles.field}>
-        <span>Password</span>
-        <input
-          type="password"
+      <div className={styles.field}>
+        <label htmlFor="login-password">Password</label>
+        <div className={styles.passwordWrap}>
+          <input
+          id="login-password"
+          type={passwordVisible ? "text" : "password"}
           name="password"
           autoComplete="current-password"
           required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           disabled={submitting}
-        />
-      </label>
+          />
+          <button className={styles.visibilityButton} type="button"
+            onClick={() => setPasswordVisible((visible) => !visible)}
+            aria-label={passwordVisible ? "Hide password" : "Show password"}
+            aria-pressed={passwordVisible} disabled={submitting}>
+            {passwordVisible ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+          </button>
+        </div>
+      </div>
 
       <button className={styles.submit} type="submit" disabled={submitting}>
         {submitting ? "Signing in…" : "Log in"}

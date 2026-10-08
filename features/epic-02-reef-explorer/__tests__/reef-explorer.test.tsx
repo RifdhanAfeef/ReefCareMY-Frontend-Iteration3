@@ -32,6 +32,9 @@ vi.mock("@/lib/api/publicApi", () => ({
   getPublicReportHandoff: vi.fn(),
   getPublicSiteContext: getContext,
 }));
+vi.mock("@/features/epic-08-context/public-site-context", () => ({
+  ExternalContextPanel: () => <div data-testid="external-context" />,
+}));
 
 beforeEach(() => {
   getContext.mockReset();

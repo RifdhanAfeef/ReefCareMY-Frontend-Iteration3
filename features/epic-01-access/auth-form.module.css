@@ -28,6 +28,18 @@
   opacity: 0.6;
 }
 
+.passwordWrap { position: relative; }
+.passwordWrap input { width: 100%; padding-right: 52px; }
+.visibilityButton {
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  width: 40px; height: 40px; display: grid; place-items: center;
+  color: var(--color-primary-hover); background: transparent; border: 0; border-radius: 8px;
+  cursor: pointer;
+}
+.visibilityButton:hover { background: var(--color-info); }
+.visibilityButton:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.visibilityButton:disabled { opacity: .5; cursor: not-allowed; }
+
 .submit {
   padding: 12px 20px;
   font-size: 15px;

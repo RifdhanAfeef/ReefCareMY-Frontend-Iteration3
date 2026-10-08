@@ -30,6 +30,8 @@ type TestLocationDraft = {
   surfaceExitContext: string;
 };
 
+const { navigationPush } = vi.hoisted(() => ({ navigationPush: vi.fn() }));
+
 const appState = vi.hoisted(() => ({
   updateLocationDraft: vi.fn(),
   locationDraft: {
@@ -49,7 +51,7 @@ vi.mock("@/features/shared/mock-app-state", () => ({
   useMockAppState: () => appState,
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ back: vi.fn(), push: navigationPush }),
 }));
 vi.mock("next/dynamic", () => ({
   default: () => () => <div data-testid="map-placeholder" />,
@@ -61,6 +63,7 @@ vi.mock("@/lib/api/reportsApi");
 beforeEach(() => {
   window.localStorage.clear();
   appState.updateLocationDraft.mockReset();
+  navigationPush.mockReset();
   Object.assign(appState.locationDraft, {
     step: "session",
     sessions: [],
@@ -199,7 +202,8 @@ describe("US4.6 — optional surface entry and exit context", () => {
 
     await user.click(await screen.findByRole("button", { name: "Confirm location" }));
 
-    expect(appState.updateLocationDraft).toHaveBeenCalledWith({ step: "privacy" });
+    expect(navigationPush).toHaveBeenCalledWith("/report-a-reef/review");
+    expect(screen.queryByText("Privacy", { exact: true })).not.toBeInTheDocument();
   });
 });
 

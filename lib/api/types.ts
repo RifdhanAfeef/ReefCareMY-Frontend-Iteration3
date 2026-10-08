@@ -216,6 +216,8 @@ export type ObserverInformationResponseResult = {
 export type ReportTimelineEvent = {
   statusLabel: string;
   occurredAt: string;
+  explanation?: string | null;
+  message?: string | null;
 };
 
 export type ReportTimeline = {
