@@ -121,8 +121,8 @@ describe("Epic 3 Reef Threat Explorer", () => {
 
     await user.click(screen.getByRole("button", { name: "Explore Coral bleaching" }));
 
-    expect(screen.getByText(/bleached coral losing its colour/i)).toBeInTheDocument();
-    expect(screen.getByText(/healthy coral for comparison/i)).toBeInTheDocument();
+    expect(screen.getByText("A bleached branching reef")).toBeInTheDocument();
+    expect(screen.getByText("Healthy branching reef for comparison")).toBeInTheDocument();
   });
 
   it("states that the education is recognition guidance rather than a diagnosis", () => {
@@ -131,12 +131,15 @@ describe("Epic 3 Reef Threat Explorer", () => {
     expect(screen.getByText(/not a scientific identification or confirmation of any specific observation/i)).toBeInTheDocument();
   });
 
-  it("notes that gallery imagery is generated for ReefCare", async () => {
+  it("credits the real photographs and marks the quiz images as illustrations", async () => {
     const user = userEvent.setup();
     renderExplorer();
 
     await user.click(screen.getByText("Image sources"));
 
-    expect(screen.getByText(/illustrations are generated for reefcare/i)).toBeInTheDocument();
+    expect(screen.getByText(/photographs are real recognition examples/i)).toBeInTheDocument();
+    expect(screen.getByText(/images are illustrations generated for reefcare/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Tim Sheerman-Chase" })).toHaveAttribute("href", expect.stringContaining("commons.wikimedia.org"));
+    expect(screen.getByText("Illustration")).toBeInTheDocument();
   });
 });

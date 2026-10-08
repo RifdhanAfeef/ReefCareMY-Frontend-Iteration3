@@ -7,7 +7,6 @@ import {
   Bookmark,
   CalendarDays,
   Check,
-  ChevronRight,
   Compass,
   FlaskConical,
   Info,
@@ -507,11 +506,6 @@ export function DivePlanner() {
         </>
       )}
       <div className={styles.container}>
-        <div className={styles.breadcrumb}>
-          <Link href="/explore">Explore reefs</Link>
-          <ChevronRight size={13} />
-          <span>Plan a dive</span>
-        </div>
         <header className={styles.hero}>
           <h1
             tabIndex={-1}

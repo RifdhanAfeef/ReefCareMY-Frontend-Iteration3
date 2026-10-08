@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { threatCategories } from "@/features/epic-02-reporting/threat-data";
@@ -13,6 +13,7 @@ import { diveSiteCatalog } from "./dive-site-catalog";
 import { reefIslands, reefSites } from "./reef-sites";
 import { storeSelectedReefSite } from "./selected-site-storage";
 import type { ReefSite, ReefSiteReference } from "./types";
+import { PhotoCreditLine } from "@/features/shared/photo-credit-line";
 import styles from "./reef-explorer.module.css";
 
 const ReefExplorerMap = dynamic(
@@ -23,12 +24,13 @@ const ReefExplorerMap = dynamic(
   },
 );
 
+// Real, credited example photos shared with the Reef Threats page.
 const threatImages = {
-  ghost_gear: "/images/threats/ghost-fishing-gear-photo.jpg",
-  coral_bleaching: "/images/threats/coral-bleaching-photo.jpg",
-  marine_debris: "/images/threats/marine-debris-photo.png",
-  physical_reef_damage: "/images/threats/physical-reef-damage-photo.jpg",
-  unsure: "/images/reef-photo-2.jpg",
+  ghost_gear: "/images/threats/open/net-reef.webp",
+  coral_bleaching: "/images/threats/open/bleaching-acropora.webp",
+  marine_debris: "/images/threats/open/debris-indonesia.webp",
+  physical_reef_damage: "/images/threats/open/broken-corals.webp",
+  unsure: "/images/threats/open/bleaching-samoa.webp",
 } as const;
 
 function planningHref(site: ReefSiteReference) {
@@ -73,6 +75,7 @@ function SiteList({
               <button
                 className={styles.siteButton}
                 data-selected={site.id === selectedSiteId}
+                aria-pressed={site.id === selectedSiteId}
                 key={site.id}
                 type="button"
                 onClick={() => onSelect(site.id)}
@@ -160,7 +163,6 @@ function ActivityPanel({ site }: { site: ReefSite }) {
     <section className={styles.activity} aria-labelledby="site-activity-heading">
       <div className={styles.sectionTitleRow}>
         <div>
-          <p className={styles.eyebrow}>Public-safe site context</p>
           <h3 id="site-activity-heading">ReefCare observations and activity</h3>
         </div>
         <span className={styles.generalisedBadge}>General area only</span>
@@ -392,7 +394,6 @@ function AuthenticationDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <button className={styles.dialogClose} type="button" onClick={onClose} aria-label="Close sign-in prompt">×</button>
-        <p className={styles.eyebrow}>Selected site</p>
         <p className={styles.dialogSite}>{site.name} · {site.publicAreaLabel}</p>
         <h2 id="authentication-heading">Sign in to report this reef threat</h2>
         <p>
@@ -418,6 +419,7 @@ export function ReefExplorer() {
   const [validatedReportingPath, setValidatedReportingPath] = useState("/report-a-reef?source=explore");
   const [reportHandoffState, setReportHandoffState] = useState<"idle" | "loading" | "error">("idle");
   const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null);
+  const sidePanelRef = useRef<HTMLElement>(null);
   const guidanceCategories = useMemo(
     () => threatCategories.filter((category) => category.guidanceAvailable),
     [],
@@ -438,6 +440,14 @@ export function ReefExplorer() {
       `${site.name} ${site.island} ${site.publicAreaLabel}`.toLowerCase().includes(query),
     );
   }, [search]);
+
+  // In the stacked mobile layout the map sits above the list, so bring the
+  // chosen site's details into view instead of leaving them off-screen.
+  useEffect(() => {
+    if (!selectedSiteId || typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 1120px)").matches) return;
+    sidePanelRef.current?.scrollIntoView?.({ block: "start" });
+  }, [selectedSiteId]);
 
   async function startReport() {
     if (!selectedSite) return;
@@ -466,9 +476,8 @@ export function ReefExplorer() {
   }
 
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <header className={styles.hero}>
-        <p className={styles.eyebrow}>Public Reef Information and Engagement</p>
         <h1>Explore Malaysia&apos;s reef areas</h1>
         <p>
           Discover selected islands and dive sites, learn what to observe responsibly and see privacy-safe ReefCare activity without logging in.
@@ -476,7 +485,7 @@ export function ReefExplorer() {
       </header>
 
       <section className={`${styles.explorer} ${selectedSite ? styles.explorerSelected : ""}`} aria-labelledby="explorer-heading">
-        <aside className={styles.sidePanel}>
+        <aside className={styles.sidePanel} ref={sidePanelRef}>
           {selectedSite ? (
             selectedProfile ? (
               <SiteDetail
@@ -496,7 +505,6 @@ export function ReefExplorer() {
             )
           ) : (
             <>
-              <p className={styles.eyebrow}>Selected Malaysian reef areas</p>
               <h2 id="explorer-heading">Choose an island or dive site</h2>
               <label className={styles.searchField}>
                 <span className="sr-only">Search reef areas</span>
@@ -534,7 +542,6 @@ export function ReefExplorer() {
       <section className={styles.guidance} id="responsible-observation" aria-labelledby="guidance-heading">
         <div className={styles.guidanceHeading}>
           <div>
-            <p className={styles.eyebrow}>Responsible observation</p>
             <h2 id="guidance-heading">Know what may be useful to document</h2>
           </div>
           <p>You do not need to diagnose a reef threat scientifically.</p>
@@ -561,7 +568,6 @@ export function ReefExplorer() {
             <div className={styles.threatDetailHeading}>
               <Image src={threatImages[selectedGuidance.code]} alt="" width={96} height={72} />
               <div>
-                <p className={styles.eyebrow}>Selected observation guide</p>
                 <h3>{selectedGuidance.label}</h3>
                 <p>{selectedGuidance.shortExplanation}</p>
               </div>
@@ -580,6 +586,7 @@ export function ReefExplorer() {
           <strong>Observe safely</strong>
           <p>Do not touch, move or attempt to remove anything unless you are trained and authorised.</p>
         </aside>
+        <PhotoCreditLine className={styles.guidanceCredits} images={guidanceCategories.map((category) => threatImages[category.code])} lead="Example photos from reefs worldwide:" />
       </section>
 
       {selectedSite && status === "authenticated" && user?.role !== "observer" && (
@@ -595,6 +602,6 @@ export function ReefExplorer() {
       {selectedProfile && enlargedImageIndex !== null && (
         <ImageDialog site={selectedProfile} imageIndex={enlargedImageIndex} onClose={() => setEnlargedImageIndex(null)} />
       )}
-    </main>
+    </div>
   );
 }

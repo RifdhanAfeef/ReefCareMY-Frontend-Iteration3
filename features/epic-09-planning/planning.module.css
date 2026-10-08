@@ -94,18 +94,6 @@
   margin: 0 auto;
   padding-bottom: 32px;
 }
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 28px 0 0;
-  color: var(--color-muted);
-  font-size: 14px;
-}
-.breadcrumb a:hover {
-  color: var(--color-primary-hover);
-  text-decoration: underline;
-}
 .hero {
   max-width: 820px;
   padding: 28px 0 8px;
@@ -1162,9 +1150,6 @@
     align-items: stretch;
     padding: 16px;
   }
-  .breadcrumb {
-    padding-top: 20px;
-  }
   .hero {
     padding-top: 20px;
   }
@@ -1322,5 +1307,31 @@
   .dateCard,
   .siteCard {
     transition: none;
+  }
+}
+
+/* Phones: a thumbnail beside the forecast keeps eight sites scannable
+   instead of eight full-width photographs. */
+@media (max-width: 520px) {
+  .siteCard {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .siteImage {
+    height: auto;
+    min-height: 152px;
+  }
+  .imageCaption {
+    right: 6px;
+    bottom: 6px;
+    left: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+  .selectSite {
+    top: 8px;
+    right: auto;
+    left: 8px;
   }
 }

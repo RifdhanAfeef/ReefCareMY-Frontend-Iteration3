@@ -174,6 +174,15 @@ export function SiteHeader({
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const navigationRef = useRef<HTMLElement>(null);
+  const reportItem = navigation.find((item) => item.href === "/report-a-reef");
+
+  // On narrow screens the navigation scrolls sideways; keep the current page in view.
+  useEffect(() => {
+    navigationRef.current
+      ?.querySelector<HTMLElement>('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [pathname]);
 
   const resolvedIdentity = identity ?? (user
     ? { label: user.displayName.trim() || "Signed-in user", initial: user.displayName.trim().charAt(0).toUpperCase() || "U" }
@@ -189,7 +198,7 @@ export function SiteHeader({
       <div className={`${styles.inner} ${resolvedIdentity ? styles.signedIn : ""}`}>
         <Brand />
 
-        <nav className={styles.navigation} aria-label="Primary navigation">
+        <nav className={styles.navigation} aria-label="Primary navigation" ref={navigationRef}>
           {navigation.map((item) => {
             const active = isActive(pathname, item.href);
             if (item.href === "/report-a-reef") {
@@ -208,8 +217,15 @@ export function SiteHeader({
           })}
         </nav>
 
-        {(resolvedIdentity || actions.length > 0) && (
+        {(resolvedIdentity || actions.length > 0 || reportItem) && (
           <div className={styles.actions}>
+            {reportItem && (
+              <FreshReportLink
+                item={{ ...reportItem, label: "Report" }}
+                active={false}
+                className={styles.quickReport}
+              />
+            )}
             {resolvedIdentity && (
               <div className={styles.identity} aria-label={`Signed in as ${resolvedIdentity.label}`}>
                 <span>{resolvedIdentity.label}</span>

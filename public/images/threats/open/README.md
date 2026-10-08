@@ -65,3 +65,11 @@ ATRIS photo of coral rubble — David Zawada / USGS
 [Source](https://www.usgs.gov/media/images/atris-photo-coral-rubble) · [Public domain](https://creativecommons.org/publicdomain/mark/1.0/)
 
 [Original file](https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/thumbnails/image/rubbleLG.jpg)
+
+## broken-corals.webp
+
+Broken Corals.jpg — Mudasir Zainuddin
+
+[Source](https://commons.wikimedia.org/wiki/File:Broken_Corals.jpg) · [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+
+Retrieved 2026-10-08, resized to 1440 px and converted to WebP. Replaces coral-rubble.webp, which was blurred and carried a USGS watermark.
