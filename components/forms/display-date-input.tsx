@@ -17,6 +17,7 @@ type DisplayDateInputProps = {
   label: string;
   allowFuture?: boolean;
   disabled?: boolean;
+  id?: string;
 };
 
 export function DisplayDateInput({
@@ -28,6 +29,7 @@ export function DisplayDateInput({
   label,
   allowFuture = false,
   disabled = false,
+  id,
 }: DisplayDateInputProps) {
   const pickerRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +49,7 @@ export function DisplayDateInput({
     <div className="display-date-input" data-invalid={invalid || undefined}>
       <input
         className="display-date-input__text"
+        id={id}
         type="text"
         inputMode="numeric"
         autoComplete="off"

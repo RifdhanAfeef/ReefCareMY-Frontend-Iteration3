@@ -106,7 +106,6 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
     <section className={styles.detail} aria-labelledby="report-overview-heading">
       <header className={styles.cardHeader}>
         <div>
-          <p className={styles.eyebrow}>Observation summary</p>
           <h2 id="report-overview-heading">What you reported</h2>
         </div>
         <span className={styles.statusChip}>{report.statusLabel}</span>

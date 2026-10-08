@@ -16,6 +16,7 @@ import { getThreatCategory } from "./threat-data";
 import { buildReportReviewPayload, buildReportSubmissionPayload } from "./report-payload";
 import { applySuggestionValue, suggestionStateLabel } from "./smart-report-state";
 import styles from "./reporting.module.css";
+import { ReportProgress } from "./report-progress";
 import { formatCompletenessItem } from "./completeness-display";
 import { saveSubmittedStructuredDetails } from "./submitted-structured-details";
 import { confidenceLabel } from "./visual-recognition-state";
@@ -218,6 +219,7 @@ export function ReportReview() {
 
   return (
     <div className={styles.stack}>
+      <ReportProgress current={3} />
       {missingItems.length > 0 && <section className={styles.errorBox} role="alert"><strong>Complete the report before submitting</strong><p>Missing: {missingItems.join(", ")}.</p><Link className={styles.textButton} href="/report-a-reef">Return to observation details</Link></section>}
       {photoLoadFailed && <section className={styles.errorBox}><strong>Photographs could not be restored</strong><p>Return to the observation form and select the evidence again.</p></section>}
       {submissionError && <section className={styles.errorBox} role="alert"><strong>Report not submitted</strong><p>{submissionError}</p></section>}

@@ -242,7 +242,7 @@ describe("Epic 2 Reef Explorer", () => {
     await user.click(marineDebris);
 
     expect(marineDebris).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Selected observation guide")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Marine debris", level: 3 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Reef Threat Explorer" })).toHaveAttribute(
       "href",
       "/reef-threats?threat=marine_debris",

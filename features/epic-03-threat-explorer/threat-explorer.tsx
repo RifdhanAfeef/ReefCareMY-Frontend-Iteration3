@@ -6,7 +6,10 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight, Camera, ChevronRight, Info, ShieldCheck, ExternalLink } from "lucide-react";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { recognitionNotice, spotTheThreatExamples, threatExplorerItems, type ThreatExplorerCode } from "./threat-explorer-data";
+import { creditsFor } from "./photo-credits";
 import styles from "./threat-explorer.module.css";
+
+const pagePhotoCredits = creditsFor(threatExplorerItems.flatMap((threat) => [threat.image, ...threat.examples.map((item) => item.image)]));
 
 function Arrow({ direction }: { direction: "left" | "right" }) {
   const Icon = direction === "left" ? ArrowLeft : ArrowRight;
@@ -105,6 +108,7 @@ export function ThreatExplorer({ initialThreat }: { initialThreat?: ThreatExplor
           <div className={styles.quizPanel}>
             <figure className={styles.quizImage}>
               <Image src={example.image} alt={example.imageAlt} fill sizes="(max-width: 900px) 100vw, 52vw" />
+              <figcaption className={styles.illustrationTag}>Illustration</figcaption>
             </figure>
             <div className={styles.quizCopy}>
               <div className={styles.answers} role="group" aria-label="Visual threat examples">{spotTheThreatExamples.map((item, index) => <button aria-pressed={exampleIndex === index} key={item.threatCode} type="button" onClick={() => setExampleIndex(index)}>{threatExplorerItems.find((threat) => threat.code === item.threatCode)?.label}<ChevronRight size={18} aria-hidden="true" /></button>)}</div>
@@ -123,7 +127,15 @@ export function ThreatExplorer({ initialThreat }: { initialThreat?: ThreatExplor
 
         <details className={styles.photoCredits}>
           <summary>Image sources</summary>
-          <p>Illustrations are generated for ReefCare, including the healthy-versus-affected comparisons above; they show recognition cues and are not photographs of recorded incidents. Impact facts are linked to their NOAA sources above.</p>
+          <p>Photographs are real recognition examples from reefs around the world, not records of Malaysian dive sites or ReefCare reports. The four &ldquo;Spot the threat&rdquo; images are illustrations generated for ReefCare. Impact facts are linked to their NOAA sources above.</p>
+          <ul>
+            {pagePhotoCredits.map((credit) => (
+              <li key={credit.image}>
+                <span>{credit.title}</span>
+                <a href={credit.source} target="_blank" rel="noreferrer">{credit.author}</a> · <a href={credit.licenseUrl} target="_blank" rel="noreferrer">{credit.license}</a>
+              </li>
+            ))}
+          </ul>
         </details>
 
         <section className={styles.unsure}>

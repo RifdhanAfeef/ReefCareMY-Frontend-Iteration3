@@ -22,8 +22,9 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <div className={styles.shell}>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <SiteHeader navigation={navigation} actions={actions} identity={identity} />
-      <main className={styles.main}>
+      <main className={styles.main} id="main-content" tabIndex={-1}>
         <RouteFocusManager />
         {children}
       </main>

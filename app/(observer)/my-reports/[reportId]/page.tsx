@@ -15,8 +15,7 @@ export default async function ObserverReportDetailsPage({
 
   return (
     <PageTemplate
-      eyebrow={`Report ${reportId}`}
-      title="Report status"
+      title={`Report ${reportId}`}
       description="Review what you reported, follow its progress and respond when more information is needed."
       showBackButton
       backFallbackHref="/my-reports"

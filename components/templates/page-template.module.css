@@ -25,15 +25,6 @@
   padding-bottom: 6px;
 }
 
-.eyebrow {
-  margin: 0 0 8px;
-  color: var(--color-primary);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .heading h1 {
   margin: 0;
   color: var(--color-ink);
@@ -41,32 +32,14 @@
   line-height: 1.12;
 }
 
-.headingCopy > p:not(.eyebrow) {
+.headingCopy > p {
   margin: 14px 0 0;
   color: var(--color-muted);
   font-size: 18px;
 }
 
 .workspace {
-  min-height: 420px;
   margin-top: 40px;
-  padding: 32px;
-  color: var(--color-muted);
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-card);
-}
-
-.workspace p {
-  margin: 0;
-}
-
-.workspaceReady {
-  min-height: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
 }
 
 .centered .heading {
@@ -75,7 +48,7 @@
   text-align: center;
 }
 
-.centered .workspaceReady {
+.centered .workspace {
   display: grid;
   justify-items: center;
 }
@@ -87,9 +60,7 @@
   }
 
   .workspace {
-    min-height: 300px;
     margin-top: 28px;
-    padding: 22px;
   }
 
   .headingWithAction {

@@ -9,7 +9,6 @@ export const metadata: Metadata = { title: "Manage users and access" };
 export default function UsersPage() {
   return (
     <PageTemplate
-      eyebrow="Administration / Users & roles"
       title="Manage users and access"
       description="View ReefCare accounts, manage safe account details and approve Coordinator access."
       headerAction={

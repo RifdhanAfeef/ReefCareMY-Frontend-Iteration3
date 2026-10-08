@@ -1,24 +1,8 @@
 .page { width: min(calc(100% - 64px), var(--content-width)); margin: 0 auto; padding: 44px 0 72px; }
-.heading { max-width: 1040px; }
-.eyebrow { margin: 0 0 8px; color: var(--color-primary); font-size: 14px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.heading { max-width: 1040px; margin-top: 8px; }
 .heading h1 { margin: 0; font-size: clamp(34px, 3vw, 44px); line-height: 1.12; }
 .heading > p:last-child, .supporting { color: var(--color-muted); }
 .heading > p:last-child { margin: 12px 0 0; font-size: 18px; }
-.progress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; width: 100%; margin: 32px 0 0; padding: 0; list-style: none; }
-.progress li { position: relative; min-width: 0; color: var(--color-muted); font-size: 14px; }
-.progress li:not(:last-child)::after { content: ""; position: absolute; z-index: 0; top: 21px; left: calc(50% + 28px); right: calc(-50% + 28px); height: 2px; background: var(--color-border); }
-.progress li[data-status="complete"]::after { background: var(--color-primary); }
-.progress li button { position: relative; z-index: 1; width: 100%; min-height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 6px; color: inherit; background: transparent; border: 0; font: inherit; text-align: center; cursor: pointer; }
-.progress li button:disabled { cursor: default; }
-.progress li button:not(:disabled):hover > span { box-shadow: 0 0 0 5px var(--color-info); }
-.progress li button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: 10px; }
-.progress li button > span { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; color: var(--color-muted); background: #fff; border: 2px solid var(--color-border); border-radius: 50%; font-weight: 800; transition: box-shadow .2s ease; }
-.progress li button > strong { min-width: 0; line-height: 1.3; }
-.progress li[data-status="complete"] { color: var(--color-primary-hover); }
-.progress li[data-status="complete"] button > span { color: #fff; background: var(--color-primary); border-color: var(--color-primary); }
-.progress li[data-status="current"] { color: var(--color-ink); }
-.progress li[data-status="current"] button > span { color: #fff; background: var(--color-primary); border-color: var(--color-primary); box-shadow: 0 0 0 5px var(--color-info); }
-.progress li[data-status="current"] button > strong { font-weight: 800; }
 .choiceGrid, .privacyGrid, .savedGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; margin-top: 50px; }
 .locationChoices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .formLayout { display: grid; grid-template-columns: minmax(0, 900px); justify-content: center; margin-top: 44px; }
@@ -34,8 +18,8 @@
 .sessionOption span { display: grid; }
 .sessionOption strong { font-size: 17px; }
 .sessionOption small { margin-top: 2px; color: var(--color-muted); font-size: 14px; }
-.suggestedSession { width: fit-content; margin-top: 7px; padding: 4px 8px; color: #176246; background: #e6f5ed; border-radius: 999px; font-size: 12px; font-style: normal; font-weight: 800; }
-.metadataNotice { margin: 16px 0 0; padding: 12px 14px; color: #155a58; background: var(--color-info); border-radius: 10px; font-size: 13px; }
+.suggestedSession { width: fit-content; margin-top: 7px; padding: 4px 8px; color: var(--color-success-ink); background: #e6f5ed; border-radius: 999px; font-size: 13px; font-style: normal; font-weight: 800; }
+.metadataNotice { margin: 16px 0 0; padding: 12px 14px; color: var(--color-info-ink); background: var(--color-info); border-radius: 10px; font-size: 14px; }
 .requirementGroup { margin-top: 24px; }
 .requirementGroup h3 { margin: 0 0 12px; color: var(--color-muted); font-size: 15px; }
 .requirementGroup p { display: flex; gap: 12px; margin: 12px 0; }
@@ -51,10 +35,24 @@
 .infoPanel p, .privacyStrip p, .infoBox p { color: var(--color-primary); }
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 28px; margin-top: 28px; }
 .field { display: grid; gap: 8px; font-size: 15px; font-weight: 700; }
-.field > span { color: var(--color-muted); font-size: 13px; font-weight: 500; }
+.field > span { color: var(--color-muted); font-size: 14px; font-weight: 500; }
 .field input, .field select, .field textarea { width: 100%; min-height: 54px; padding: 12px 16px; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-field); font-weight: 400; }
 .field textarea { min-height: 100px; resize: vertical; }
-.surfaceContext { display: grid; gap: 18px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--color-border); }
+.surfaceContext { display: grid; gap: 18px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--color-border); }
+.surfaceContext > summary { min-height: 44px; display: flex; align-items: center; gap: 10px; color: var(--color-primary); font-weight: 700; list-style: none; cursor: pointer; }
+.surfaceContext > summary::-webkit-details-marker { display: none; }
+.surfaceContext > summary::before { content: ""; width: 8px; height: 8px; flex: 0 0 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 160ms ease; }
+.surfaceContext[open] > summary::before { transform: rotate(45deg); }
+.confirmGrid aside .actions { flex-direction: column-reverse; align-items: stretch; }
+.confirmGrid aside .actions > * { width: 100%; align-self: stretch; }
+.surfaceContext > summary span { color: var(--color-muted); font-weight: 500; }
+.surfaceContext:not([open]) { gap: 0; }
+.confidenceList > p { margin: 0 0 4px; }
+.privacySummary { margin-top: 8px; padding: 18px; background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: 14px; }
+.privacySummary h3 { margin: 0 0 10px; font-size: 16px; }
+.privacySummary .accessList { margin: 0; }
+.privacySummary .accessList div { grid-template-columns: 1fr; gap: 2px; padding: 10px 0; }
+.privacySummary dd { font-size: 15px; }
 .surfaceContext h3, .surfaceContext p { margin: 0; }
 .contextNotice { margin-top: 22px; padding: 16px; border-radius: 12px; background: var(--color-info); }
 .contextNotice p { margin: 5px 0 0; color: var(--color-muted); }
@@ -66,7 +64,7 @@
 .sidePanel { background: var(--color-info); }
 .checkList { display: grid; gap: 18px; margin: 34px 0; padding: 0; list-style: none; }
 .checkList li::before { content: "✓"; display: inline-grid; width: 24px; height: 24px; margin-right: 12px; place-items: center; color: #fff; background: var(--color-primary); border-radius: 6px; }
-.warning { margin-top: 24px; padding: 20px; color: #7b5215; background: #fff4df; border-radius: 14px; }
+.warning { margin-top: 24px; padding: 20px; color: var(--color-warning-ink); background: var(--color-warning-soft); border-radius: 14px; }
 .errorText { margin: 14px 0 0; color: var(--color-danger); font-size: 14px; font-weight: 700; }
 .inlineError { margin-top: 16px; padding: 14px 16px; color: var(--color-danger); background: #fff3f1; border-radius: 12px; }
 .inlineError p { margin: 0 0 8px; }
@@ -82,18 +80,18 @@
 .map { position: relative; width: 100%; min-height: 300px; margin: 24px 0; overflow: hidden; background: #dbeae7; border: 1px solid var(--color-border); border-radius: 14px; }
 .mapCanvas { width: 100%; min-height: 300px; cursor: grab; }
 .mapCanvas:active { cursor: grabbing; }
-.mapInstruction { position: absolute; left: 50%; top: 12px; z-index: 500; max-width: calc(100% - 100px); margin: 0; transform: translateX(-50%); padding: 7px 11px; color: var(--color-ink); background: rgba(255, 255, 255, .94); border-radius: 8px; box-shadow: 0 2px 8px rgba(20, 54, 66, .2); font-size: 13px; font-weight: 700; text-align: center; pointer-events: none; }
+.mapInstruction { position: absolute; left: 50%; top: 12px; z-index: 500; max-width: calc(100% - 100px); margin: 0; transform: translateX(-50%); padding: 7px 11px; color: var(--color-ink); background: rgba(255, 255, 255, .94); border-radius: 8px; box-shadow: 0 2px 8px rgba(20, 54, 66, .2); font-size: 14px; font-weight: 700; text-align: center; pointer-events: none; }
 .mapLoading { width: 100%; min-height: 300px; display: grid; place-items: center; margin: 24px 0; color: var(--color-muted); background: #dbeae7; border: 1px solid var(--color-border); border-radius: 14px; }
 .map :global(.leaflet-control-zoom a) { color: var(--color-ink); font-family: var(--font-ui); font-weight: 700; }
-.map :global(.leaflet-control-attribution) { font-family: var(--font-ui); font-size: 10px; }
+.map :global(.leaflet-control-attribution) { font-family: var(--font-ui); font-size: 12px; }
 .coordinateReadout { margin: -10px 0 20px; color: var(--color-muted); font-size: 14px; text-align: center; }
 .mapCaption { margin: -10px 0 8px; color: var(--color-primary); font-weight: 800; text-align: center; }
 .infoBox { margin: 30px 0; padding: 18px; background: var(--color-info); border-radius: 14px; }
 .privacyStrip { color: #6e55a3; background: #f1ecfa; }
 .privacyStrip p { color: #6e55a3; }
-.locationWarning { margin-top: 28px; padding: 18px 22px; color: #765015; background: #fff3dc; border: 1px solid #efd6a4; border-radius: var(--radius-card); }
+.locationWarning { margin-top: 28px; padding: 18px 22px; color: var(--color-warning-ink); background: var(--color-warning-soft); border: 1px solid #efd6a4; border-radius: var(--radius-card); }
 .locationWarning p { margin: 5px 0; }
-.locationWarning small { color: #765015; }
+.locationWarning small { color: var(--color-warning-ink); }
 .aiLocationNote { margin-top: 28px; padding: 18px 22px; color: #27677d; background: #eef8fb; border: 1px solid #bddce8; border-radius: var(--radius-card); }
 .aiLocationNote p { margin: 6px 0; color: var(--color-ink); font-weight: 800; }
 .aiLocationNote small { color: var(--color-muted); }
@@ -112,4 +110,4 @@
 .purpleBox { margin-top: 36px; padding: 20px; color: #6e55a3; background: #f1ecfa; border-radius: 14px; }
 @media (max-width: 1100px) { .locationChoices { grid-template-columns: 1fr; } }
 @media (max-width: 1000px) { .choiceGrid, .privacyGrid, .formLayout, .confirmGrid, .savedGrid { grid-template-columns: 1fr; } .savedContent { grid-template-columns: 1fr; } }
-@media (max-width: 650px) { .page { width: min(calc(100% - 32px), var(--content-width)); padding: 32px 0 48px; } .progress { margin-top: 24px; } .progress li { font-size: 12px; } .progress li button { min-height: 76px; padding: 0 2px; } .progress li button > span { width: 38px; height: 38px; flex-basis: 38px; } .progress li:not(:last-child)::after { top: 18px; left: calc(50% + 24px); right: calc(-50% + 24px); } .choiceGrid, .privacyGrid, .savedGrid, .formLayout, .confirmGrid { gap: 22px; margin-top: 30px; } .card, .sidePanel { padding: 24px; } .formGrid, .timeFields { grid-template-columns: 1fr; } .fullField { grid-column: auto; } .map, .mapCanvas { min-height: 220px; } .mapInstruction { max-width: calc(100% - 24px); } .map :global(.leaflet-control-attribution) { max-width: calc(100% - 56px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .actions, .splitActions { align-items: stretch; flex-direction: column-reverse; } .actions > *, .splitActions > *, .primaryButton, .secondaryButton { width: 100%; align-self: stretch; } .accessList div { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 650px) { .page { width: min(calc(100% - 32px), var(--content-width)); padding: 32px 0 48px; } .choiceGrid, .privacyGrid, .savedGrid, .formLayout, .confirmGrid { gap: 22px; margin-top: 30px; } .card, .sidePanel { padding: 24px; } .formGrid, .timeFields { grid-template-columns: 1fr; } .fullField { grid-column: auto; } .map, .mapCanvas { min-height: 220px; } .mapInstruction { max-width: calc(100% - 24px); } .map :global(.leaflet-control-attribution) { max-width: calc(100% - 56px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .actions, .splitActions { align-items: stretch; flex-direction: column-reverse; } .actions > *, .splitActions > *, .primaryButton, .secondaryButton { width: 100%; align-self: stretch; } .accessList div { grid-template-columns: 1fr; gap: 4px; } }

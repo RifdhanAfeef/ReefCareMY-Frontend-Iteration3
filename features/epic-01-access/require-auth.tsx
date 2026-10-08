@@ -4,10 +4,22 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-context";
 import type { UserRole } from "@/lib/api/types";
+import styles from "./require-auth.module.css";
 
 function currentReturnPath(pathname: string) {
   const search = typeof window === "undefined" ? "" : window.location.search;
   return `${pathname}${search}`;
+}
+
+// While the session is checked (or a redirect is under way) keep the page from
+// flashing blank: say what is happening in the space the page will occupy.
+function CheckingAccess() {
+  return (
+    <div className={styles.checking} role="status" aria-live="polite">
+      <span className={styles.spinner} aria-hidden="true" />
+      <span>Checking your sign-in…</span>
+    </div>
+  );
 }
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -22,7 +34,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   }, [status, pathname, router]);
 
   if (status !== "authenticated") {
-    return null;
+    return <CheckingAccess />;
   }
 
   return <>{children}</>;
@@ -57,7 +69,7 @@ export function RequireRole({
   }, [status, user, role, pathname, router]);
 
   if (status !== "authenticated" || user?.role !== role) {
-    return null;
+    return <CheckingAccess />;
   }
 
   return <>{children}</>;

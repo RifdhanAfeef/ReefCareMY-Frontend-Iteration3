@@ -212,10 +212,9 @@ describe("automatic Smart Report Structuring", () => {
     render(<ObservationForm />);
     await act(async () => { await Promise.resolve(); });
 
-    expect(screen.getByRole("heading", { name: "IMAGE ANALYSIS" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Two checks, using two different inputs" })).toBeInTheDocument();
-    expect(screen.getByText("From your uploaded photo")).toBeInTheDocument();
-    expect(screen.getByText("From your written description")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Photo check" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Suggestions from your photo and description" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Description check" })).toBeInTheDocument();
     expect(screen.queryByText("Possible visual threat")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use image suggestion" }));
 
@@ -306,5 +305,42 @@ describe("automatic Smart Report Structuring", () => {
     expect(clearDraftPhotos).toHaveBeenCalledTimes(1);
     expect(resetReportDraft).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog", { name: "Start a fresh report?" })).not.toBeInTheDocument();
+  });
+
+  it("asks for the threat type first, as picture choices", async () => {
+    vi.mocked(getThreatCategories).mockResolvedValue([
+      { threatCategoryId: 41, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+      { threatCategoryId: 45, code: "unsure", label: "Not sure", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+    ]);
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+
+    const picker = screen.getByRole("group", { name: "What did you see? *" });
+    fireEvent.click(within(picker).getByRole("radio", { name: "Ghost fishing gear" }));
+
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
+      threatCategoryCode: "ghost_gear",
+      threatCategoryId: 41,
+    }));
+  });
+
+  it("summarises what is missing and moves focus to the summary", async () => {
+    runtime.reportDraft = { ...runtime.reportDraft, description: "" };
+    render(<ObservationForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue to location" }));
+
+    const summary = screen.getByRole("alert", { name: /things need fixing before you continue/ });
+    expect(summary).toHaveFocus();
+    expect(within(summary).getByRole("link", { name: "Select the closest threat category." })).toBeInTheDocument();
+    expect(within(summary).getByRole("link", { name: "Describe what you observed." })).toBeInTheDocument();
+  });
+
+  it("keeps optional AI suggestions folded away until there is something to check", () => {
+    runtime.reportDraft = { ...runtime.reportDraft, description: "" };
+    render(<ObservationForm />);
+
+    expect(screen.getByText("Add a photo or a description and suggestions will appear here.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Photo check" })).not.toBeInTheDocument();
   });
 });

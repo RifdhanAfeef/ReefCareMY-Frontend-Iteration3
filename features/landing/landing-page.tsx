@@ -4,22 +4,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/features/epic-01-access/auth-context";
+import { PhotoCreditLine } from "@/features/shared/photo-credit-line";
 import styles from "./landing-page.module.css";
 
-const threats = [
-  { name: "Ghost fishing gear", code: "ghost_gear", icon: "/images/threats/ghost-fishing-gear-icon.png", text: "Lost nets, lines, traps or ropes affecting reef life." },
-  { name: "Coral bleaching", code: "coral_bleaching", icon: "/images/threats/coral-bleaching-icon-v2.png", text: "Unusually pale or white coral across a colony or reef area." },
-  { name: "Marine debris", code: "marine_debris", icon: "/images/threats/marine-debris-icon.png", text: "Human-made waste resting on or interacting with the reef." },
-  { name: "Physical reef damage", code: "physical_reef_damage", icon: "/images/threats/physical-reef-damage-icon-v2.png", text: "Recently broken, crushed or scraped coral." },
-] as const;
+const heroPhoto = "/images/threats/open/bleaching-samoa.webp";
 
-function ThreatIcon({ src }: { src: (typeof threats)[number]["icon"] }) {
-  return (
-    <span className={styles.threatIcon} aria-hidden="true">
-      <Image src={src} alt="" width={40} height={40} />
-    </span>
-  );
-}
+const threats = [
+  { name: "Ghost fishing gear", code: "ghost_gear", image: "/images/threats/open/net-reef.webp", alt: "A lost fishing net draped over coral on a reef slope", text: "Lost nets, lines, traps or ropes caught on the reef." },
+  { name: "Coral bleaching", code: "coral_bleaching", image: "/images/threats/open/bleaching-acropora.webp", alt: "A bleached white branching coral colony in blue water", text: "Coral that has turned unusually pale or white." },
+  { name: "Marine debris", code: "marine_debris", image: "/images/threats/open/debris-indonesia.webp", alt: "A plastic wrapper caught on coral", text: "Human-made waste resting on or tangled in the reef." },
+  { name: "Physical reef damage", code: "physical_reef_damage", image: "/images/threats/open/broken-corals.webp", alt: "Broken coral fragments heaped on the reef floor", text: "Coral that has been freshly broken, crushed or scraped." },
+] as const;
 
 const causticMesh = [
   "M0 62C35 42 68 45 104 74C140 102 174 83 206 58C244 29 284 47 322 78C360 109 398 85 480 62",
@@ -98,63 +93,104 @@ function useScrollReveal() {
 
 export function LandingPage() {
   const { status, user } = useAuth();
-  const processSectionRef = useScrollReveal();
   const threatSectionRef = useScrollReveal();
+  const processSectionRef = useScrollReveal();
   const signedIn = status === "authenticated";
-  const signedInDestination = user?.role === "case_coordinator"
+  const reportHref = signedIn ? "/report-a-reef" : `/login?next=${encodeURIComponent("/report-a-reef")}`;
+  const primaryAction = user?.role === "case_coordinator"
     ? { href: "/coordinator/report-queue", label: "Open report intake" }
     : user?.role === "system_administrator"
       ? { href: "/admin/users", label: "Manage users and access" }
-      : { href: "/report-a-reef", label: "Start a reef report" };
+      : { href: reportHref, label: "Report what you saw" };
+
   return (
     <div className={styles.page}>
-      <section className={styles.hero}>
+      <section className={styles.hero} aria-labelledby="hero-heading">
         <WaterCaustics id="hero-caustics" />
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}>Community reef observation for Malaysia</p>
-          <h1>Turn what you saw underwater into a useful reef report.</h1>
-          <p className={styles.lead}>ReefCare MY helps divers and reef observers document potential threats, protect sensitive locations and follow what happens after submission without needing scientific expertise.</p>
+          <h1 id="hero-heading">Turn what you saw underwater into a useful reef report.</h1>
+          <p className={styles.lead}>Divers and reef observers use ReefCare MY to record potential threats on Malaysia&apos;s reefs, keep sensitive locations private and follow what happens next. No scientific training needed.</p>
           <div className={styles.heroControls}>
             <div className={styles.actions}>
-              <Link className={styles.primaryButton} href="/reef-threats">Explore reef threats</Link>
-              {signedIn && (
-                <Link className={styles.secondaryButton} href={signedInDestination.href}>{signedInDestination.label}</Link>
-              )}
+              <Link className={styles.primaryButton} href={primaryAction.href}>{primaryAction.label}</Link>
+              <Link className={styles.secondaryButton} href="/reef-threats">Learn the four threats</Link>
             </div>
             {!signedIn && status !== "loading" && (
-              <p className={styles.signInPrompt}>Already registered? <Link href="/login">Log in to start or continue a report</Link>.</p>
+              <p className={styles.signInPrompt}>New to ReefCare? <Link href={`/register?next=${encodeURIComponent("/report-a-reef")}`}>Create a free observer account</Link>.</p>
             )}
           </div>
         </div>
-        <div className={styles.visualPanel}>
-          <Image
-            className={styles.reefPhoto}
-            src="/images/reef-photo-2.jpg"
-            alt="A comparison of bleached coral and a healthy colourful coral reef"
-            width={1168}
-            height={784}
-            priority
-            sizes="(max-width: 1060px) 90vw, 45vw"
-          />
-        </div>
-      </section>
-
-      <section ref={processSectionRef} className={styles.processSection} aria-labelledby="process-heading">
-        <div className={styles.processIntro}><p className={styles.eyebrow}>A clear reporting journey</p><h2 id="process-heading">From observation to a traceable report</h2><p>You can learn without an account. Sign in as a Registered Observer to create, submit and track a report.</p></div>
-        <ol className={styles.steps}>
-          <li><span>1</span><div><h3>Check the guidance</h3><p>Choose the closest threat and observe without touching or disturbing the reef.</p></div></li>
-          <li><span>2</span><div><h3>Record what you saw</h3><p>Add photographs, date and time, a short description and safe location details.</p></div></li>
-          <li><span>3</span><div><h3>Submit and keep the reference</h3><p>Your report receives a traceable ID and enters the Case Coordinator queue.</p></div></li>
-          <li><span>4</span><div><h3>Follow honest updates</h3><p>My Reports shows the status and recorded outcome without promising external action.</p></div></li>
-        </ol>
+        <figure className={styles.visualPanel}>
+          <div className={styles.photoFrame}>
+            <Image
+              className={styles.reefPhoto}
+              src={heroPhoto}
+              alt="A bleached white table coral growing beside a healthy brown colony"
+              width={1440}
+              height={1080}
+              priority
+              sizes="(max-width: 1060px) 90vw, 45vw"
+            />
+            <span className={styles.labelBleached} aria-hidden="true">Bleached</span>
+            <span className={styles.labelHealthy} aria-hidden="true">Healthy</span>
+          </div>
+          <figcaption className={styles.photoCaption}>
+            <PhotoCreditLine images={[heroPhoto]} lead="Bleaching beside healthy coral, American Samoa. Photo:" />
+          </figcaption>
+        </figure>
       </section>
 
       <section ref={threatSectionRef} className={`${styles.section} ${styles.threatSection}`} aria-labelledby="threat-heading">
-        <WaterCaustics id="threat-caustics" />
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>Supported observations</p><h2 id="threat-heading">Four reef threats you can document</h2></div><Link className={styles.textLink} href="/reef-threats">Open Reef Threat Explorer <span aria-hidden="true">→</span></Link></div>
-        <div className={styles.threatGrid}>{threats.map((threat) => <Link className={styles.threatCard} href={`/reef-threats?threat=${threat.code}`} key={threat.name} aria-label={`Explore ${threat.name}`}><div className={styles.threatTitle}><ThreatIcon src={threat.icon} /><h3>{threat.name}</h3></div><p>{threat.text}</p><span className={styles.cardLink}>Explore threat <span className={styles.cardArrow} aria-hidden="true">→</span></span></Link>)}</div>
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2 id="threat-heading">Four threats worth reporting</h2>
+            <p>Spot one on a dive? Photograph it from a safe distance, then report it.</p>
+          </div>
+          <Link className={styles.textLink} href="/reef-threats">How to recognise each one <span aria-hidden="true">→</span></Link>
+        </div>
+        <ul className={styles.threatGrid}>
+          {threats.map((threat) => (
+            <li key={threat.code}>
+              <Link className={styles.threatCard} href={`/reef-threats?threat=${threat.code}`}>
+                <span className={styles.threatImage}>
+                  <Image src={threat.image} alt={threat.alt} fill sizes="(max-width: 760px) 92vw, (max-width: 1060px) 45vw, 22vw" />
+                </span>
+                <span className={styles.threatBody}>
+                  <h3>{threat.name}</h3>
+                  <span>{threat.text}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <PhotoCreditLine className={styles.imageNote} images={threats.map((threat) => threat.image)} lead="Example photos from reefs worldwide, not ReefCare reports:" />
       </section>
 
+      <section ref={processSectionRef} className={styles.processSection} aria-labelledby="process-heading">
+        <div className={styles.processIntro}>
+          <h2 id="process-heading">From your dive to a traceable report</h2>
+          <p>Anyone can learn the threats. Sign in as an observer to submit a report and follow it.</p>
+        </div>
+        <ol className={styles.steps}>
+          <li><span aria-hidden="true">1</span><div><h3>Say what you saw</h3><p>Pick the closest threat, or &ldquo;not sure&rdquo;. Add photos, the date and a few words.</p></div></li>
+          <li><span aria-hidden="true">2</span><div><h3>Add where it was</h3><p>The dive site is enough. Exact points stay private to you and the coordinator.</p></div></li>
+          <li><span aria-hidden="true">3</span><div><h3>Submit and keep the reference</h3><p>Your report gets an ID and goes to a case coordinator for review.</p></div></li>
+          <li><span aria-hidden="true">4</span><div><h3>Follow honest updates</h3><p>My Reports shows the status and outcome, without promising action that has not happened.</p></div></li>
+        </ol>
+      </section>
+
+      <section className={styles.closing} aria-labelledby="closing-heading">
+        <div className={styles.closingInner}>
+          <div>
+            <h2 id="closing-heading">Seen something on your last dive?</h2>
+            <p>A photo, a date and a few words are enough to start. Your draft is saved on your device until you submit.</p>
+          </div>
+          <div className={styles.closingActions}>
+            <Link className={styles.lightButton} href={reportHref}>Report what you saw</Link>
+            <Link className={styles.ghostLink} href="/plan-a-dive">Plan a reef-aware dive <span aria-hidden="true">→</span></Link>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

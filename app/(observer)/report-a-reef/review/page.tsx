@@ -7,7 +7,6 @@ export const metadata: Metadata = { title: "Review report" };
 export default function ReviewReportPage() {
   return (
     <PageTemplate
-      eyebrow="Before submission"
       title="Review your report"
       description="Check the evidence, observation details and protected location before lodging the report."
       showBackButton

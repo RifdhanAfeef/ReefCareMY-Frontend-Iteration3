@@ -70,13 +70,66 @@ export const threatPhotoCredits = [
     "image": "/images/threats/open/broken-coral.webp"
   },
   {
-    "name": "coral-rubble",
-    "title": "ATRIS photo of coral rubble",
-    "source": "https://www.usgs.gov/media/images/atris-photo-coral-rubble",
-    "original": "https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/thumbnails/image/rubbleLG.jpg",
-    "author": "David Zawada / USGS",
+    "name": "broken-corals",
+    "title": "Broken Corals.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Broken_Corals.jpg",
+    "author": "Mudasir Zainuddin",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "image": "/images/threats/open/broken-corals.webp"
+  },
+  {
+    "name": "bleached-reef",
+    "title": "Bleached coral reef.png",
+    "source": "https://commons.wikimedia.org/wiki/File:Bleached_coral_reef.png",
+    "author": "Danielle Ihde",
+    "license": "CC0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "image": "/images/reef-sites/profiles/tioman-labas-island-1.jpg"
+  },
+  {
+    "name": "healthy-branching-reef",
+    "title": "Coral reef PloS.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Coral_reef_PloS.jpg",
+    "author": "Terry Hughes",
+    "license": "CC BY 2.5",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.5/",
+    "image": "/images/reef-sites/profiles/tioman-labas-island-2.jpg"
+  },
+  {
+    "name": "healthy-plate-reef",
+    "title": "Coral Reef in the Red Sea.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Coral_Reef_in_the_Red_Sea.JPG",
+    "author": "Mahmoud Habeeb",
     "license": "Public domain",
     "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
-    "image": "/images/threats/open/coral-rubble.webp"
+    "image": "/images/reef-sites/profiles/tioman-malang-rock-1.jpg"
+  },
+  {
+    "name": "healthy-colourful-reef",
+    "title": "Colorful underwater landscape of a coral reef.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Colorful_underwater_landscape_of_a_coral_reef.jpg",
+    "author": "Jim E. Maragos / U.S. Fish and Wildlife Service",
+    "license": "Public domain",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "image": "/images/reef-sites/profiles/tioman-pirate-reef-2.jpg"
+  },
+  {
+    "name": "healthy-acropora",
+    "title": "Acropora coral ffs.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Acropora_coral_ffs.jpg",
+    "author": "Andy Collins / NOAA",
+    "license": "Public domain",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "image": "/images/reef-sites/profiles/perhentian-batu-nisan-1.jpg"
   }
 ];
+
+export type PhotoCredit = (typeof threatPhotoCredits)[number];
+
+/** Credits for the given photos, in the order they are passed, skipping any without a record. */
+export function creditsFor(images: string[]): PhotoCredit[] {
+  return [...new Set(images)]
+    .map((image) => threatPhotoCredits.find((credit) => credit.image === image))
+    .filter((credit): credit is PhotoCredit => Boolean(credit));
+}

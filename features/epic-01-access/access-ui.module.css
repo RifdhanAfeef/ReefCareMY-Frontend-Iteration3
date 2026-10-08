@@ -39,7 +39,7 @@
   border-radius: 999px;
   color: inherit;
   background: rgba(255, 255, 255, 0.18);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .toolbar,
@@ -202,7 +202,7 @@
 
 .fieldHelp,
 .fieldError {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -243,7 +243,7 @@
 }
 
 .input[readonly] {
-  background: #f8fbfa;
+  background: var(--color-surface-muted);
 }
 
 .tableWrap {
@@ -274,7 +274,7 @@
 }
 
 .table tbody tr:hover {
-  background: #fbfdfd;
+  background: var(--color-surface-muted);
 }
 
 .tableNote {
@@ -303,7 +303,7 @@
   display: block;
   margin-top: 2px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -368,7 +368,7 @@
   border: 1px solid var(--color-border);
   border-radius: 50%;
   color: var(--color-ink);
-  background: #f5faf9;
+  background: var(--color-surface-muted);
   font: inherit;
   font-size: 26px;
   line-height: 1;
@@ -415,7 +415,7 @@
 }
 
 .identifier {
-  color: #087579;
+  color: var(--color-primary);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -438,18 +438,18 @@
 
 .priorityChip[data-priority="high"],
 .priorityChip[data-priority="urgent"] {
-  color: #8a2d25;
-  background: #fff0ef;
+  color: var(--color-danger-ink);
+  background: var(--color-danger-soft);
 }
 
 .priorityChip[data-priority="medium"] {
-  color: #765015;
-  background: #fff3dc;
+  color: var(--color-warning-ink);
+  background: var(--color-warning-soft);
 }
 
 .priorityChip[data-priority="low"] {
-  color: #176246;
-  background: #e9f7ef;
+  color: var(--color-success-ink);
+  background: var(--color-success-soft);
 }
 
 .priorityCell {
@@ -474,7 +474,7 @@
   border: 1px solid var(--color-primary);
   border-radius: 50%;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   cursor: help;
 }
@@ -490,7 +490,7 @@
   background: var(--color-ink);
   border-radius: 10px;
   box-shadow: 0 10px 28px rgba(20, 54, 66, .22);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   opacity: 0;
   pointer-events: none;
@@ -515,7 +515,7 @@
   min-height: 28px;
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 750;
   white-space: nowrap;
 }
@@ -529,7 +529,7 @@
 
 .pillPending,
 .pillReceived {
-  color: #805b0c;
+  color: var(--color-warning-ink);
   background: #fff1d6;
 }
 
@@ -547,12 +547,12 @@
 }
 
 .notice {
-  color: #155a58;
+  color: var(--color-info-ink);
   background: var(--color-info);
 }
 
 .privacyNotice {
-  color: #8a5712;
+  color: var(--color-warning-ink);
   background: #fff2d9;
 }
 
@@ -629,7 +629,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -700,7 +700,7 @@
 
 .warningIcon {
   color: #d58b19;
-  background: #fff2dc;
+  background: var(--color-warning-soft);
   border: 2px solid #e5a02c;
 }
 
@@ -739,7 +739,7 @@
 
 .definitionList dt {
   color: var(--color-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.03em;

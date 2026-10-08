@@ -7,7 +7,6 @@ import {
   Bookmark,
   CalendarDays,
   Check,
-  ChevronRight,
   Compass,
   FlaskConical,
   Info,
@@ -507,13 +506,7 @@ export function DivePlanner() {
         </>
       )}
       <div className={styles.container}>
-        <div className={styles.breadcrumb}>
-          <Link href="/explore">Explore reefs</Link>
-          <ChevronRight size={13} />
-          <span>Plan a dive</span>
-        </div>
         <header className={styles.hero}>
-          <p className={styles.eyebrow}>Reef-aware dive planning</p>
           <h1
             tabIndex={-1}
             style={{ outline: "none", outlineOffset: 0, boxShadow: "none" }}
@@ -579,12 +572,12 @@ export function DivePlanner() {
           <section className={styles.savedIntent} aria-labelledby="saved-intent-heading">
             <Bookmark size={18} />
             <div>
-              <span className={styles.eyebrow}>SAVED PLAN · PLANNING INTENT ONLY</span>
               <h2 id="saved-intent-heading">{openedPlan.name}</h2>
               <p>
                 {openedPlan.area} · {dateLabel(openedPlan.plannedDate, true)} ·{" "}
                 {openedPlan.siteIds.length} selected{" "}
-                {openedPlan.siteIds.length === 1 ? "site" : "sites"}
+                {openedPlan.siteIds.length === 1 ? "site" : "sites"} · planning
+                intent only
               </p>
               <p>
                 {sample
@@ -1054,12 +1047,10 @@ export function DivePlanner() {
           onClose={() => setPastPlan(null)}
         >
           <div className={styles.dialogContent}>
-            <span className={styles.eyebrow}>
-              PAST PLAN · NO CURRENT FORECAST
-            </span>
             <h2>{pastPlan.name}</h2>
             <p>
-              {dateLabel(pastPlan.plannedDate, true)} · {pastPlan.area}
+              {dateLabel(pastPlan.plannedDate, true)} · {pastPlan.area} · past
+              plan, no current forecast
             </p>
             <h3>Did you observe something?</h3>
             <p>
