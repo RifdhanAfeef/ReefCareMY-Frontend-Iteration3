@@ -23,13 +23,14 @@ const site = (waves: number | null, wind: number | null): Assessment => ({
   retrievedAt: "2026-10-06T02:44:24+08:00",
   ruleVersion: "i3-draft-1",
 });
-const renderWith = (signals: DaySummaryView["signals"], sites: Assessment[]) =>
+const renderWith = (signals: DaySummaryView["signals"], sites: Assessment[], sitesLoading = false) =>
   render(
     <DateComparison
       dates={[date]}
       summaries={{ status: "ready", data: { [date]: summary(signals) } }}
       onRetry={() => {}}
       siteAssessments={sites}
+      sitesLoading={sitesLoading}
       total={4}
       selected={date}
       onSelect={() => {}}
@@ -55,6 +56,15 @@ describe("US9.2 AC2 date signals shown alongside the assessment", () => {
     renderWith({ waves: null, wind: null, rain: 40 }, [site(null, null)]);
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("40% rain chance");
+    expect(status).not.toHaveTextContent("No forecast values available");
+  });
+
+  it("shows the wave, wind and rain values together, holding all three while sites load", () => {
+    renderWith({ waves: 0.14, wind: 20.7, rain: 98 }, [], true);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Loading wave, wind and rain values…");
+    expect(status).not.toHaveTextContent("rain chance");
+    expect(status).not.toHaveTextContent("km/h");
     expect(status).not.toHaveTextContent("No forecast values available");
   });
 });
