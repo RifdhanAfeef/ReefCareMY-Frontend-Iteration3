@@ -254,6 +254,9 @@ export type DiveSiteReference = {
   name: string;
   publicAreaLabel: string;
   region?: string | null;
+  centreLatitude?: number | null;
+  centreLongitude?: number | null;
+  defaultUncertaintyMetres?: number | null;
 };
 
 export type DiveSession = {
