@@ -280,6 +280,7 @@ export function ReportReview() {
           <ReviewLocationSummary />
         </div>
 
+        <div className={styles.reviewSidebar}>
         <aside className={styles.sideCard}>
           <h2>Before submitting</h2>
           {backendReview && <div className={backendReview.completeness.isSubmittable ? styles.successBox : styles.errorBox}><strong>{backendReview.completeness.summary}</strong>{backendReview.completeness.blockingMissing.length > 0 && <p>Required: {backendReview.completeness.blockingMissing.map(formatCompletenessItem).join(", ")}.</p>}{backendReview.completeness.blockingIssues.length > 0 && <p>Fix: {backendReview.completeness.blockingIssues.map(formatCompletenessItem).join(", ")}.</p>}{backendReview.completeness.recommendedMissing.length > 0 && <p>Recommended: {backendReview.completeness.recommendedMissing.map(formatCompletenessItem).join(", ")}.</p>}</div>}
@@ -287,6 +288,12 @@ export function ReportReview() {
           <div className={styles.infoBox}><strong>Initial status: Received</strong><p>Submission places the report in the Case Coordinator queue. Claiming and evidence decisions occur later.</p></div>
           <button className={styles.primaryButton} type="button" disabled={!canSubmit || submitting} onClick={submit}>{submitting ? "Submitting…" : reviewing ? "Checking…" : "Submit report"}</button>
         </aside>
+          <section className={styles.privacySummary} aria-labelledby="review-privacy-heading">
+            <h3 id="review-privacy-heading">Your location stays protected</h3>
+            <p>You and the Case Coordinator who claims this report can see the location and accuracy you provided. Other coordinators and administrators see only the general site; visitors cannot view your report location.</p>
+            <p>Optional surface entry and exit notes are supporting context, not the underwater observation location.</p>
+          </section>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import {
   MAX_PASSWORD_LENGTH,
   MIN_DISTINCT_PASSWORD_CHARACTERS,
@@ -60,7 +61,7 @@ export function PasswordInput({
           aria-pressed={visible}
           disabled={disabled}
         >
-          {visible ? "Hide" : "Show"}
+          {visible ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
         </button>
       </div>
       <ul className={styles.requirements} id={requirementsId} aria-label="Password requirements">

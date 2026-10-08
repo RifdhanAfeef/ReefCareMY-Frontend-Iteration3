@@ -67,7 +67,7 @@ export function MalaysiaMap({
 }: {
   pin: MapPin | null;
   siteCentre: MapPin | null;
-  diveSiteRadiusMetres: number;
+  diveSiteRadiusMetres: number | null;
   islandRadiusMetres: number;
   interactive?: boolean;
   onSetPin?: (pin: MapPin) => void;
@@ -96,7 +96,7 @@ export function MalaysiaMap({
         <InitialView pin={pin} siteCentre={siteCentre} />
         {siteCentre && <>
           <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={islandRadiusMetres} pathOptions={{ color: "#c98b2a", weight: 2, dashArray: "7 6", fillColor: "#f4c66f", fillOpacity: 0.08 }} />
-          <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={diveSiteRadiusMetres} pathOptions={{ color: "#0f8b8d", weight: 2, fillColor: "#29a3a5", fillOpacity: 0.16 }} />
+          {diveSiteRadiusMetres && <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={diveSiteRadiusMetres} pathOptions={{ color: "#0f8b8d", weight: 2, fillColor: "#29a3a5", fillOpacity: 0.16 }} />}
           <CircleMarker center={[siteCentre.latitude, siteCentre.longitude]} radius={6} pathOptions={{ color: "#ffffff", weight: 3, fillColor: "#0b6466", fillOpacity: 1 }} />
         </>}
         {pin && (

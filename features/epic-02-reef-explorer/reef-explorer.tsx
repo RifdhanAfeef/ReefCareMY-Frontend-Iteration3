@@ -9,6 +9,7 @@ import { useAuth } from "@/features/epic-01-access/auth-context";
 import { threatCategories } from "@/features/epic-02-reporting/threat-data";
 import { getPublicReportHandoff, getPublicSiteContext } from "@/lib/api/publicApi";
 import type { PublicSiteContextResponse } from "@/lib/api/types";
+import { ExternalContextPanel } from "@/features/epic-08-context/public-site-context";
 import { diveSiteCatalog } from "./dive-site-catalog";
 import { reefIslands, reefSites } from "./reef-sites";
 import { storeSelectedReefSite } from "./selected-site-storage";
@@ -113,26 +114,26 @@ function BasicSiteDetail({
         Explore this recognised {site.publicAreaLabel} dive site or use it as the starting point for a reef-threat report.
       </p>
       <div className={styles.siteActions}>
-        <p className={styles.planningUnavailable} role="status">
-          Dive planning is not available for this site yet. You can still review the public site information or start a report.
-        </p>
+        <Link className={styles.primaryButton} href={planningHref(site)}>Plan a dive</Link>
         <button className={styles.primaryButton} type="button" onClick={onReport} disabled={reportPending}>
           {reportPending ? "Checking selected site…" : "Report a Reef Threat"}
         </button>
         <a className={styles.secondaryButton} href="#responsible-observation">View guidance</a>
       </div>
+      <ActivityPanel key={site.backendDiveSiteId} siteId={site.backendDiveSiteId} />
+      <ExternalContextPanel key={`external-${site.backendDiveSiteId}`} siteId={site.backendDiveSiteId} />
     </article>
   );
 }
 
-function ActivityPanel({ site }: { site: ReefSite }) {
+function ActivityPanel({ siteId }: { siteId: number }) {
   const [context, setContext] = useState<PublicSiteContextResponse | null>(null);
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    getPublicSiteContext(site.backendDiveSiteId, controller.signal)
+    getPublicSiteContext(siteId, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
         setContext(result);
@@ -143,7 +144,7 @@ function ActivityPanel({ site }: { site: ReefSite }) {
         setState("error");
       });
     return () => controller.abort();
-  }, [reloadKey, site.backendDiveSiteId]);
+  }, [reloadKey, siteId]);
 
   const retry = () => {
     setState("loading");
@@ -333,7 +334,8 @@ function SiteDetail({
         </p>
       </aside>
 
-      <ActivityPanel key={site.backendDiveSiteId} site={site} />
+      <ActivityPanel key={site.backendDiveSiteId} siteId={site.backendDiveSiteId} />
+      <ExternalContextPanel key={`external-${site.backendDiveSiteId}`} siteId={site.backendDiveSiteId} />
 
       <div className={styles.siteActions}>
         <Link className={styles.primaryButton} href={planningHref(site)}>Plan a dive</Link>

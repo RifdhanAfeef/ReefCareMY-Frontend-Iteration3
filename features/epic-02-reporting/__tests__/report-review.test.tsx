@@ -63,6 +63,16 @@ beforeEach(() => {
   vi.mocked(submitReport).mockResolvedValue({ reportReference: "RC-1", status: "received", submittedAt: "2026-09-11T10:00:00Z", generalLocation: "Reef" });
 });
 
+it("puts the location privacy explanation in its own box below the submission checklist", async () => {
+  render(<ReportReview />);
+  const privacyHeading = screen.getByRole("heading", { name: "Your location stays protected" });
+  expect(privacyHeading).toBeInTheDocument();
+  expect(privacyHeading.closest("aside")).toBeNull();
+  expect(screen.getByRole("heading", { name: "Before submitting" }).closest("aside")).toBeInTheDocument();
+  expect(screen.getByText(/Other coordinators and administrators see only the general site/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+});
+
 it("shows success rather than missing fields while navigation is pending after resetting drafts", async () => {
   render(<ReportReview />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());

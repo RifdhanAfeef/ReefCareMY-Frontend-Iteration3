@@ -52,6 +52,17 @@ async function fillAndSubmit(email: string, password: string) {
 }
 
 describe("Login — generic credential error", () => {
+  it("shows and hides the password without submitting", async () => {
+    const user = userEvent.setup();
+    render(<AuthProvider><LoginForm /></AuthProvider>);
+    const password = screen.getByLabelText("Password");
+    await user.type(password, "reefcare-password");
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password).toHaveAttribute("type", "text");
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password).toHaveAttribute("type", "password");
+    expect(mockedLogin).not.toHaveBeenCalled();
+  });
   it("shows a user-safe credential message", async () => {
     mockedLogin.mockRejectedValue(new ApiError("Invalid credentials", 401));
 

@@ -14,7 +14,6 @@ import { checkReportLocation } from "@/lib/api/reportsApi";
 import type { DiveSiteReference } from "@/lib/api/types";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import { clearSelectedReefSite, readSelectedReefSite } from "@/features/epic-02-reef-explorer/selected-site-storage";
-import { reefSites } from "@/features/epic-02-reef-explorer/reef-sites";
 import { buildLocationCheckPayload } from "@/features/epic-02-reporting/report-payload";
 import { ReportProgress } from "@/features/epic-02-reporting/report-progress";
 import { displayDateAndTimeToIso, displayDateToIsoDate, inputDateToDisplayValue, isFutureDisplayDate, isValidDisplayDate } from "@/lib/format/date";
@@ -34,7 +33,6 @@ const malaysiaBounds = {
   south: 0.5,
   north: 7.7,
 };
-const diveSiteRadiusMetres = 5000;
 const islandRadiusMetres = 15000;
 
 const MalaysiaMap = dynamic(
@@ -80,7 +78,7 @@ function isWithinSupportedMalaysiaArea(pin: MapPin) {
     && pin.longitude <= malaysiaBounds.east;
 }
 
-function MapPreview({ pin, siteCentre, interactive = false, onSetPin }: { pin: MapPin | null; siteCentre?: MapPin | null; interactive?: boolean; onSetPin?: (pin: MapPin) => void }) {
+function MapPreview({ pin, siteCentre, diveSiteRadiusMetres, interactive = false, onSetPin }: { pin: MapPin | null; siteCentre?: MapPin | null; diveSiteRadiusMetres: number | null; interactive?: boolean; onSetPin?: (pin: MapPin) => void }) {
   const resolvedPin = normalisePin(pin);
   return <MalaysiaMap pin={resolvedPin} siteCentre={siteCentre ?? null} diveSiteRadiusMetres={diveSiteRadiusMetres} islandRadiusMetres={islandRadiusMetres} interactive={interactive} onSetPin={onSetPin} />;
 }
@@ -126,13 +124,25 @@ export function LocationFlow() {
   const initiallySelectedSessionId = useRef(selectedSessionId);
   const initialForm = useRef(form);
   const session = useMemo(() => sessions.find((item) => item.id === selectedSessionId) ?? sessions[0], [selectedSessionId, sessions]);
-  const siteProfile = useMemo(() => reefSites.find((site) => site.backendDiveSiteId === session?.namedDiveSiteId), [session?.namedDiveSiteId]);
-  const siteCentre = useMemo<MapPin | null>(() => siteProfile ? {
-    latitude: siteProfile.position[0],
-    longitude: siteProfile.position[1],
-    x: ((siteProfile.position[1] - malaysiaBounds.west) / (malaysiaBounds.east - malaysiaBounds.west)) * 100,
-    y: ((malaysiaBounds.north - siteProfile.position[0]) / (malaysiaBounds.north - malaysiaBounds.south)) * 100,
-  } : null, [siteProfile]);
+  const siteReference = useMemo(
+    () => diveSites.find((site) => site.diveSiteId === session?.namedDiveSiteId),
+    [diveSites, session?.namedDiveSiteId],
+  );
+  const siteCentre = useMemo<MapPin | null>(() => {
+    const latitude = siteReference?.centreLatitude;
+    const longitude = siteReference?.centreLongitude;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return {
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      x: ((Number(longitude) - malaysiaBounds.west) / (malaysiaBounds.east - malaysiaBounds.west)) * 100,
+      y: ((malaysiaBounds.north - Number(latitude)) / (malaysiaBounds.north - malaysiaBounds.south)) * 100,
+    };
+  }, [siteReference]);
+  const diveSiteRadiusMetres = Number.isFinite(siteReference?.defaultUncertaintyMetres)
+    && Number(siteReference?.defaultUncertaintyMetres) > 0
+    ? Number(siteReference?.defaultUncertaintyMetres)
+    : null;
   const coordinates = mapCoordinates(pin);
   const aiSiteReference = reportDraft?.aiSuggestions?.find((suggestion) =>
     suggestion.field === "site_reference"
@@ -212,6 +222,11 @@ export function LocationFlow() {
   }, [referenceReloadKey, reportDraft?.observationDate, updateLocationDraft]);
 
   useEffect(() => {
+    // Drafts saved before this shorter flow may still point to removed screens.
+    if (step === "privacy" || step === "saved") updateLocationDraft({ step: "confirm" });
+  }, [step, updateLocationDraft]);
+
+  useEffect(() => {
     const heading = document.querySelector<HTMLElement>("[data-location-flow-heading]");
     if (heading) {
       heading.style.outline = "none";
@@ -267,10 +282,13 @@ export function LocationFlow() {
         else setCoordinateError(message);
         return false;
       }
-      if (distance > diveSiteRadiusMetres) {
+      if (diveSiteRadiusMetres && distance > diveSiteRadiusMetres) {
         const confirmed = window.confirm("The supplied location appears beyond the dive site, but within the island area. Do you want to proceed with this location?");
         if (!confirmed) {
-          const message = "Choose a location within 5 km of the dive site, or confirm the wider island-area location.";
+          const radiusLabel = diveSiteRadiusMetres >= 1000
+            ? `${diveSiteRadiusMetres / 1000} km`
+            : `${diveSiteRadiusMetres} m`;
+          const message = `Choose a location within ${radiusLabel} of the dive site, or confirm the wider island-area location.`;
           if (source === "map_pin") setMapPinError(message);
           else setCoordinateError(message);
           return false;
@@ -389,7 +407,7 @@ export function LocationFlow() {
     {aiSiteReference && <aside className={styles.aiLocationNote} role="note"><strong>Location mentioned in your description</strong><p>{aiSiteReference}</p><small>Context only. Choose the location below.</small></aside>}
     {locationCheckError && <aside className={styles.locationWarning} role="status"><strong>Location check</strong><p>{locationCheckError}</p></aside>}
     <div className={`${styles.choiceGrid} ${styles.locationChoices}`}><section className={`${styles.card} ${styles.selectedCard}`}><h2>Use the dive site</h2><div className={styles.readOnlyLabel}>Dive site<p className={styles.readOnlyValue}>{session.site}</p></div><p className={styles.supporting}>Most reports use this. Precise coordinates are optional.</p><button className={styles.primaryButton} type="button" onClick={() => continueFromLocation("dive_site")}>Use dive-site location</button><button className={styles.textRetry} type="button" onClick={continueWithUnknownLocation}>I don&apos;t know the exact location</button></section>
-      <section className={styles.card}><h2>Point on the map</h2><p className={styles.supporting}>Select the approximate spot where you saw it.</p><MapPreview pin={pin} siteCentre={siteCentre} interactive onSetPin={(nextPin) => { updateLocationDraft({ pin: nextPin }); setMapPinError(""); }} />{coordinates && <p className={styles.coordinateReadout}>Selected coordinates: {coordinates}</p>}{mapPinError && <p className={styles.errorText} role="alert">{mapPinError}</p>}<button className={styles.secondaryButton} type="button" disabled={!pin || checkingLocation} onClick={() => continueFromLocation("map_pin")}>{checkingLocation ? "Checking location…" : "Confirm map pin"}</button></section>
+      <section className={styles.card}><h2>Point on the map</h2><p className={styles.supporting}>Select the approximate spot where you saw it.</p><MapPreview pin={pin} siteCentre={siteCentre} diveSiteRadiusMetres={diveSiteRadiusMetres} interactive onSetPin={(nextPin) => { updateLocationDraft({ pin: nextPin }); setMapPinError(""); }} />{coordinates && <p className={styles.coordinateReadout}>Selected coordinates: {coordinates}</p>}{mapPinError && <p className={styles.errorText} role="alert">{mapPinError}</p>}<button className={styles.secondaryButton} type="button" disabled={!pin || checkingLocation} onClick={() => continueFromLocation("map_pin")}>{checkingLocation ? "Checking location…" : "Confirm map pin"}</button></section>
       <section className={styles.card}><h2>Enter coordinates</h2><p className={styles.supporting}>From a dive computer, GPS or another trusted source.</p><div className={styles.coordinateFields}><label className={styles.field}>Latitude<input type="number" min={malaysiaBounds.south} max={malaysiaBounds.north} step="any" value={manualLatitude} onChange={(event) => { setManualLatitude(event.target.value); setCoordinateError(""); }} placeholder="3.15021" /></label><label className={styles.field}>Longitude<input type="number" min={malaysiaBounds.west} max={malaysiaBounds.east} step="any" value={manualLongitude} onChange={(event) => { setManualLongitude(event.target.value); setCoordinateError(""); }} placeholder="104.21864" /></label></div>{coordinateError && <p className={styles.errorText} role="alert">{coordinateError}</p>}<button className={styles.secondaryButton} type="button" disabled={checkingLocation} onClick={continueWithManualCoordinates}>{checkingLocation ? "Checking location…" : "Use these coordinates"}</button></section></div>
     <aside className={styles.privacyStrip}><strong>Your exact location stays protected</strong><p>Only you and the coordinator handling your report see a map point or coordinates. Everyone else sees the general site.</p></aside><button className={`${styles.secondaryButton} ${styles.backOutside}`} type="button" onClick={() => setStep("session")}>Back</button>
   </section>;
@@ -400,7 +418,7 @@ export function LocationFlow() {
     <form className={styles.confirmGrid} onSubmit={confirmLocation}>
       <section className={styles.card}>
         <h2>{session.site}</h2>
-        <MapPreview pin={pin} siteCentre={siteCentre} />
+        <MapPreview pin={pin} siteCentre={siteCentre} diveSiteRadiusMetres={diveSiteRadiusMetres} />
         <p className={styles.mapCaption}>{hasExactCoordinates ? `${locationSource === "manual_coordinates" ? "Entered coordinates" : "Selected map pin"}${coordinates ? ` — ${coordinates}` : ""}` : confidence === "unsure" ? "Exact location unknown" : "Named dive-site location only"}</p>
         <details className={styles.surfaceContext} open={Boolean(surfaceEntryContext.trim() || surfaceExitContext.trim()) || undefined}>
           <summary>Add where you entered or left the water <span>Optional</span></summary>

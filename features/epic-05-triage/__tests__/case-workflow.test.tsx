@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CoordinatorCaseRoute } from "../case-workflow";
 import * as coordinatorApi from "@/lib/api/coordinatorApi";
+import * as iteration3Api from "@/lib/api/iteration3Api";
 import { ApiError } from "@/lib/api/client";
 import type { CoordinatorCase } from "@/lib/api/types";
 
 vi.mock("@/lib/api/coordinatorApi");
+vi.mock("@/lib/api/iteration3Api");
 // Area context has independent requests and its own failure/permission tests.
 vi.mock("../hotspots/hotspot-context", () => ({ HotspotCaseContext: () => null }));
 
@@ -54,6 +56,14 @@ beforeEach(() => {
   mockedGetCoordinatorEvidence.mockResolvedValue(new Blob(["image"], { type: "image/jpeg" }));
   mockedGetConservationActionTypes.mockResolvedValue([]);
   mockedGetConservationActions.mockResolvedValue({ reportReference: report.reportReference, items: [], total: 0 });
+  vi.mocked(iteration3Api.getRelatedReports).mockResolvedValue({
+    reportReference: report.reportReference, analysisState: "unavailable", message: "Analysis unavailable.",
+    ruleVersion: null, analysedAt: null, candidates: [],
+  });
+  vi.mocked(iteration3Api.getFollowUps).mockResolvedValue({
+    reportReference: report.reportReference, items: [], total: 0, message: "No follow-up recorded.",
+  });
+  vi.mocked(iteration3Api.getMonitoringConditions).mockResolvedValue([]);
   mockedClaimReport.mockResolvedValue({
     reportReference: report.reportReference,
     owner: report.owner,
@@ -94,6 +104,17 @@ beforeEach(() => {
 });
 
 describe("Coordinator case workflow", () => {
+  it("keeps the optional case context compact until a coordinator expands it", async () => {
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    expect(await screen.findByRole("heading", { name: "Submitted evidence" })).toBeInTheDocument();
+    const areaSummary = screen.getByText("Area reporting context").closest("summary");
+    const relatedSummary = screen.getByText("Potentially related reports", { selector: "summary strong" }).closest("summary");
+    expect(areaSummary?.parentElement).not.toHaveAttribute("open");
+    expect(relatedSummary?.parentElement).not.toHaveAttribute("open");
+    fireEvent.click(relatedSummary!);
+    expect(relatedSummary?.parentElement).toHaveAttribute("open");
+  });
+
   it("loads and displays protected evidence automatically with the case", async () => {
     render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
 
@@ -128,30 +149,44 @@ describe("Coordinator case workflow", () => {
     mockedGetConservationActionTypes.mockResolvedValueOnce([
       { code: "reef_cleanup", label: "Reef clean-up", description: null },
     ]);
-    mockedGetConservationActions.mockResolvedValueOnce({
+    vi.mocked(iteration3Api.getFollowUps).mockResolvedValueOnce({
       reportReference: report.reportReference,
       total: 1,
+      message: "",
       items: [{
         caseActionId: 6,
+        caseEventId: 6,
         reportReference: report.reportReference,
+        followUpType: "action",
+        followUpState: "action_taken",
+        recordingLevel: "coordinator_summary",
         actionTypeCode: "reef_cleanup",
         actionTypeLabel: "Reef clean-up",
-        actionState: "action_taken",
         actionDate: "2026-09-17",
         responsibleTeam: "Team 18",
+        sourceReference: null,
+        observations: null,
+        recordedOutcome: "Debris has been removed.",
         notes: "Debris has been removed.",
+        conditionCode: null,
+        conditionLabel: null,
+        conditionReviewedByName: null,
+        nextFollowUpRequired: null,
+        nextFollowUpDate: null,
+        supersedesCaseActionId: null,
+        supersededByCaseActionId: null,
         statusCode: "response_complete",
         createdBy: 8,
         createdByName: "Case Coordinator",
         createdAt: "2026-09-17T14:15:00Z",
-        evidence: [{ evidenceId: 19, mediaType: "image/jpeg", uploadedAt: "2026-09-17T14:15:00Z", caseActionId: 6 }],
+        evidence: [{ evidenceId: 19, mediaType: "image/jpeg", fileSizeBytes: 100, uploadedAt: "2026-09-17T14:15:00Z" }],
       }],
     });
 
     render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
 
     expect(await screen.findByRole("img", { name: "Submitted evidence 13" })).toBeInTheDocument();
-    expect(await screen.findByRole("img", { name: "Action evidence 1 for Reef clean-up" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "Supporting follow-up evidence" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Submitted evidence 19" })).not.toBeInTheDocument();
   });
 

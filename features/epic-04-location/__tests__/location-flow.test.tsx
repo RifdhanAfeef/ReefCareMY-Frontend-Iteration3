@@ -30,6 +30,11 @@ type TestLocationDraft = {
   surfaceExitContext: string;
 };
 
+const { navigationPush, captureMapProps } = vi.hoisted(() => ({
+  navigationPush: vi.fn(),
+  captureMapProps: vi.fn(),
+}));
+
 const appState = vi.hoisted(() => ({
   updateLocationDraft: vi.fn(),
   locationDraft: {
@@ -48,12 +53,14 @@ const appState = vi.hoisted(() => ({
 vi.mock("@/features/shared/mock-app-state", () => ({
   useMockAppState: () => appState,
 }));
-const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: vi.fn(), push }),
+  useRouter: () => ({ back: vi.fn(), push: navigationPush }),
 }));
 vi.mock("next/dynamic", () => ({
-  default: () => () => <div data-testid="map-placeholder" />,
+  default: () => (props: Record<string, unknown>) => {
+    captureMapProps(props);
+    return <div data-testid="map-placeholder" />;
+  },
 }));
 vi.mock("@/lib/api/diveSessionsApi");
 vi.mock("@/lib/api/referenceApi");
@@ -62,7 +69,8 @@ vi.mock("@/lib/api/reportsApi");
 beforeEach(() => {
   window.localStorage.clear();
   appState.updateLocationDraft.mockReset();
-  push.mockReset();
+  navigationPush.mockReset();
+  captureMapProps.mockReset();
   Object.assign(appState.locationDraft, {
     step: "session",
     sessions: [],
@@ -75,10 +83,17 @@ beforeEach(() => {
     surfaceExitContext: "",
   });
   vi.mocked(getDiveSites).mockResolvedValue([
-    { diveSiteId: 1, name: "Batu Nisan", publicAreaLabel: "Perhentian Islands" },
+    {
+      diveSiteId: 1,
+      name: "Batu Nisan",
+      publicAreaLabel: "Perhentian Islands",
+      centreLatitude: 2.965,
+      centreLongitude: 104.12,
+      defaultUncertaintyMetres: 5000,
+    },
   ]);
   vi.mocked(getDiveSessions).mockResolvedValue([]);
-  vi.mocked(checkReportLocation).mockResolvedValue({
+  vi.mocked(checkReportLocation).mockReset().mockResolvedValue({
     checkAvailable: true,
     hasWarning: false,
     warningCode: null,
@@ -201,7 +216,8 @@ describe("US4.6 — optional surface entry and exit context", () => {
 
     await user.click(await screen.findByRole("button", { name: "Continue to review" }));
 
-    expect(push).toHaveBeenCalledWith("/report-a-reef/review");
+    expect(navigationPush).toHaveBeenCalledWith("/report-a-reef/review");
+    expect(screen.queryByText("Privacy", { exact: true })).not.toBeInTheDocument();
   });
 });
 
@@ -273,6 +289,32 @@ describe("Location validation", () => {
       approximateStartTime: null,
       approximateEndTime: null,
     }]);
+  });
+
+  it("uses the backend site centre and uncertainty radius for the displayed map circle", async () => {
+    appState.locationDraft.pin = { x: 50, y: 50, latitude: 2.97, longitude: 104.12 };
+
+    render(<LocationFlow />);
+    await screen.findByRole("heading", { name: "Where on the reef was it?" });
+
+    await waitFor(() => expect(captureMapProps).toHaveBeenCalledWith(expect.objectContaining({
+      siteCentre: expect.objectContaining({ latitude: 2.965, longitude: 104.12 }),
+      diveSiteRadiusMetres: 5000,
+    })));
+  });
+
+  it("does not show a distance error when the backend accepts a pin inside its displayed circle", async () => {
+    appState.locationDraft.pin = { x: 50, y: 50, latitude: 2.97, longitude: 104.12 };
+    render(<LocationFlow />);
+    await screen.findByRole("heading", { name: "Where on the reef was it?" });
+    appState.updateLocationDraft.mockClear();
+
+    await userEvent.click(screen.getByRole("button", { name: "Confirm map pin" }));
+
+    expect(checkReportLocation).toHaveBeenCalledTimes(1);
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(appState.updateLocationDraft).toHaveBeenCalledWith(expect.objectContaining({ step: "confirm" }));
   });
 
   it("blocks a map pin outside the supported Malaysia area on the Location step", async () => {
