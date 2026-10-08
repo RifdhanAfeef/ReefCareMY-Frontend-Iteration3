@@ -50,13 +50,13 @@
 }
 
 .hint {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-muted);
 }
 
 .hintError {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-danger);
 }
@@ -69,6 +69,15 @@
   background: rgba(180, 35, 24, 0.08);
   border: 1px solid var(--color-danger);
   border-radius: var(--radius-field);
+}
+
+.context {
+  margin: 0;
+  padding: 12px 14px;
+  color: var(--color-info-ink);
+  background: var(--color-info);
+  border-radius: var(--radius-field);
+  font-size: 15px;
 }
 
 .accountPrompt {
