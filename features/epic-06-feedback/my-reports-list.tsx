@@ -5,9 +5,16 @@ import Link from "next/link";
 import { getMyReports } from "@/lib/api/reportsApi";
 import type { MyReportsResult } from "@/lib/api/types";
 import { userFacingError } from "@/lib/api/user-facing-error";
+import { formatDateTime } from "@/lib/format/date";
 import styles from "./my-reports-list.module.css";
 
 type LoadState = "loading" | "loaded" | "error";
+
+// Same DD/MM/YYYY Malaysia-time format as the rest of the app, whatever the browser locale.
+function submittedLabel(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : formatDateTime(parsed);
+}
 
 // The status chip carries its meaning in text; tone only adds a second cue.
 function statusTone(status: string) {
@@ -107,7 +114,7 @@ export function MyReportsList() {
               <p className={styles.location}>{report.generalLocation}</p>
               {report.outcome && <p className={styles.outcome}>{report.outcome}</p>}
               <time className={styles.date} dateTime={report.submittedAt}>
-                Submitted {new Date(report.submittedAt).toLocaleDateString()}
+                Submitted {submittedLabel(report.submittedAt)}
               </time>
             </Link>
           </li>
