@@ -540,7 +540,6 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   const depthSuggestion = reportDraft.aiSuggestions.find((item) => item.field === "estimated_depth_metres");
   const selectedThreatLabel = categoryOptions.find((item) => item.code === reportDraft.threatCategoryCode)?.label;
   const orderedThreats = [...categoryOptions].sort((first, second) => Number(first.code === "unsure") - Number(second.code === "unsure"));
-  const detailFields = smartReportFields.filter(({ field }) => field !== "possible_threat" && field !== "estimated_depth_metres");
   const hasAiInput = photos.length > 0
     || Boolean(reportDraft.description.trim())
     || Boolean(reportDraft.visualRecognition)
@@ -673,14 +672,34 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           </section>
 
           <section className={styles.assistantCard} aria-labelledby="smart-report-heading">
-          <div className={styles.assistantHeader}><div className={styles.aiFeatureHeader}><div><h3 id="smart-report-heading">Description check</h3><p>Pulls out details such as size, contact with coral or animals, and site landmarks. Check each one.</p></div></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
+          <div className={styles.assistantHeader}><div className={styles.aiFeatureHeader}><div><h3 id="smart-report-heading">Description check</h3><p>Pulls out the possible threat, depth, size, interactions and site landmarks. Check each one. Threat and depth also update the fields above.</p></div></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
           {assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
-          <div className={styles.inlineSuggestionGrid}>{detailFields.map(({ field, label }) => {
+          <div className={styles.inlineSuggestionGrid}>{smartReportFields.map(({ field, label }) => {
             const suggestionIndex = reportDraft.aiSuggestions.findIndex((item) => item.field === field);
             const suggestion = suggestionIndex >= 0 ? reportDraft.aiSuggestions[suggestionIndex] : undefined;
             return <label className={`${styles.inlineSuggestionField} ${suggestion?.conflict && suggestion.status === "unresolved" ? styles.conflictField : ""}`} key={field}>
               <span className={styles.inlineFieldHeading}><strong>{label}</strong><em data-state={suggestionStateLabel(suggestion).toLowerCase().replaceAll(" ", "-")}>{suggestionStateLabel(suggestion)}</em></span>
-              <input
+              {field === "possible_threat" ? <select
+                aria-label="Possible threat type structured value"
+                value={reportDraft.threatCategoryCode}
+                disabled={categoryOptions.length === 0}
+                onChange={(event) => {
+                  const selected = categoryOptions.find((category) => category.code === event.target.value);
+                  updateField({ threatCategoryCode: (selected?.code ?? "") as ReportDraft["threatCategoryCode"], threatCategoryId: selected?.threatCategoryId ?? null }, "threat");
+                }}
+              >
+                <option value="">{categoryOptions.length === 0 ? "Loading choices…" : "Select a possible threat type"}</option>
+                {categoryOptions.map((category) => <option value={category.code} key={category.code}>{category.label}</option>)}
+              </select> : field === "estimated_depth_metres" ? <input
+                type="number"
+                min="0"
+                step="0.1"
+                inputMode="decimal"
+                aria-label="Estimated depth structured value"
+                placeholder="Not included"
+                value={reportDraft.estimatedDepthMetres}
+                onChange={(event) => updateField({ estimatedDepthMetres: event.target.value }, "depth")}
+              /> : <input
                 aria-label={label}
                 placeholder="Not included"
                 value={suggestion?.status === "removed" ? "" : suggestion?.suggestedValue ?? ""}
@@ -688,7 +707,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                   if (suggestionIndex >= 0) updateSuggestion(suggestionIndex, { suggestedValue: event.target.value, status: event.target.value.trim() ? "corrected" : "removed" });
                   else if (event.target.value.trim()) answerFollowUp({ field, question: label, options: [] }, event.target.value);
                 }}
-              />
+              />}
               {suggestion?.conflict && suggestion.status === "unresolved" && <span className={styles.conflictText}>Your report already says {suggestion.observerValue}. Review this difference before submitting.</span>}
             </label>;
           })}</div>
