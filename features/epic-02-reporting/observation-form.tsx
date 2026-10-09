@@ -589,33 +589,6 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
         </div>
 
         <div className={styles.formGrid}>
-          <fieldset className={`${styles.threatPicker} ${styles.fullWidth}`} id="threat-picker" data-invalid={Boolean(errors.threat) || undefined} aria-describedby={errors.threat ? "threat-help threat-error" : "threat-help"}>
-            <legend className={styles.fieldLabel}>What did you see? *</legend>
-            <p className={styles.fieldHelp} id="threat-help">Pick the closest match. If you can&apos;t tell, choose &ldquo;Not sure&rdquo; and a coordinator will check.</p>
-            {categoryOptions.length === 0 && !categoryLoadError && <p className={styles.muted} role="status">Loading threat types…</p>}
-            {categoryLoadError && <p className={styles.errorText} role="alert">{categoryLoadError}</p>}
-            {orderedThreats.length > 0 && <div className={styles.threatOptions}>
-              {orderedThreats.map((category) => {
-                const icon = threatIcons[category.code];
-                return <label className={styles.threatOption} key={category.code}>
-                  <input
-                    type="radio"
-                    name="threat-type"
-                    value={category.code}
-                    checked={reportDraft.threatCategoryCode === category.code}
-                    onChange={() => updateField({ threatCategoryCode: category.code as ReportDraft["threatCategoryCode"], threatCategoryId: category.threatCategoryId }, "threat")}
-                  />
-                  <span className={styles.threatOptionIcon} aria-hidden="true">
-                    {icon ? <Image src={icon} alt="" width={36} height={36} /> : <CircleHelp size={26} strokeWidth={2} />}
-                  </span>
-                  <span>{category.label}</span>
-                </label>;
-              })}
-            </div>}
-            {suggestionHint(threatSuggestion, selectedThreatLabel)}
-            {errors.threat && <span className={styles.errorText} id="threat-error">{errors.threat}</span>}
-          </fieldset>
-
           <section className={styles.uploadArea} aria-labelledby="photo-heading">
             <h3 id="photo-heading">Photographs *</h3>
             <p className={styles.supporting}>PNG, JPG or WebP, up to 10 MB each. A clear close photo and a wider one help most.</p>
@@ -645,12 +618,38 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
             <label className={styles.field}><span className={styles.fieldLabel}>Approximate depth (m) <span className={styles.fieldMeta}>Optional</span></span><input id="observation-depth" type="number" min="0" step="0.1" inputMode="decimal" value={reportDraft.estimatedDepthMetres} onChange={(event) => updateField({ estimatedDepthMetres: event.target.value }, "depth")} aria-invalid={Boolean(errors.depth)} aria-describedby={errors.depth ? "observation-depth-error" : undefined} placeholder="e.g. 12" />{suggestionHint(depthSuggestion, reportDraft.estimatedDepthMetres)}{errors.depth && <span className={styles.errorText} id="observation-depth-error">{errors.depth}</span>}</label>
           </div>
           <label className={`${styles.field} ${styles.fullWidth}`}><span className={styles.fieldLabel}>Describe what you saw *</span><span className={styles.fieldHelp} id="description-help">Size, contact with coral or animals, and where on the reef, if you remember.</span><textarea id="observation-description" value={reportDraft.description} onChange={(event) => updateField({ description: event.target.value }, "description")} aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? "description-help description-error" : "description-help"} placeholder="Example: Large fishing net tangled around coral north of D'Lagoon, around 10-15 m deep." />{errors.description && <span className={styles.errorText} id="description-error">{errors.description}</span>}</label>
+          <fieldset className={`${styles.threatPicker} ${styles.fullWidth}`} id="threat-picker" data-invalid={Boolean(errors.threat) || undefined} aria-describedby={errors.threat ? "threat-help threat-error" : "threat-help"}>
+            <legend className={styles.fieldLabel}>What did you see? *</legend>
+            <p className={styles.fieldHelp} id="threat-help">Your description may fill this in automatically. Check the result or choose the closest match. If you can&apos;t tell, choose &ldquo;Unsure&rdquo; and a coordinator will check.</p>
+            {categoryOptions.length === 0 && !categoryLoadError && <p className={styles.muted} role="status">Loading threat types…</p>}
+            {categoryLoadError && <p className={styles.errorText} role="alert">{categoryLoadError}</p>}
+            {orderedThreats.length > 0 && <div className={styles.threatOptions}>
+              {orderedThreats.map((category) => {
+                const icon = threatIcons[category.code];
+                return <label className={styles.threatOption} key={category.code}>
+                  <input
+                    type="radio"
+                    name="threat-type"
+                    value={category.code}
+                    checked={reportDraft.threatCategoryCode === category.code}
+                    onChange={() => updateField({ threatCategoryCode: category.code as ReportDraft["threatCategoryCode"], threatCategoryId: category.threatCategoryId }, "threat")}
+                  />
+                  <span className={styles.threatOptionIcon} aria-hidden="true">
+                    {icon ? <Image src={icon} alt="" width={36} height={36} /> : <CircleHelp size={26} strokeWidth={2} />}
+                  </span>
+                  <span>{category.label}</span>
+                </label>;
+              })}
+            </div>}
+            {suggestionHint(threatSuggestion, selectedThreatLabel)}
+            {errors.threat && <span className={styles.errorText} id="threat-error">{errors.threat}</span>}
+          </fieldset>
         </div>
 
         <section className={styles.aiWorkspace} aria-labelledby="ai-assistance-heading">
           <header className={styles.aiWorkspaceHeader}>
             <h2 id="ai-assistance-heading">Suggestions from your photo and description</h2>
-            <p>Optional. ReefCare can suggest details from what you add above. Nothing is used unless you keep it.</p>
+            <p>Optional. ReefCare can suggest details from what you add above. Check or edit the suggested details before continuing.</p>
           </header>
 
           {!hasAiInput ? <p className={styles.aiEmptyState}>Add a photo or a description and suggestions will appear here.</p> : <>
@@ -672,7 +671,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           </section>
 
           <section className={styles.assistantCard} aria-labelledby="smart-report-heading">
-          <div className={styles.assistantHeader}><div className={styles.aiFeatureHeader}><div><h3 id="smart-report-heading">Description check</h3><p>Pulls out the possible threat, depth, size, interactions and site landmarks. Check each one. Threat and depth also update the fields above.</p></div></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
+          <div className={styles.assistantHeader}><div className={styles.aiFeatureHeader}><div><h3 id="smart-report-heading">Description check</h3><p>Pulls out the possible threat, depth, size, interactions and site landmarks. Check each one. Threat and depth here match the fields above.</p></div></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
           {assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
           <div className={styles.inlineSuggestionGrid}>{smartReportFields.map(({ field, label }) => {
             const suggestionIndex = reportDraft.aiSuggestions.findIndex((item) => item.field === field);
