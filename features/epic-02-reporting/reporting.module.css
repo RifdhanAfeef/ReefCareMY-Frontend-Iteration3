@@ -207,7 +207,7 @@
   .dialogActions > * { width: 100%; }
 }
 
-/* Threat choice: the one decision every report needs, so it leads the form. */
+/* Threat choice follows the description so an automatic match can be reviewed in context. */
 .threatPicker { min-width: 0; display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
 .threatPicker legend { margin-bottom: 4px; padding: 0; }
 .threatOptions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
