@@ -8,6 +8,7 @@ import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { useMockAppState } from "@/features/shared/mock-app-state";
 import {
   dateToMalaysiaFormValues,
+  formatDateTime,
   inputDateToDisplayValue,
   isFutureDisplayDate,
   isValidDisplayDate,
@@ -27,6 +28,7 @@ import {
   suggestionStateLabel,
 } from "./smart-report-state";
 import { clearDraftPhotos, createPhotoId, loadDraftPhotos, saveDraftPhotos, type StoredDraftPhoto } from "./draft-storage";
+import { readExifCaptureTime } from "./photo-exif";
 import {
   clearSelectedReefSite,
   readSelectedReefSite,
@@ -58,13 +60,18 @@ const errorFields: Array<{ key: keyof FieldErrors; target: string }> = [
 ];
 const maximumPhotoSize = 10 * 1024 * 1024;
 
-function captureTimeCandidate(file: File) {
-  if (!file.lastModified || file.lastModified > Date.now()) return null;
-  return new Date(file.lastModified).toISOString();
+// Capture times by photo id, read from each photo's EXIF data (null when it has none).
+export type PhotoCaptureTimes = Record<string, string | null>;
+
+/** Reads EXIF capture times for photos that do not have recorded metadata yet. */
+export async function readPhotoCaptureTimes(photos: StoredDraftPhoto[], existingPhotos: ReportDraft["photos"]) {
+  const pending = photos.filter((photo) => !existingPhotos.some((item) => item.id === photo.id));
+  const times = await Promise.all(pending.map((photo) => readExifCaptureTime(photo.file)));
+  return Object.fromEntries(pending.map((photo, index) => [photo.id, times[index]])) as PhotoCaptureTimes;
 }
 
-function photoMetadata(photo: StoredDraftPhoto, existing?: ReportDraft["photos"][number]) {
-  const capturedAt = existing?.capturedAt ?? captureTimeCandidate(photo.file);
+function photoMetadata(photo: StoredDraftPhoto, existing: ReportDraft["photos"][number] | undefined, captureTimes: PhotoCaptureTimes) {
+  const capturedAt = existing?.capturedAt ?? captureTimes[photo.id] ?? null;
   return {
     id: photo.id,
     name: photo.file.name,
@@ -80,10 +87,12 @@ export function buildAutomaticPhotoDraftChanges(
   existingPhotos: ReportDraft["photos"],
   observationDate: string,
   observationTime: string,
+  captureTimes: PhotoCaptureTimes = {},
 ) {
   const metadata = photos.map((photo) => photoMetadata(
     photo,
     existingPhotos.find((item) => item.id === photo.id),
+    captureTimes,
   ));
   const capturedAt = metadata.find((photo) => photo.capturedAt)?.capturedAt;
   const automaticValues = capturedAt ? dateToMalaysiaFormValues(capturedAt) : null;
@@ -215,7 +224,9 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     if (isAccountDraftRestored === false) return;
     let cancelled = false;
     loadDraftPhotos()
-      .then((stored) => {
+      .then(async (stored) => {
+        if (cancelled) return;
+        const captureTimes = await readPhotoCaptureTimes(stored, latestReportDraft.current.photos);
         if (cancelled) return;
         const hydratedDraft = latestReportDraft.current;
         const restored = stored.map((photo) => {
@@ -229,6 +240,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           hydratedDraft.photos,
           hydratedDraft.observationDate,
           hydratedDraft.observationTime,
+          captureTimes,
         );
         updateReportDraft(changes);
       })
@@ -317,11 +329,13 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   }
 
   async function syncPhotos(next: PhotoPreview[]) {
+    const captureTimes = await readPhotoCaptureTimes(next, reportDraft.photos);
     const { changes, automaticValues } = buildAutomaticPhotoDraftChanges(
       next,
       reportDraft.photos,
       reportDraft.observationDate,
       reportDraft.observationTime,
+      captureTimes,
     );
     setPhotos(next);
     updateReportDraft(changes);
@@ -631,8 +645,8 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                   <div className={styles.photoMeta}><strong title={photo.file.name}>{photo.file.name}</strong><span>{formatFileSize(photo.file.size)}</span><div className={styles.compactActions}><button className={styles.smallButton} type="button" disabled={visualRecognitionBusy} onClick={() => analysePhoto(photo)}>{reportDraft.visualRecognition?.photoId === photo.id ? "Check again" : "Check this photo"}</button><button className={styles.textButton} type="button" onClick={() => removePhoto(photo.id)}>Remove</button></div></div>
                   {metadata?.capturedAt && <div className={styles.metadataPrompt}>
                     <strong>Photo date and time added</strong>
-                    <span>{new Date(metadata.capturedAt).toLocaleString()}</span>
-                    <p>Taken from the photo file and copied into the date and time below. Edit them if they are wrong.</p>
+                    <span>{formatDateTime(new Date(metadata.capturedAt))}</span>
+                    <p>Read from the camera data saved in the photo and copied into the date and time below. Check them and edit them if they are wrong.</p>
                   </div>}
                 </article>;
               })}</div>}

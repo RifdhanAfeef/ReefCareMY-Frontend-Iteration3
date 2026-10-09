@@ -67,6 +67,10 @@ vi.mock("@/lib/api/smartReportApi", () => ({
   structureReportDescription: vi.fn(),
 }));
 
+// EXIF parsing has its own tests; here every photo has no EXIF capture time.
+vi.mock("@/features/epic-02-reporting/photo-exif", () => ({
+  readExifCaptureTime: vi.fn().mockResolvedValue(null),
+}));
 vi.mock("@/lib/api/visualRecognitionApi", () => ({
   recognizeVisualThreat: vi.fn(),
 }));
@@ -214,10 +218,10 @@ describe("automatic Smart Report Structuring", () => {
     expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ estimatedDepthMetres: "12" }));
   });
 
-  it("loads photo file date and time immediately while preserving values already entered", () => {
+  it("loads the EXIF capture date and time immediately while preserving values already entered", () => {
     const file = new File(["reef"], "reef.jpg", {
       type: "image/jpeg",
-      lastModified: Date.parse("2026-08-28T07:26:21Z"),
+      lastModified: Date.parse("2026-10-09T11:32:00Z"),
     });
 
     const automatic = buildAutomaticPhotoDraftChanges(
@@ -225,6 +229,7 @@ describe("automatic Smart Report Structuring", () => {
       [],
       "",
       "",
+      { "photo-1": "2026-08-28T07:26:21.000Z" },
     );
     expect(automatic.changes).toEqual(expect.objectContaining({
       observationDate: "28/08/2026",
@@ -237,9 +242,24 @@ describe("automatic Smart Report Structuring", () => {
       [],
       "27/08/2026",
       "14:10",
+      { "photo-1": "2026-08-28T07:26:21.000Z" },
     );
     expect(preserved.changes).not.toHaveProperty("observationDate");
     expect(preserved.changes).not.toHaveProperty("observationTime");
+  });
+
+  it("does not use the file's modified date when the photo has no EXIF capture time (QA-R4-02)", () => {
+    const file = new File(["reef"], "reef.jpg", {
+      type: "image/jpeg",
+      lastModified: Date.parse("2026-10-09T11:32:00Z"),
+    });
+
+    const automatic = buildAutomaticPhotoDraftChanges([{ id: "photo-1", file }], [], "", "", { "photo-1": null });
+
+    expect(automatic.automaticValues).toBeNull();
+    expect(automatic.changes).not.toHaveProperty("observationDate");
+    expect(automatic.changes).not.toHaveProperty("observationTime");
+    expect(automatic.changes.photos).toEqual([expect.objectContaining({ capturedAt: null, capturedAtConfirmed: false })]);
   });
 
   it("analyses a newly attached photo without overwriting the observer threat", async () => {
@@ -249,9 +269,9 @@ describe("automatic Smart Report Structuring", () => {
     render(<ObservationForm />);
 
     fireEvent.change(screen.getByLabelText("Choose photos"), { target: { files: [file] } });
+    // Reading the photo's EXIF data adds an asynchronous step before the analysis call.
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
     });
 
     expect(recognizeVisualThreat).toHaveBeenCalledWith(file);
@@ -360,8 +380,7 @@ describe("automatic Smart Report Structuring", () => {
     runtime.draftRestored = true;
     view.rerender(<ObservationForm />);
     await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
     });
     expect(loadDraftPhotos).toHaveBeenCalledTimes(1);
     const photoRestoreChanges = vi.mocked(updateReportDraft).mock.calls
