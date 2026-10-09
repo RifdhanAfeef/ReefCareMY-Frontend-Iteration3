@@ -125,7 +125,8 @@ export type MonitoringCondition = { code: string; label: string; description: st
 export type SiteHistoryItem = {
   recordType: "observation" | "action" | "monitoring" | "sourced_outcome";
   occurredAt?: string | null;
-  occurredOn: string;
+  // Null for planned actions, which have not happened yet.
+  occurredOn: string | null;
   recordedAt: string;
   threatCategoryCode?: string | null;
   threatCategoryLabel?: string | null;

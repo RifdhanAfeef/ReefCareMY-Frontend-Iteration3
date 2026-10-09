@@ -50,9 +50,10 @@ export function SiteHistoryPage() {
   const toIso = dateTo && !invalidTo ? displayDateToIsoDate(dateTo) : "";
   const invalidDateRange = Boolean(fromIso && toIso && fromIso > toIso);
   const filteredHistoryItems = useMemo(() => (history?.items ?? []).filter((item) => {
-    const date = item.occurredOn.slice(0, 10);
+    // Planned actions have no date yet; they cannot fall inside a date range.
+    const date = item.occurredOn?.slice(0, 10) ?? "";
     return !invalidDateInput && !invalidDateRange && (recordType === "all" || item.recordType === recordType)
-      && (!fromIso || date >= fromIso) && (!toIso || date <= toIso);
+      && (!fromIso || (date !== "" && date >= fromIso)) && (!toIso || (date !== "" && date <= toIso));
   }), [history, recordType, fromIso, toIso, invalidDateInput, invalidDateRange]);
 
   useEffect(() => {
@@ -156,7 +157,8 @@ export function SiteHistoryPage() {
           {!invalidDateInput && !invalidDateRange && filteredHistoryItems.length === 0 && <p className={styles.noResults}>No records match these filters. Try a wider date range or another record type.</p>}
           {!invalidDateInput && !invalidDateRange && filteredHistoryItems.length > 0 && <ol className={styles.timeline}>{filteredHistoryItems.map((item, index) => <li key={`${item.recordType}-${item.recordedAt}-${index}`} data-record-type={item.recordType}>
             <div className={styles.eventHead}><span className={styles.tag}>{item.recordType.replaceAll("_", " ")}</span>
-              <time dateTime={item.occurredOn}>{eventDate(item.occurredOn)}</time></div>
+              {item.occurredOn ? <time dateTime={item.occurredOn}>{eventDate(item.occurredOn)}</time>
+                : <span>{item.followUpState === "action_planned" ? "Not yet done" : "Date unavailable"}</span>}</div>
             <h3>{eventTitle(item)}</h3>
             {item.recordType === "observation" && <p className={styles.assessment} data-assessment={item.assessmentState}>Assessment: {item.assessmentStateLabel || "Not yet assessed"}</p>}
             {item.recordType === "monitoring" && <p>Human-reviewed condition: {item.conditionLabel || "Not recorded"}</p>}
