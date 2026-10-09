@@ -63,4 +63,24 @@ describe("site history selection", () => {
     expect(screen.getByText("Anchor damage")).toBeInTheDocument();
     expect(getSiteHistory).toHaveBeenCalledTimes(1);
   });
+
+  it("lists a planned action without a date instead of crashing, and leaves it out of date filters", async () => {
+    vi.mocked(getSiteHistory).mockResolvedValue({
+      diveSiteId: 1, siteName: "Batu Nisan", publicAreaLabel: "Perhentian Islands",
+      state: "available", message: "Recorded site history available.",
+      firstRecordOn: "2026-09-01", lastRecordOn: "2026-09-01",
+      counts: { observations: 1, actions: 1, monitoringVisits: 0, sourcedOutcomes: 0, observationsByAssessmentState: {} },
+      items: [
+        { recordType: "observation", occurredOn: "2026-09-01", recordedAt: "2026-09-02", reportReference: "R-1", ownedByYou: false, threatCategoryLabel: "Anchor damage" },
+        { recordType: "action", followUpState: "action_planned", occurredOn: null, recordedAt: "2026-09-03", reportReference: "R-1", ownedByYou: false },
+      ], hotspotNote: null,
+    });
+    render(<SiteHistoryPage />);
+    expect(await screen.findByText("Action planned")).toBeInTheDocument();
+    expect(screen.getByText("Not yet done")).toBeInTheDocument();
+    expect(screen.getByText("Showing 2 of 2 recorded entries. Counts above cover all site records.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "From date, format dd/mm/yyyy" }), { target: { value: "01/09/2026" } });
+    expect(screen.getByText("Anchor damage")).toBeInTheDocument();
+    expect(screen.queryByText("Action planned")).not.toBeInTheDocument();
+  });
 });
