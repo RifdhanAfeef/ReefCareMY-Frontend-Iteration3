@@ -398,6 +398,8 @@ export function DivePlanner() {
     setEditing(loaded.planId);
     setOpenedPlan(loaded);
     setTab("planner");
+    // Area and date may be unchanged, which would keep the earlier site forecast; always request it again.
+    retrySites();
   }
   function startReport() {
     const site = reefSites.find((item) => item.id === reportSite);

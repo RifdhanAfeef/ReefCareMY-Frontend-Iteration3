@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as planningApi from "@/lib/api/planningApi";
 import * as plansApi from "@/lib/api/plansApi";
+import * as publicApi from "@/lib/api/publicApi";
 import { reefSites } from "@/features/epic-02-reef-explorer/reef-sites";
 import { sitesIn } from "../planning-data";
 
@@ -59,6 +60,63 @@ describe("API source", () => {
     });
     expect(result[second.id]).toMatchObject({
       band: "unavailable", waves: null, rain: null, source: null, retrievedAt: null, ruleVersion: null,
+    });
+  });
+
+  it("shows the E8 public summary the brief uses, not the older activity feed (US9.4 AC2)", async () => {
+    const source = await loadApiSource();
+    const [site] = sitesIn("Redang");
+    vi.mocked(publicApi.getPublicSiteContext).mockResolvedValue({
+      diveSiteId: site.backendDiveSiteId,
+      siteName: site.name,
+      publicAreaLabel: "Redang",
+      state: "available",
+      message: "Public ReefCare context is available.",
+      assessmentSummary: { acceptedObservations: 10, observationsUnderReview: 1 },
+      threats: [
+        { threatCategoryCode: "marine_debris", threatCategoryLabel: "Marine debris", acceptedReportCount: 7, mostRecentMonth: "2026-09" },
+      ],
+      activity: [
+        { activityId: null, activityType: "cleanup", title: "Reef clean-up", summary: "Debris removed.", activityDate: "2026-09-20", sourceLabel: "ReefCare" },
+      ],
+      interpretationNote: "Counts reflect ReefCare records only.",
+    } as Awaited<ReturnType<typeof publicApi.getPublicSiteContext>>);
+
+    const view = await source.publicContext(site, context);
+
+    expect(publicApi.getPublicSiteContext).toHaveBeenCalledWith(site.backendDiveSiteId);
+    expect(publicApi.getPublicSiteActivity).not.toHaveBeenCalled();
+    expect(view.available).toBe(true);
+    expect(view.headline).toBe("10 accepted observations · 1 observation under review");
+    expect(view.items).toEqual([
+      { title: "Marine debris", summary: "7 accepted reports", meta: "most recent 2026-09" },
+      { title: "Reef clean-up", summary: "Debris removed.", meta: "2026-09-20 · ReefCare" },
+    ]);
+    expect(view.note).toBe("Counts reflect ReefCare records only.");
+  });
+
+  it("passes on the E8 message when a site has no public context", async () => {
+    const source = await loadApiSource();
+    const [site] = sitesIn("Redang");
+    vi.mocked(publicApi.getPublicSiteContext).mockResolvedValue({
+      diveSiteId: site.backendDiveSiteId,
+      siteName: site.name,
+      publicAreaLabel: "Redang",
+      state: "no_public_context",
+      message: "No public ReefCare context is available. This does not mean there are no reef threats.",
+      assessmentSummary: { acceptedObservations: 0, observationsUnderReview: 0 },
+      threats: [],
+      activity: [],
+      interpretationNote: "Counts reflect ReefCare records only.",
+    });
+
+    const view = await source.publicContext(site, context);
+
+    expect(view).toEqual({
+      available: false,
+      headline: null,
+      items: [],
+      note: "No public ReefCare context is available. This does not mean there are no reef threats.",
     });
   });
 

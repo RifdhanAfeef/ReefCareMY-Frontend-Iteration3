@@ -90,6 +90,22 @@ describe("saved dive plans", () => {
     await waitFor(() => expect(getAreaSites).toHaveBeenCalledWith("redang", plannedDate));
   });
 
+  it("requests the site forecast again when the same plan is reopened (US9.5 AC3)", async () => {
+    await renderPlanner();
+    const sitesCallsFor = () =>
+      vi.mocked(getAreaSites).mock.calls.filter(([area, date]) => area === "redang" && date === plannedDate).length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Open plan" }));
+    await waitFor(() => expect(sitesCallsFor()).toBeGreaterThan(0));
+    const afterFirstOpen = sitesCallsFor();
+
+    // Same area and date, so only an explicit refresh can request the forecast again.
+    fireEvent.click(screen.getByRole("button", { name: /My dive plans/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open plan" }));
+    await waitFor(() => expect(getPlan).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(sitesCallsFor()).toBeGreaterThan(afterFirstOpen));
+  });
+
   it("drops a plan that no longer exists instead of opening stale intent", async () => {
     await renderPlanner(async () => {
       // Use the same module instance as the freshly imported planner.

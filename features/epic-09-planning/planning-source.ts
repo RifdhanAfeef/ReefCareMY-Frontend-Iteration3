@@ -6,7 +6,7 @@ import {
   type SeasonState,
 } from "@/lib/api/planningApi";
 import { createPlan, deletePlan, getPlan, listPlans, updatePlan } from "@/lib/api/plansApi";
-import { getPublicSiteActivity } from "@/lib/api/publicApi";
+import { getPublicSiteContext } from "@/lib/api/publicApi";
 import type { ReefSite } from "@/features/epic-02-reef-explorer/types";
 import {
   assess,
@@ -72,6 +72,8 @@ export type PlanningSource = {
 export const FORECAST_HORIZON_DAYS = 6;
 
 const API_MODE_ENABLED = process.env.NEXT_PUBLIC_E9_DATA_SOURCE === "api";
+// The backend brief uses at most five threat summaries and five activity items.
+const BRIEF_CONTEXT_ITEMS = 5;
 
 export function planningModeFor(previewMode: boolean): PlanningMode {
   return !previewMode && API_MODE_ENABLED ? "api" : "sample";
@@ -296,17 +298,30 @@ const apiSource: PlanningSource = {
       }),
     );
   },
+  // Same E8 public-safe summary the backend gives the AI brief, so the page shows the facts it used.
   async publicContext(site) {
-    const activity = await getPublicSiteActivity(site.backendDiveSiteId);
+    const context = await getPublicSiteContext(site.backendDiveSiteId);
+    if (context.state !== "available") {
+      return { available: false, headline: null, items: [], note: context.message };
+    }
+    const { acceptedObservations, observationsUnderReview } = context.assessmentSummary;
+    const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
     return {
-      available: activity.hasActivity,
-      headline: null,
-      items: activity.items.map((item) => ({
-        title: item.title,
-        summary: item.summary,
-        meta: [item.activityDate, item.sourceLabel].filter(Boolean).join(" · ") || null,
-      })),
-      note: activity.message,
+      available: true,
+      headline: `${plural(acceptedObservations, "accepted observation")} · ${plural(observationsUnderReview, "observation")} under review`,
+      items: [
+        ...context.threats.slice(0, BRIEF_CONTEXT_ITEMS).map((threat) => ({
+          title: threat.threatCategoryLabel,
+          summary: plural(threat.acceptedReportCount, "accepted report"),
+          meta: threat.mostRecentMonth ? `most recent ${threat.mostRecentMonth}` : null,
+        })),
+        ...context.activity.slice(0, BRIEF_CONTEXT_ITEMS).map((item) => ({
+          title: item.title,
+          summary: item.summary,
+          meta: [item.activityDate, item.sourceLabel].filter(Boolean).join(" · ") || null,
+        })),
+      ],
+      note: context.interpretationNote,
     };
   },
   async brief(site, date) {
