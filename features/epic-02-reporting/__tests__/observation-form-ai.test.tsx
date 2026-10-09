@@ -114,6 +114,19 @@ describe("automatic Smart Report Structuring", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it("places the threat choices directly after the description in the observation flow", () => {
+    render(<ObservationForm />);
+
+    const description = document.getElementById("observation-description")!;
+    const threatPicker = document.getElementById("threat-picker")!;
+    const assistant = screen.getByRole("heading", { name: "Suggestions from your photo and description" });
+
+    expect(description.parentElement?.nextElementSibling).toBe(threatPicker);
+    expect(threatPicker.compareDocumentPosition(assistant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(threatPicker).getByText(/Your description may fill this in automatically/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is used unless you keep it/)).not.toBeInTheDocument();
+  });
+
   it("analyses the description after typing pauses without requiring a button", async () => {
     render(<ObservationForm />);
 
