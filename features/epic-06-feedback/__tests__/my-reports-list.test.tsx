@@ -63,6 +63,29 @@ describe("US6.2 AC1 — observer sees their own reports", () => {
   });
 });
 
+describe("submitted date format", () => {
+  it("shows the submitted date as DD/MM/YYYY in Malaysia time, not the browser locale", async () => {
+    mockedGetMyReports.mockResolvedValue(
+      resultOf([
+        {
+          reportReference: "RC-0300",
+          threatCategory: "Marine debris",
+          generalLocation: "Reef A",
+          status: "received",
+          statusLabel: "Received",
+          outcome: null,
+          // 5 Oct 16:20 UTC is 6 Oct 00:20 in Malaysia.
+          submittedAt: "2026-10-05T16:20:00Z",
+        },
+      ]),
+    );
+
+    render(<MyReportsList />);
+
+    expect(await screen.findByText("Submitted 06/10/2026, 12:20 AM")).toBeInTheDocument();
+  });
+});
+
 describe("US6.2 AC3 — closure reason is visible", () => {
   it("shows the outcome text for a closed report", async () => {
     mockedGetMyReports.mockResolvedValue(
