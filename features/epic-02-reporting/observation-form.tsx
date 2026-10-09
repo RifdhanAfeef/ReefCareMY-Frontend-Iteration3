@@ -27,6 +27,7 @@ import {
   smartReportFields,
   suggestionStateLabel,
 } from "./smart-report-state";
+import { hasReportInProgress } from "./draft-progress";
 import { clearDraftPhotos, createPhotoId, loadDraftPhotos, saveDraftPhotos, type StoredDraftPhoto } from "./draft-storage";
 import { readExifCaptureTime } from "./photo-exif";
 import {
@@ -106,13 +107,28 @@ export function buildAutomaticPhotoDraftChanges(
   };
 }
 
+// "waiting": the account draft is not loaded yet; "asking": an unsent draft must be
+// continued or discarded before a new report starts; "decided": the form is in use.
+type DraftChoice = "waiting" | "asking" | "decided";
+
 function formatFileSize(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 }
 
 export function ObservationForm({ initialThreat, fromExplorer = false, plannedDate }: { initialThreat?: string; fromExplorer?: boolean; plannedDate?: string }) {
   const router = useRouter();
-  const { reportDraft, isAccountDraftRestored, updateReportDraft, saveReportDraft, resetReportDraft } = useMockAppState();
+  const { reportDraft, locationDraft, isAccountDraftRestored, updateReportDraft, saveReportDraft, resetReportDraft } = useMockAppState();
+  // Opening the form from Reef Explorer, a dive plan or the threat explorer starts a
+  // new report, so an unsent draft is not continued without asking (QA-R4-03).
+  // Plain links back to the form (e.g. "Edit observation") keep continuing the draft.
+  const startsNewReport = Boolean(initialThreat || fromExplorer || plannedDate);
+  const [draftChoice, setDraftChoice] = useState<DraftChoice>(startsNewReport ? "waiting" : "decided");
+  const [discardingDraft, setDiscardingDraft] = useState(false);
+  const [discardDraftError, setDiscardDraftError] = useState("");
+  const continueDraftRef = useRef<HTMLButtonElement>(null);
+  if (draftChoice === "waiting" && isAccountDraftRestored !== false) {
+    setDraftChoice(hasReportInProgress(reportDraft, locationDraft) ? "asking" : "decided");
+  }
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [uploadMessage, setUploadMessage] = useState("");
@@ -145,6 +161,10 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   useEffect(() => {
     if (submitAttempt > 0) errorSummaryRef.current?.focus();
   }, [submitAttempt]);
+
+  useEffect(() => {
+    if (draftChoice === "asking") continueDraftRef.current?.focus();
+  }, [draftChoice]);
 
   const runSmartStructuring = useCallback(async (description: string, requestId: number) => {
     setAssistantBusy(true);
@@ -221,7 +241,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     // Wait for the authenticated account's local draft before restoring photo
     // files. Otherwise photo metadata can populate an empty initial draft just
     // before the user's saved observation date/time is hydrated.
-    if (isAccountDraftRestored === false) return;
+    if (isAccountDraftRestored === false || draftChoice !== "decided") return;
     let cancelled = false;
     loadDraftPhotos()
       .then(async (stored) => {
@@ -249,7 +269,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       cancelled = true;
       previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [isAccountDraftRestored, updateReportDraft]);
+  }, [draftChoice, isAccountDraftRestored, updateReportDraft]);
 
   useEffect(() => {
     const description = reportDraft.description.trim();
@@ -268,14 +288,14 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   }, [reportDraft.description, runSmartStructuring]);
 
   useEffect(() => {
-    if (ignoreInitialHandoff.current || !initialThreat || reportDraft.threatCategoryCode || reportDraft.threatCategoryId) return;
+    if (draftChoice !== "decided" || ignoreInitialHandoff.current || !initialThreat || reportDraft.threatCategoryCode || reportDraft.threatCategoryId) return;
     const matchedThreat = categoryOptions.find((category) => category.code === initialThreat);
     if (!matchedThreat) return;
     updateReportDraft({
       threatCategoryCode: matchedThreat.code,
       threatCategoryId: matchedThreat.threatCategoryId,
     });
-  }, [categoryOptions, initialThreat, reportDraft.threatCategoryCode, reportDraft.threatCategoryId, updateReportDraft]);
+  }, [categoryOptions, draftChoice, initialThreat, reportDraft.threatCategoryCode, reportDraft.threatCategoryId, updateReportDraft]);
 
   useEffect(() => {
     let cancelled = false;
@@ -531,6 +551,30 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     }
   }
 
+  async function discardDraftAndStartNew() {
+    setDiscardingDraft(true);
+    setDiscardDraftError("");
+    try {
+      // Clear the stored photos first so a storage failure leaves the draft intact.
+      await clearDraftPhotos();
+      smartStructuringRequest.current += 1;
+      visualRecognitionRequest.current += 1;
+      lastStructuredDescription.current = "";
+      setAssistantMessage("");
+      setAssistantBusy(false);
+      setVisualRecognitionBusy(false);
+      setVisualRecognitionMessage("");
+      setFollowUpQuestions([]);
+      // The site, date or threat the observer just chose is kept for the new report.
+      resetReportDraft();
+      setDraftChoice("decided");
+    } catch {
+      setDiscardDraftError("Your saved report could not be cleared from this device. Please try again.");
+    } finally {
+      setDiscardingDraft(false);
+    }
+  }
+
   function continueToLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!validate()) {
@@ -748,6 +792,29 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <div className={styles.dialogActions}>
             <button className={styles.secondaryButton} type="button" disabled={resettingReport} onClick={() => setShowResetConfirmation(false)}>Keep current report</button>
             <button className={styles.dangerConfirmButton} type="button" disabled={resettingReport} onClick={confirmResetReport}>{resettingReport ? "Resetting…" : "Reset report"}</button>
+          </div>
+        </section>
+      </div>}
+      {draftChoice === "asking" && <div className={styles.dialogBackdrop} role="presentation">
+        <section
+          className={styles.confirmDialog}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="draft-choice-heading"
+          aria-describedby="draft-choice-description"
+          onKeyDown={(event) => { if (event.key === "Escape" && !discardingDraft) setDraftChoice("decided"); }}
+        >
+          <h2 id="draft-choice-heading">You have a report in progress</h2>
+          <p id="draft-choice-description">
+            {reportDraft.photos.length > 0
+              ? `Your unsubmitted report and ${reportDraft.photos.length} photo${reportDraft.photos.length === 1 ? "" : "s"} are saved on this device. `
+              : "Your unsubmitted report is saved on this device. "}
+            Continue it, or discard it to start a new report with what you just chose.
+          </p>
+          {discardDraftError && <p className={styles.errorText} role="alert">{discardDraftError}</p>}
+          <div className={styles.dialogActions}>
+            <button className={styles.dangerConfirmButton} type="button" disabled={discardingDraft} onClick={discardDraftAndStartNew}>{discardingDraft ? "Discarding…" : "Discard and start new"}</button>
+            <button ref={continueDraftRef} className={styles.primaryButton} type="button" disabled={discardingDraft} onClick={() => setDraftChoice("decided")}>Continue report</button>
           </div>
         </section>
       </div>}

@@ -36,6 +36,7 @@ vi.mock("@/features/shared/mock-app-state", () => ({
     reportDraft: runtime.reportDraft,
     isAccountDraftRestored: runtime.draftRestored,
     locationDraft: {
+      step: "session",
       sessions: [],
       selectedSessionId: "",
       locationSource: "dive_site",
@@ -96,6 +97,7 @@ describe("automatic Smart Report Structuring", () => {
     URL.createObjectURL = vi.fn(() => "blob:restored-photo");
     URL.revokeObjectURL = vi.fn();
     vi.mocked(loadDraftPhotos).mockResolvedValue([]);
+    vi.mocked(clearDraftPhotos).mockReset().mockResolvedValue(undefined);
     vi.mocked(structureReportDescription).mockResolvedValue({
       available: true,
       suggestions: [{ field: "estimated_depth", label: "Estimated depth", suggestedValue: "12m" }],
@@ -353,6 +355,7 @@ describe("automatic Smart Report Structuring", () => {
       iconReference: null,
     }]);
 
+    runtime.reportDraft = { ...runtime.reportDraft, description: "" };
     render(<ObservationForm initialThreat="physical_reef_damage" />);
     await act(async () => { await Promise.resolve(); });
 
@@ -404,6 +407,89 @@ describe("automatic Smart Report Structuring", () => {
     }));
     expect(photoRestoreChanges).not.toHaveProperty("observationDate");
     expect(photoRestoreChanges).not.toHaveProperty("observationTime");
+  });
+
+  it("asks before continuing an unsent draft when a report is started from a dive plan (QA-R4-03)", async () => {
+    runtime.reportDraft = { ...runtime.reportDraft, photos: [{ id: "old-photo", name: "old.jpg", type: "image/jpeg", size: 10 }] };
+    render(<ObservationForm fromExplorer plannedDate="2026-10-10" />);
+    await act(async () => { await Promise.resolve(); });
+
+    const dialog = screen.getByRole("dialog", { name: "You have a report in progress" });
+    expect(dialog).toHaveTextContent("Your unsubmitted report and 1 photo are saved on this device.");
+    expect(within(dialog).getByRole("button", { name: "Continue report" })).toHaveFocus();
+    // Old photos are not brought back into the form until the observer chooses.
+    expect(loadDraftPhotos).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Continue report" }));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByRole("dialog", { name: "You have a report in progress" })).not.toBeInTheDocument();
+    expect(loadDraftPhotos).toHaveBeenCalledTimes(1);
+    expect(resetReportDraft).not.toHaveBeenCalled();
+    expect(clearDraftPhotos).not.toHaveBeenCalled();
+  });
+
+  it("discards the unsent draft and its photos when the observer starts a new report", async () => {
+    render(<ObservationForm fromExplorer />);
+    await act(async () => { await Promise.resolve(); });
+
+    const dialog = screen.getByRole("dialog", { name: "You have a report in progress" });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Discard and start new" }));
+      await Promise.resolve();
+    });
+
+    expect(clearDraftPhotos).toHaveBeenCalledTimes(1);
+    expect(resetReportDraft).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "You have a report in progress" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the draft and says so when it cannot be cleared", async () => {
+    vi.mocked(clearDraftPhotos).mockRejectedValueOnce(new Error("blocked"));
+    render(<ObservationForm fromExplorer />);
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Discard and start new" }));
+      await Promise.resolve();
+    });
+
+    expect(resetReportDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Your saved report could not be cleared from this device.");
+  });
+
+  it("does not apply a threat from the threat explorer to an unsent draft before the observer chooses", async () => {
+    vi.mocked(getThreatCategories).mockResolvedValue([{
+      threatCategoryId: 44,
+      code: "physical_reef_damage",
+      label: "Physical reef damage",
+      shortExplanation: "Recently damaged coral.",
+      usefulEvidence: "A close and wider photograph.",
+      safetyReminder: "Observe safely.",
+      iconReference: null,
+    }]);
+    render(<ObservationForm initialThreat="physical_reef_damage" />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByRole("dialog", { name: "You have a report in progress" })).toBeInTheDocument();
+    expect(updateReportDraft).not.toHaveBeenCalledWith(expect.objectContaining({ threatCategoryCode: "physical_reef_damage" }));
+  });
+
+  it("continues the draft without asking when the form is reopened from the report itself", async () => {
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByRole("dialog", { name: "You have a report in progress" })).not.toBeInTheDocument();
+    expect(loadDraftPhotos).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not ask when there is no unsent draft", async () => {
+    runtime.reportDraft = { ...runtime.reportDraft, description: "" };
+    render(<ObservationForm fromExplorer plannedDate="2026-10-10" />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByRole("dialog", { name: "You have a report in progress" })).not.toBeInTheDocument();
+    expect(loadDraftPhotos).toHaveBeenCalledTimes(1);
   });
 
   it("confirms before clearing the current report and locally stored photos", async () => {
