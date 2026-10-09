@@ -8,9 +8,12 @@ export function HotspotLoading({ message = "Loading geographic reporting activit
 }
 
 export function HotspotError({ error, onRetry, title = "Analysis unavailable" }: { error: unknown; onRetry: () => void; title?: string }) {
+  // A 503 here is the analysis reporting itself unavailable. Its own message says the
+  // queue and case review still work, which the generic 5xx text would hide (QA-UI-04).
+  const unavailableMessage = error instanceof ApiError && error.status === 503 ? error.serverMessage : null;
   return <div className={styles.error} role="alert">
     <strong>{title}</strong>
-    <p>{userFacingError(error, "Reporting activity could not be loaded. Please try again.")}</p>
+    <p>{unavailableMessage ?? userFacingError(error, "Reporting activity could not be loaded. Please try again.")}</p>
     <div className={styles.actions}>
       <button className={styles.secondaryButton} type="button" onClick={onRetry}>Try again</button>
       {error instanceof ApiError && error.status === 401 && <Link className={styles.secondaryButton} href="/login">Log in</Link>}

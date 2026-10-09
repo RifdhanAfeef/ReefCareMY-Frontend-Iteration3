@@ -124,6 +124,22 @@ describe("apiRequest — error message extraction", () => {
     );
   });
 
+  it("keeps the API's own message from a `detail` or a state response, and none for a fallback", async () => {
+    const message = "Geographic analysis is unavailable. The queue and normal case review remain accessible.";
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ state: "unavailable", message }, 503));
+    await expect(apiRequest({ path: "/api/v1/coordinator/hotspots" })).rejects.toMatchObject({
+      status: 503,
+      message: "ReefCare MY could not complete the request. Please try again.",
+      serverMessage: message,
+    });
+
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: message, code: "analysis_unavailable" }, 503));
+    await expect(apiRequest({ path: "/api/v1/coordinator/hotspots" })).rejects.toMatchObject({ serverMessage: message });
+
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("not json", { status: 503 }));
+    await expect(apiRequest({ path: "/api/v1/coordinator/hotspots" })).rejects.toMatchObject({ serverMessage: null });
+  });
+
   it("clears an expired stored session after an authenticated 401 response", async () => {
     writeStoredAuth({
       user: { id: 1, displayName: "Sam", role: "observer" },

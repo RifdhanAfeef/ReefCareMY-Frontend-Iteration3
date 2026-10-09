@@ -64,6 +64,20 @@ describe("Geographic analysis", () => {
     expect(await screen.findByText("Check this analysis link")).toBeInTheDocument();
     expect(api.getHotspotAnalysis).not.toHaveBeenCalled();
   });
+  it("shows the analysis's own unavailable message instead of the generic outage text (QA-UI-04)", async () => {
+    const message = "Geographic analysis is unavailable. The queue and normal case review remain accessible.";
+    vi.mocked(api.getHotspotAnalysis).mockRejectedValueOnce(new ApiError("ReefCare MY could not complete the request. Please try again.", 503, message));
+    render(<HotspotAnalysisPage />);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(message);
+    expect(alert).not.toHaveTextContent("ReefCare MY is temporarily unavailable");
+    expect(within(alert).getByRole("link", { name: "Open report intake" })).toBeInTheDocument();
+  });
+  it("keeps the generic text for other server errors", async () => {
+    vi.mocked(api.getHotspotAnalysis).mockRejectedValueOnce(new ApiError("Internal Server Error", 500, "Internal Server Error"));
+    render(<HotspotAnalysisPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("ReefCare MY is temporarily unavailable. Please try again shortly.");
+  });
   it("keeps unavailable options recoverable", async () => {
     vi.mocked(api.getHotspotOptions).mockRejectedValue(new ApiError("Expired", 401));
     render(<HotspotAnalysisPage />);
