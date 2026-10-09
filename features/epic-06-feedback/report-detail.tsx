@@ -205,11 +205,19 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
 
       {responseSuccess && <p className={styles.responseSuccess} role="status">{responseSuccess}</p>}
 
+      {/* E6 uses the backend's latest observer-safe projection. Publication is
+          an E8 public-activity rule, not a condition for viewing your own report. */}
       {report.contribution && (
         <section className={styles.descriptionBlock} aria-labelledby="report-contribution-heading">
           <h3 id="report-contribution-heading">Your contribution</h3>
           <p className={styles.description}><strong>{report.contribution.label}</strong></p>
           {report.contribution.detail && <p className={styles.description}>{report.contribution.detail}</p>}
+          {["planned", "action_planned"].includes(report.contribution.state) && (
+            <p className={styles.description}>This work is planned. It has not been recorded as completed.</p>
+          )}
+          {report.contribution.contributionType === "sourced_outcome" && (
+            <p className={styles.description}>This outcome was reported by an external source. It is not a record of work completed by ReefCare MY.</p>
+          )}
           {report.contribution.recordedAt && (
             <p className={styles.requestedAt}>
               Recorded <time dateTime={report.contribution.recordedAt}>{formatDateTime(new Date(report.contribution.recordedAt))}</time>

@@ -226,6 +226,61 @@ describe("US6.2 AC3 — closure reason is visible", () => {
 
 
 describe("Observer contribution feedback", () => {
+  it.each(["planned", "action_planned"])("keeps an unpublished %s action clearly planned", async (state) => {
+    // E6 does not require or receive an E8 publication flag.
+    mockedGetReportDetail.mockResolvedValue(baseReport({
+      contribution: {
+        contributionType: "action", state,
+        label: "Your report informed a planned action",
+        detail: "A follow-up action has been planned.",
+        recordedAt: "2026-10-09T08:00:00Z",
+        nextFollowUpRequired: false, nextFollowUpDate: null,
+      },
+    }));
+    render(<ReportDetail reportReference="RC-0241" />);
+    expect(await screen.findByText("Your report informed a planned action")).toBeInTheDocument();
+    expect(screen.getByText("This work is planned. It has not been recorded as completed.")).toBeInTheDocument();
+    expect(reportsApi.getReportDetail).toHaveBeenCalledWith("RC-0241");
+  });
+
+  it("distinguishes a sourced external outcome from work completed by ReefCare", async () => {
+    mockedGetReportDetail.mockResolvedValue(baseReport({
+      contribution: {
+        contributionType: "sourced_outcome", state: "outcome_recorded",
+        label: "An external outcome was recorded",
+        detail: "A follow-up outcome was reported by an external organisation.",
+        recordedAt: "2026-10-09T08:00:00Z",
+        nextFollowUpRequired: false, nextFollowUpDate: null,
+      },
+    }));
+    render(<ReportDetail reportReference="RC-0241" />);
+    expect(await screen.findByText("An external outcome was recorded")).toBeInTheDocument();
+    expect(screen.getByText(/This outcome was reported by an external source/)).toHaveTextContent("It is not a record of work completed by ReefCare MY.");
+  });
+
+  it("renders only the current safe projection and ignores unexpected private fields", async () => {
+    const contribution = {
+      contributionType: "action", state: "action_taken",
+      label: "Your report informed a recorded action",
+      detail: "The current recorded outcome is available.",
+      recordedAt: "2026-10-09T08:00:00Z",
+      nextFollowUpRequired: false, nextFollowUpDate: null,
+      isPublishable: false,
+      notes: "PRIVATE INTERNAL NOTE", responsibleTeam: "PRIVATE PERSON",
+      sourceReference: "PRIVATE SOURCE REFERENCE", reportReference: "OTHER-PRIVATE-REPORT",
+      supersededRecord: { detail: "OLD SUPERSEDED OUTCOME" },
+      demonstrationRecord: { detail: "DEMONSTRATION OUTCOME" },
+    };
+    mockedGetReportDetail.mockResolvedValue(baseReport({ contribution }));
+    render(<ReportDetail reportReference="RC-0241" />);
+    expect(await screen.findByText("The current recorded outcome is available.")).toBeInTheDocument();
+    for (const value of ["PRIVATE INTERNAL NOTE", "PRIVATE PERSON", "PRIVATE SOURCE REFERENCE", "OTHER-PRIVATE-REPORT", "OLD SUPERSEDED OUTCOME", "DEMONSTRATION OUTCOME"]) {
+      expect(screen.queryByText(value)).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText(/This work is planned/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/This outcome was reported by an external source/)).not.toBeInTheDocument();
+  });
+
   it("shows the backend's safe referral explanation without claiming completed action", async () => {
     mockedGetReportDetail.mockResolvedValue(baseReport({
       contribution: {
