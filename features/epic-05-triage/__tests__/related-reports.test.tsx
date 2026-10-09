@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import { RelatedReportsPanel } from "../related-reports";
 import * as api from "@/lib/api/iteration3Api";
+import type { RelatedComparison } from "@/lib/api/iteration3-types";
 
 vi.mock("@/lib/api/iteration3Api");
 vi.mock("@/lib/api/coordinatorApi");
@@ -30,6 +31,88 @@ beforeEach(() => {
 });
 
 describe("related-report review", () => {
+  it("shows confirmed links beside the candidate and in the opened comparison", async () => {
+    const analysis = await api.getRelatedReports("RC-1");
+    const comparison = await api.compareReports("RC-1", "RC-2");
+    vi.mocked(api.getRelatedReports).mockResolvedValue({ ...analysis, candidates: analysis.candidates.map((candidate) =>
+      ({ ...candidate, decisionState: "linked" })) });
+    vi.mocked(api.compareReports).mockResolvedValue({ ...comparison,
+      current: { ...comparison.current, incidentReference: "INC-0010" },
+      candidate: { ...comparison.candidate, incidentReference: "INC-0010" },
+      latestDecision: { decision: "same_incident" },
+    });
+    render(<RelatedReportsPanel reportReference="RC-1" />);
+    expect(await screen.findByText("✓ Confirmed same incident")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Compare reports" }));
+    const region = await screen.findByRole("region", { name: "Comparison for RC-1 and RC-2" });
+    expect(within(region).getByText("✓ Confirmed same incident")).toBeInTheDocument();
+    expect(within(region).getByText(/linked under INC-0010/)).toBeInTheDocument();
+    expect(within(region).queryByRole("button", { name: "Confirm same incident" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare reports" })).toHaveAttribute("aria-expanded", "true");
+    expect(region).toHaveFocus();
+  });
+
+  it("replaces the previous comparison with a loading state before opening the selected report", async () => {
+    const analysis = await api.getRelatedReports("RC-1");
+    const comparison = await api.compareReports("RC-1", "RC-2");
+    vi.mocked(api.getRelatedReports).mockResolvedValue({ ...analysis, candidates: [analysis.candidates[0],
+      { ...analysis.candidates[0], candidateReportReference: "RC-3" }] });
+    let resolveComparison!: (value: RelatedComparison) => void;
+    vi.mocked(api.compareReports).mockResolvedValueOnce(comparison).mockImplementationOnce(() =>
+      new Promise((resolve) => { resolveComparison = resolve; }));
+    render(<RelatedReportsPanel reportReference="RC-1" />);
+    await screen.findByText("RC-3");
+    fireEvent.click(screen.getAllByRole("button", { name: "Compare reports" })[0]);
+    expect(await screen.findByRole("region", { name: "Comparison for RC-1 and RC-2" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Compare reports" })[1]);
+    expect(screen.queryByRole("region", { name: "Comparison for RC-1 and RC-2" })).not.toBeInTheDocument();
+    expect(screen.getByText("Loading comparison for RC-1 and RC-3…")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Opening comparison…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Confirm same incident" })).not.toBeInTheDocument();
+    await act(async () => resolveComparison({ ...comparison, candidate: { ...comparison.candidate, reportReference: "RC-3" } }));
+    const region = await screen.findByRole("region", { name: "Comparison for RC-1 and RC-3" });
+    expect(region).toHaveFocus();
+    expect(screen.queryByText("Loading comparison for RC-1 and RC-3…")).not.toBeInTheDocument();
+    expect(screen.getByText("Comparison open below")).toBeInTheDocument();
+  });
+
+  it("keeps a saved decision visible without allowing another confirmation", async () => {
+    const analysis = await api.getRelatedReports("RC-1");
+    vi.mocked(api.getRelatedReports).mockResolvedValueOnce(analysis).mockResolvedValue({ ...analysis,
+      candidates: analysis.candidates.map((candidate) => ({ ...candidate, decisionState: "linked" })) });
+    render(<RelatedReportsPanel reportReference="RC-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Compare reports" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm same incident" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
+    await screen.findByText(/RC-2 was confirmed as the same incident/);
+    await waitFor(() => expect(screen.getAllByText("✓ Confirmed same incident")).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: "Confirm same incident" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Comparison for RC-1 and RC-2" })).toBeInTheDocument();
+  });
+
+  it("shows new evidence as needing review rather than a current confirmed link", async () => {
+    const analysis = await api.getRelatedReports("RC-1");
+    const comparison = await api.compareReports("RC-1", "RC-2");
+    vi.mocked(api.getRelatedReports).mockResolvedValue({ ...analysis, candidates: analysis.candidates.map((candidate) =>
+      ({ ...candidate, decisionState: "not_related", reopenedByNewEvidence: true })) });
+    vi.mocked(api.compareReports).mockResolvedValue({ ...comparison, latestDecision: { decision: "not_related" } });
+    render(<RelatedReportsPanel reportReference="RC-1" />);
+    expect(await screen.findByText("Review again — new evidence")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Compare reports" }));
+    expect(await screen.findByRole("button", { name: "Confirm same incident" })).toBeEnabled();
+    expect(screen.queryByText("Confirmed not related")).not.toBeInTheDocument();
+    expect(screen.getByText(/New evidence needs another review/)).toBeInTheDocument();
+  });
+
+  it("keeps the old comparison closed if loading the next comparison fails", async () => {
+    vi.mocked(api.compareReports).mockRejectedValueOnce(new ApiError("Missing report", 404));
+    render(<RelatedReportsPanel reportReference="RC-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Compare reports" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The comparison could not be opened.");
+    expect(screen.queryByRole("region", { name: /Comparison for/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare reports" })).toBeEnabled();
+  });
+
   it("requires a human confirmation and preserves the separate case reviews", async () => {
     render(<RelatedReportsPanel reportReference="RC-1" />);
     expect(await screen.findByText("RC-2")).toBeInTheDocument();
@@ -40,7 +123,7 @@ describe("related-report review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm same incident" }));
     expect(screen.getByText(/Each report keeps its own history and evidence/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
-    expect(await screen.findByText(/linked under INC-0010/)).toBeInTheDocument();
+    expect(await screen.findByText(/The reports were linked under INC-0010/)).toBeInTheDocument();
     expect(api.decideRelationship).toHaveBeenCalledWith("RC-1", "RC-2", { decision: "same_incident" });
   });
 

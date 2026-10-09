@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CoordinatorCaseRoute } from "../case-workflow";
 import * as coordinatorApi from "@/lib/api/coordinatorApi";
 import * as iteration3Api from "@/lib/api/iteration3Api";
+import * as hotspotsApi from "@/lib/api/hotspotsApi";
 import { ApiError } from "@/lib/api/client";
 import type { CoordinatorCase } from "@/lib/api/types";
 
 vi.mock("@/lib/api/coordinatorApi");
 vi.mock("@/lib/api/iteration3Api");
+vi.mock("@/lib/api/hotspotsApi");
 // Area context has independent requests and its own failure/permission tests.
 vi.mock("../hotspots/hotspot-context", () => ({ HotspotCaseContext: () => null }));
 
@@ -53,6 +55,8 @@ beforeEach(() => {
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:reef-evidence") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
   mockedGetCoordinatorCase.mockResolvedValue(report);
+  vi.mocked(coordinatorApi.getCoordinatorCaseHistory).mockResolvedValue({ items: [], page: 1, pageSize: 100, total: 0, appliedFilters: {} });
+  vi.mocked(hotspotsApi.getHotspotIntake).mockReset();
   mockedGetCoordinatorEvidence.mockResolvedValue(new Blob(["image"], { type: "image/jpeg" }));
   mockedGetConservationActionTypes.mockResolvedValue([]);
   mockedGetConservationActions.mockResolvedValue({ reportReference: report.reportReference, items: [], total: 0 });
@@ -104,6 +108,64 @@ beforeEach(() => {
 });
 
 describe("Coordinator case workflow", () => {
+  it("refreshes permitted ownership after a stale claim without opening protected details", async () => {
+    mockedClaimReport.mockRejectedValueOnce(new ApiError("Already claimed", 409));
+    vi.mocked(hotspotsApi.getHotspotIntake).mockResolvedValue({
+      reportReference: report.reportReference, site: null, threat: report.threat, threatCode: "ghost_gear",
+      observedAt: report.observedAt, submittedAt: report.submittedAt, statusCode: "claimed", statusLabel: "Claimed",
+      isClosed: false, ownership: "other", ownerDisplayName: "Another coordinator", nextAction: "assigned_summary",
+      claimApiPath: null, reviewApiPath: null,
+    });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} startWithClaim />);
+    fireEvent.click(screen.getByRole("button", { name: "Claim and open report" }));
+    expect(await screen.findByText("Another coordinator")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Claim and open report" })).toBeDisabled();
+    expect(screen.queryByText("Available to claim")).not.toBeInTheDocument();
+    expect(mockedGetCoordinatorCase).not.toHaveBeenCalled();
+    expect(mockedGetCoordinatorEvidence).not.toHaveBeenCalled();
+  });
+
+  it("keeps claiming blocked until ownership can be refreshed successfully", async () => {
+    mockedClaimReport.mockRejectedValueOnce(new ApiError("Already claimed", 409));
+    vi.mocked(hotspotsApi.getHotspotIntake).mockRejectedValueOnce(new Error("Offline"))
+      .mockResolvedValueOnce({ reportReference: report.reportReference, site: null, threat: report.threat, threatCode: "ghost_gear",
+        observedAt: report.observedAt, submittedAt: report.submittedAt, statusCode: "received", statusLabel: "Received",
+        isClosed: false, ownership: "unclaimed", ownerDisplayName: null, nextAction: "claim", claimApiPath: null, reviewApiPath: null });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} startWithClaim />);
+    fireEvent.click(screen.getByRole("button", { name: "Claim and open report" }));
+    expect(await screen.findByText(/Current ownership could not be loaded/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Claim and open report" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh ownership" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Claim and open report" })).toBeEnabled());
+    expect(mockedClaimReport).toHaveBeenCalledTimes(1);
+    expect(mockedGetCoordinatorCase).not.toHaveBeenCalled();
+  });
+
+  it("allows an already-owned case to open only after explicit confirmation", async () => {
+    mockedClaimReport.mockRejectedValueOnce(new ApiError("Already claimed", 409));
+    vi.mocked(hotspotsApi.getHotspotIntake).mockResolvedValue({ reportReference: report.reportReference, site: null,
+      threat: report.threat, threatCode: "ghost_gear", observedAt: report.observedAt, submittedAt: report.submittedAt,
+      statusCode: "claimed", statusLabel: "Claimed", isClosed: false, ownership: "mine", ownerDisplayName: report.owner.displayName,
+      nextAction: "review", claimApiPath: null, reviewApiPath: null });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} startWithClaim />);
+    const open = await (async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Claim and open report" }));
+      return screen.findByRole("button", { name: "Open your claimed case" });
+    })();
+    expect(mockedGetCoordinatorCase).not.toHaveBeenCalled();
+    fireEvent.click(open);
+    expect(await screen.findByRole("heading", { name: "Review reef observation" })).toBeInTheDocument();
+    expect(mockedClaimReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not enable follow-up creation from a browser-cached decision", async () => {
+    window.sessionStorage.setItem(`reefcare.coordinator-decision.${report.reportReference}`, JSON.stringify({ responseType: "monitoring_only" }));
+    mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted", latestDecision: null });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    expect(await screen.findByText(/Record a response decision before adding a follow-up/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save follow-up" })).not.toBeInTheDocument();
+  });
+
   it("keeps the optional case context compact until a coordinator expands it", async () => {
     render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
     expect(await screen.findByRole("heading", { name: "Submitted evidence" })).toBeInTheDocument();
@@ -512,6 +574,74 @@ describe("Coordinator case workflow", () => {
     expect(screen.getByRole("button", { name: "Record a closure outcome" })).toBeEnabled();
   });
 
+  it("allows later closure after keeping an accepted case open, without recording the response again", async () => {
+    const user = userEvent.setup();
+    mockedGetCoordinatorCase.mockResolvedValue({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted",
+      latestDecision: { responseType: "monitoring_only", notes: "Retained for monitoring.", referredTo: null } });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Keep case open" }));
+    expect(await screen.findByRole("button", { name: "Continue to response" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close case" }));
+    expect(await screen.findByRole("heading", { name: "Choose a closure reason" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Monitored, no action required/)).toBeEnabled();
+    expect(screen.getByLabelText(/Not substantiated/)).toBeDisabled();
+    await user.click(screen.getByLabelText(/Monitored, no action required/));
+    await user.type(screen.getByLabelText("Public closure note *"), "Reviewed; no further action required.");
+    await user.click(screen.getByRole("button", { name: "Close case" }));
+    expect(await screen.findByRole("heading", { name: "Case outcome recorded" })).toBeInTheDocument();
+    expect(mockedCloseCase).toHaveBeenCalledWith(report.reportReference, {
+      closureReasonCode: "monitored_no_action", publicClosureNote: "Reviewed; no further action required.",
+    });
+    expect(mockedRecordCaseDecision).not.toHaveBeenCalled();
+  });
+
+  it("keeps the later closure entry point after a newly saved response and supports returning to the case", async () => {
+    const user = userEvent.setup();
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Start evidence assessment" }));
+    await user.click(screen.getByLabelText("Yes — the evidence can be assessed"));
+    await user.click(screen.getByLabelText("Yes — continue to a response decision"));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByLabelText(/Intervention Required/));
+    await user.click(screen.getByRole("button", { name: "Record response" }));
+    await screen.findByRole("heading", { name: "Response decision recorded" });
+    mockedGetCoordinatorCase.mockResolvedValue({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted" });
+    await user.click(screen.getByRole("button", { name: "Keep case open" }));
+    await user.click(await screen.findByRole("button", { name: "Close case" }));
+    expect(screen.getByLabelText(/No responsible partner available/)).toBeEnabled();
+    expect(screen.getByLabelText(/Monitored, no action required/)).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Case control" })).toBeInTheDocument();
+    expect(mockedRecordCaseDecision).toHaveBeenCalledTimes(1);
+    expect(mockedCloseCase).not.toHaveBeenCalled();
+  });
+
+  it("uses the refreshed status when returning to an open case", async () => {
+    const user = userEvent.setup();
+    mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted",
+      latestDecision: { responseType: "intervention_required", notes: "Response recommended.", referredTo: null } })
+      .mockResolvedValue({ ...report, statusCode: "response_recommended", statusLabel: "Intervention Recommended",
+        latestDecision: { responseType: "intervention_required", notes: "Response recommended.", referredTo: null } });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Keep case open" }));
+    expect(await screen.findByText("Intervention Recommended")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start evidence assessment" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close case" })).toBeEnabled();
+  });
+
+  it("does not offer closure before a response or after a case is already closed", async () => {
+    mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted" });
+    const view = render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await screen.findByRole("button", { name: "Continue to response" });
+    expect(screen.queryByRole("button", { name: "Close case" })).not.toBeInTheDocument();
+    view.unmount();
+    mockedGetCoordinatorCase.mockResolvedValue({ ...report, statusCode: "closed_logged", statusLabel: "Closed — Logged for Reference",
+      latestDecision: { responseType: "intervention_required", notes: "Logged.", referredTo: null } });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await screen.findByRole("heading", { name: "Case control" });
+    expect(screen.queryByRole("button", { name: "Close case" })).not.toBeInTheDocument();
+  });
+
   it("opens the closure workflow from a response-complete case", async () => {
     const user = userEvent.setup();
     mockedGetCoordinatorCase.mockResolvedValueOnce({
@@ -558,6 +688,9 @@ describe("Coordinator case workflow", () => {
         referredTo: "Tioman Marine Park Department",
       }),
     );
+    expect(screen.getByRole("heading", { name: "Choose a closure reason" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Share for possible response" })).toBeInTheDocument();
   });
 
   it("shows backend load errors and retries the owned-case request", async () => {

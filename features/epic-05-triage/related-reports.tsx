@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   claimAndCompare, compareReports, decideRelationship, getRejectionReasons, getRelatedReports,
 } from "@/lib/api/iteration3Api";
@@ -68,11 +68,18 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
   const [analysisError, setAnalysisError] = useState("");
   const [success, setSuccess] = useState("");
   const [pending, setPending] = useState(false);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const comparisonRef = useRef<HTMLDivElement>(null);
+  const comparisonId = useId();
+  const requestBusy = useRef(false);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const selectedCandidate = result?.candidates.find((candidate) => candidate.candidateReportReference === candidateReference);
-  const canDecide = selectedCandidate?.decisionState === "undecided" || selectedCandidate?.reopenedByNewEvidence;
+  const canDecide = selectedCandidate?.reopenedByNewEvidence ||
+    (selectedCandidate?.decisionState === "undecided" && !comparison?.latestDecision);
   const linkingBlocked = differentIncidentGroups(comparison);
+  const relationshipDecision = selectedCandidate?.reopenedByNewEvidence ? null : comparison?.latestDecision?.decision ??
+    (selectedCandidate?.decisionState === "linked" ? "same_incident" : selectedCandidate?.decisionState === "not_related" ? "not_related" : null);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -88,8 +95,18 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
     return () => controller.abort();
   }, [reportReference, refreshKey]);
 
+  useEffect(() => {
+    if (!comparison) return;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    comparisonRef.current?.focus({ preventScroll: true });
+    comparisonRef.current?.scrollIntoView?.({ behavior: reduceMotion ? "instant" : "smooth", block: "start" });
+  }, [comparison]);
+
   async function openComparison(reference: string, unclaimed: boolean) {
-    setPending(true); setError(""); setSuccess("");
+    if (requestBusy.current) return;
+    requestBusy.current = true;
+    setPending(true); setComparisonLoading(true); setError(""); setSuccess("");
+    setCandidateReference(reference); setComparison(null); setDecision(null); setReasonCode(""); setNote("");
     try {
       const data = unclaimed
         ? await claimAndCompare(reportReference, reference)
@@ -103,7 +120,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
         setError("This report is no longer available to claim. The candidate list has been refreshed.");
         refresh();
       } else setError(userFacingError(requestError, "The comparison could not be opened."));
-    } finally { setPending(false); }
+    } finally { requestBusy.current = false; setPending(false); setComparisonLoading(false); }
   }
 
   async function chooseDecision(value: "same_incident" | "not_related") {
@@ -116,12 +133,13 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
   }
 
   async function saveDecision() {
-    if (!comparison || !decision) return;
+    if (!comparison || !decision || requestBusy.current) return;
     if (decision === "same_incident" && linkingBlocked) { setError(INCIDENT_CONFLICT_MESSAGE); return; }
     const reason = reasons.find((option) => option.code === reasonCode);
     if (decision === "not_related" && (!reason || (reason.requiresNote && !note.trim()))) {
       setError("Select a reason and add a note if required."); return;
     }
+    requestBusy.current = true;
     setPending(true); setError("");
     try {
       const saved = await decideRelationship(reportReference, candidateReference, {
@@ -130,9 +148,19 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
         ...(note.trim() ? { note: note.trim() } : {}),
       });
       setSuccess(decision === "same_incident"
-        ? `The reports were linked under ${saved.incidentReference}.`
-        : "The reports were recorded as not related.");
-      setComparison(null); setDecision(null); refresh();
+        ? `${candidateReference} was confirmed as the same incident. The reports were linked under ${saved.incidentReference}.`
+        : `${candidateReference} was confirmed as not related to this report.`);
+      setResult((current) => current ? { ...current, candidates: current.candidates.map((candidate) =>
+        candidate.candidateReportReference === candidateReference ? { ...candidate,
+          decisionState: decision === "same_incident" ? "linked" : "not_related", reopenedByNewEvidence: false } : candidate) } : current);
+      setComparison({ ...comparison,
+        ...(decision === "same_incident" ? {
+          current: { ...comparison.current, incidentReference: saved.incidentReference },
+          candidate: { ...comparison.candidate, incidentReference: saved.incidentReference },
+        } : {}),
+        latestDecision: { decision, decidedAt: saved.decidedAt },
+      });
+      setDecision(null); refresh();
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 409) {
         setDecision(null);
@@ -149,7 +177,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
           // Keep the comparison closed if its current details cannot be read.
         }
       } else setError(userFacingError(requestError, "The relationship decision could not be saved."));
-    } finally { setPending(false); }
+    } finally { requestBusy.current = false; setPending(false); }
   }
 
   return <section className={styles.panel} aria-labelledby="related-reports-heading">
@@ -170,28 +198,45 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
       unavailable: "Related-report analysis is unavailable. You can continue reviewing this case.",
     })[result.analysisState]}</p>}
     {result?.analysisState === "matches_available" && result.candidates.length > 0 && <ul className={styles.candidates}>
-      {result.candidates.map((candidate) => <li key={candidate.candidateReportReference}>
+      {result.candidates.map((candidate) => <li key={candidate.candidateReportReference}
+        className={[
+          candidate.decisionState === "linked" && !candidate.reopenedByNewEvidence ? styles.confirmedCandidate : "",
+          candidate.candidateReportReference === candidateReference && (comparison || comparisonLoading) ? styles.selectedCandidate : "",
+        ].filter(Boolean).join(" ")}>
         <div className={styles.candidateInfo}><div className={styles.candidateHeading}><strong>{candidate.candidateReportReference}</strong><span className={styles.badge}>{candidate.relatednessLevel} similarity</span><span className={styles.ownerBadge}>{candidate.ownershipState === "unclaimed" ? "Unclaimed" : "Your case"}</span></div>
+          <p className={`${styles.relationshipBadge} ${candidate.reopenedByNewEvidence ? styles.reviewBadge : candidate.decisionState === "linked" ? styles.confirmedBadge : candidate.decisionState === "not_related" ? styles.notRelatedBadge : styles.reviewBadge}`}>
+            {candidate.reopenedByNewEvidence ? "Review again — new evidence" : candidate.decisionState === "linked" ? "✓ Confirmed same incident" : candidate.decisionState === "not_related" ? "Confirmed not related" : "Suggested match — not confirmed"}
+          </p>
           <ul className={styles.signals} aria-label="Similarity signals">{candidate.signals.slice(0, 3).map((signal) => <li key={signal.code}>{signal.label}</li>)}{candidate.signals.length > 3 && <li>+{candidate.signals.length - 3} more</li>}</ul>
           {candidate.signals.some((signal) => signal.detail) && <details className={styles.signalDetails}><summary>Why was this suggested?</summary><ul>{candidate.signals.map((signal) => <li key={signal.code}><strong>{signal.label}</strong>{signal.detail && ` — ${signal.detail}`}</li>)}</ul></details>}
           {candidate.reopenedByNewEvidence && <small>New evidence prompted another review.</small>}
-          {candidate.decisionState !== "undecided" && <small>Previous decision: {candidate.decisionState === "linked" ? "Same incident" : "Not related"}</small>}
+          {candidate.reopenedByNewEvidence && candidate.decisionState !== "undecided" && <small>Previous decision: {candidate.decisionState === "linked" ? "Same incident" : "Not related"}</small>}
+          {candidate.candidateReportReference === candidateReference && comparison && <small className={styles.openIndicator}>Comparison open below</small>}
         </div>
-        <button type="button" className={styles.secondary} disabled={pending}
+        <button type="button" className={styles.secondary} disabled={pending} aria-controls={comparisonId}
+          aria-expanded={candidate.candidateReportReference === candidateReference && Boolean(comparison || comparisonLoading)}
           onClick={() => openComparison(candidate.candidateReportReference, candidate.ownershipState === "unclaimed")}>
-          {candidate.ownershipState === "unclaimed" ? "Claim and compare" : "Compare reports"}
+          {comparisonLoading && candidate.candidateReportReference === candidateReference ? <><span className={styles.spinner} aria-hidden="true" />Opening comparison…</> : candidate.ownershipState === "unclaimed" ? "Claim and compare" : "Compare reports"}
         </button>
       </li>)}
     </ul>}
-    {comparison && <div className={styles.comparison}>
-      <div className={styles.compareHeading}><h3>Compare reports</h3><button type="button" className={styles.secondary} onClick={() => { setComparison(null); setDecision(null); }}>Close comparison</button></div>
-      <p className={styles.compareIntro}>Check the key facts and photos, then record your decision.</p>
+    {comparisonLoading && <div id={comparisonId} className={styles.comparisonLoading} role="status" aria-live="polite" aria-busy="true">
+      <span className={styles.spinner} aria-hidden="true" />Loading comparison for {reportReference} and {candidateReference}…
+    </div>}
+    {comparison && <div id={comparisonId} ref={comparisonRef} tabIndex={-1} role="region"
+      aria-label={`Comparison for ${reportReference} and ${candidateReference}`} className={styles.comparison}>
+      <div className={styles.compareHeading}><h3>Compare reports</h3><button type="button" disabled={pending} className={styles.secondary} onClick={() => { setComparison(null); setDecision(null); }}>Close comparison</button></div>
+      <p className={styles.comparePair}>{reportReference} and {candidateReference}</p>
+      {relationshipDecision ? <div className={`${styles.relationshipSummary} ${relationshipDecision === "same_incident" ? styles.confirmedBadge : styles.notRelatedBadge}`}>
+        <strong>{relationshipDecision === "same_incident" ? "✓ Confirmed same incident" : "Confirmed not related"}</strong>
+        <p>{relationshipDecision === "same_incident" ? `These reports are linked${comparison.current.incidentReference ? ` under ${comparison.current.incidentReference}` : ""}. Each report keeps its own history and evidence.` : "A Coordinator has recorded that these reports are not related."}</p>
+      </div> : <p className={styles.compareIntro}>{selectedCandidate?.reopenedByNewEvidence ? "New evidence needs another review. Check the facts and photos before recording a new decision." : "This is a suggested match. Check the key facts and photos, then record your decision."}</p>}
       <div className={styles.compareGrid}><ReportSide report={comparison.current} /><ReportSide report={comparison.candidate} /></div>
       {comparison.signals.length > 0 && <div className={styles.matchSummary}><strong>Why they may be related</strong><ul className={styles.signals}>{comparison.signals.map((signal) => <li key={signal.code}>{signal.label}</li>)}</ul></div>}
       {canDecide ? <div className={styles.actions}>
-        <button type="button" className={styles.secondary} onClick={() => chooseDecision("not_related")}>Not related</button>
+        <button type="button" className={styles.secondary} disabled={pending} onClick={() => chooseDecision("not_related")}>Not related</button>
         <button type="button" className={styles.primary} disabled={pending || linkingBlocked} onClick={() => chooseDecision("same_incident")}>Confirm same incident</button>
-      </div> : <p>This relationship already has a recorded decision.</p>}
+      </div> : null}
       {linkingBlocked && <p className={styles.caveat}>{INCIDENT_CONFLICT_MESSAGE} Existing incident groups cannot be merged here.</p>}
       {decision && <div className={styles.decisionBox}>
         <h4>{decision === "same_incident" ? "Confirm the relationship" : "Record why these are not related"}</h4>
@@ -206,7 +251,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
         <label>Note {decision === "not_related" && reasons.find((reason) => reason.code === reasonCode)?.requiresNote ? "(required)" : "(optional)"}
           <textarea value={note} maxLength={1000} onChange={(event) => setNote(event.target.value)} />
         </label>
-        <div className={styles.actions}><button type="button" className={styles.secondary} onClick={() => setDecision(null)}>Cancel</button>
+        <div className={styles.actions}><button type="button" className={styles.secondary} disabled={pending} onClick={() => setDecision(null)}>Cancel</button>
           <button type="button" className={styles.primary} disabled={pending || (decision === "not_related" && reasons.length === 0)} onClick={saveDecision}>{pending ? "Saving…" : "Save decision"}</button></div>
       </div>}
     </div>}

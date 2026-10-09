@@ -11,6 +11,13 @@
 .badge,.ownerBadge,.signals li { display:inline-flex; align-items:center; padding:5px 10px; border-radius:999px; font-size:.78rem; line-height:1.25; }
 .badge { color:#0a6869; background:#dcefed; text-transform:capitalize; font-weight:700; }
 .ownerBadge { color:#486272; background:#e9f0f2; }
+.relationshipBadge { display:inline-flex; width:fit-content; gap:6px; margin:10px 0 0; padding:7px 11px; border:1px solid; border-radius:8px; font-size:.88rem; font-weight:800; }
+.confirmedBadge { color:#14543f; background:#dcf1e7; border-color:#83baa4; }
+.notRelatedBadge { color:#425767; background:#eaf0f4; border-color:#afbfca; }
+.reviewBadge { color:#73531b; background:#fff5df; border-color:#dfc589; }
+.candidates > .confirmedCandidate { background:#f0faf5; border-color:#83baa4; }
+.candidates > .selectedCandidate { border:2px solid #237b85; padding:16px 18px; }
+.candidates .openIndicator { color:#146776; font-weight:800; }
 .signals { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0 0; padding:0; list-style:none; }
 .signals li { color:#27606a; background:#eaf4f2; }
 .signalDetails,.moreDetails { margin-top:11px; color:#526b74; font-size:.88rem; }
@@ -24,7 +31,16 @@
 .primary:hover { background:#104f5c; } .secondary:hover { background:#edf7f5; }
 .primary:disabled,.secondary:disabled { opacity:.55; cursor:not-allowed; }
 .error { color:#9b2226; } .success { color:#166b51; }
-.comparison { margin-top:24px; padding-top:22px; border-top:1px solid #d7e5e8; }
+.comparison { margin-top:24px; padding:22px 18px 18px; border:2px solid #9cc7c7; border-radius:14px; scroll-margin-top:110px; animation:comparisonOpen .24s ease-out; }
+.comparison:focus-visible { outline:3px solid #237b85; outline-offset:4px; }
+.comparePair { margin:9px 0 12px; color:#175866; font-weight:800; }
+.relationshipSummary { margin-top:12px; padding:14px 16px; border:1px solid; border-radius:10px; }
+.relationshipSummary p { margin:6px 0 0; line-height:1.5; }
+.comparisonLoading { display:flex; align-items:center; gap:12px; margin-top:24px; padding:24px 18px; color:#175866; background:#edf7f5; border:1px solid #9cc7c7; border-radius:14px; font-weight:700; }
+.spinner { display:inline-block; flex-shrink:0; width:18px; height:18px; margin-right:6px; border:2px solid #bdd8d9; border-top-color:#176474; border-radius:50%; animation:loadingSpin .7s linear infinite; }
+@keyframes comparisonOpen { from { opacity:.4; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes loadingSpin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .comparison,.spinner { animation:none; } }
 .comparison > .actions { justify-content:flex-end; gap:12px; margin-top:18px; }
 .compareHeading h3 { margin:0; font-size:1.28rem; }
 .compareGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:17px 0; }
