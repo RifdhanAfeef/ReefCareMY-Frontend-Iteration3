@@ -130,6 +130,90 @@ describe("automatic Smart Report Structuring", () => {
     expect(screen.getByText(/Consider adding: approximate size/i)).toBeInTheDocument();
   });
 
+  it("fills the threat and depth from the description when neither was chosen", async () => {
+    vi.mocked(getThreatCategories).mockResolvedValue([{
+      threatCategoryId: 41,
+      code: "ghost_gear",
+      label: "Ghost fishing gear",
+      shortExplanation: "Fishing gear left underwater.",
+      usefulEvidence: "A photo of the gear.",
+      safetyReminder: "Keep a safe distance.",
+      iconReference: null,
+    }]);
+    vi.mocked(structureReportDescription).mockResolvedValue({
+      available: true,
+      suggestions: [
+        { field: "possible_threat", label: "Possible threat type", suggestedValue: "Ghost fishing gear" },
+        { field: "estimated_depth", label: "Estimated depth", suggestedValue: "12m" },
+      ],
+      missingFields: [],
+      followUpQuestions: [],
+      warnings: [],
+      requiresUserConfirmation: true,
+    });
+
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
+      threatCategoryCode: "ghost_gear",
+      threatCategoryId: 41,
+      estimatedDepthMetres: "12",
+      aiSuggestions: expect.arrayContaining([
+        expect.objectContaining({ field: "possible_threat" }),
+        expect.objectContaining({ field: "estimated_depth_metres" }),
+      ]),
+    }));
+  });
+
+  it("shows all six structured fields and keeps threat and depth edits in the report", async () => {
+    vi.mocked(getThreatCategories).mockResolvedValue([{
+      threatCategoryId: 41,
+      code: "ghost_gear",
+      label: "Ghost fishing gear",
+      shortExplanation: "Fishing gear left underwater.",
+      usefulEvidence: "A photo of the gear.",
+      safetyReminder: "Keep a safe distance.",
+      iconReference: null,
+    }]);
+    runtime.reportDraft = {
+      ...runtime.reportDraft,
+      threatCategoryCode: "ghost_gear",
+      threatCategoryId: 41,
+      estimatedDepthMetres: "10",
+      aiSuggestions: [{
+        source: "smart_report",
+        field: "estimated_depth_metres",
+        label: "Estimated depth",
+        suggestedValue: "10 m",
+        confidence: null,
+        status: "unresolved",
+        conflict: false,
+        observerValue: null,
+      }],
+    };
+
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+
+    const descriptionCheck = screen.getByRole("heading", { name: "Description check" }).closest("section")!;
+    expect(within(descriptionCheck).getAllByRole("textbox")).toHaveLength(4);
+    expect(within(descriptionCheck).getByRole("combobox", { name: "Possible threat type structured value" })).toHaveValue("ghost_gear");
+    expect(within(descriptionCheck).getByRole("spinbutton", { name: "Estimated depth structured value" })).toHaveValue(10);
+    expect(within(descriptionCheck).getByRole("textbox", { name: "Approximate size" })).toBeInTheDocument();
+    expect(within(descriptionCheck).getByRole("textbox", { name: "Coral interaction" })).toBeInTheDocument();
+    expect(within(descriptionCheck).getByRole("textbox", { name: "Marine-animal interaction" })).toBeInTheDocument();
+    expect(within(descriptionCheck).getByRole("textbox", { name: "Site reference" })).toBeInTheDocument();
+
+    fireEvent.change(within(descriptionCheck).getByRole("combobox", { name: "Possible threat type structured value" }), { target: { value: "" } });
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ threatCategoryCode: "", threatCategoryId: null }));
+    fireEvent.change(within(descriptionCheck).getByRole("spinbutton", { name: "Estimated depth structured value" }), { target: { value: "12" } });
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ estimatedDepthMetres: "12" }));
+  });
+
   it("loads photo file date and time immediately while preserving values already entered", () => {
     const file = new File(["reef"], "reef.jpg", {
       type: "image/jpeg",
