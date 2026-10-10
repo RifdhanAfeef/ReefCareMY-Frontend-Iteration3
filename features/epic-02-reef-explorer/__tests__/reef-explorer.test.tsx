@@ -88,6 +88,9 @@ describe("Epic 2 Reef Explorer", () => {
     expect(temple?.preparation).toContain("Maximum depth listed by PADI: 25 metres.");
     expect(temple?.preparation.join(" ")).toContain("surface marker buoy");
     expect(temple?.position).toEqual([5.95912, 102.65972]);
+    // QA-DATA-01: map positions are the backend dive_site centres, not separate estimates.
+    expect(reefSites.find((site) => site.backendDiveSiteId === 1)?.position).toEqual([2.89302, 104.05593]);
+    expect(reefSites.find((site) => site.backendDiveSiteId === 24)?.position).toEqual([5.732139, 102.997583]);
     expect(temple?.source.url).toBe("https://www.padi.com/dive-site/malaysia/temple-of-the-sea/");
     expect(sugarWreck?.introduction).toContain("MV Union Star 17");
     expect(sugarWreck?.preparation).toContain("Maximum depth listed by PADI: 18 metres.");
