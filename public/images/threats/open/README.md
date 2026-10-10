@@ -18,6 +18,16 @@ Reef3038 - Flickr - NOAA Photo Library.jpg — Dr. Dwayne Meadows / NOAA
 
 [Original file](https://upload.wikimedia.org/wikipedia/commons/a/a2/Reef3038_-_Flickr_-_NOAA_Photo_Library.jpg)
 
+## net-turtle.webp
+
+Turtle entangled in marine debris (ghost net).jpg — NOAA
+
+[Source](https://commons.wikimedia.org/wiki/File:Turtle_entangled_in_marine_debris_(ghost_net).jpg) · [Public domain](https://creativecommons.org/publicdomain/mark/1.0/)
+
+[Original file](https://upload.wikimedia.org/wikipedia/commons/5/50/Turtle_entangled_in_marine_debris_%28ghost_net%29.jpg)
+
+Retrieved 2026-10-10, resized to 1440 px wide and converted to WebP. Replaces the healthy-reef comparison photo in the ghost fishing gear gallery.
+
 ## bleaching-fire.webp
 
 Fire Coral Bleaching.jpg — USGS

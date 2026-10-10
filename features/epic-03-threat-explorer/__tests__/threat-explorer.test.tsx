@@ -176,6 +176,15 @@ describe("Epic 3 Reef Threat Explorer", () => {
     expect(screen.getByLabelText(/what to record for coral bleaching/i)).toHaveTextContent(/how much of the area is affected/i);
   });
 
+  it("shows two ghost fishing gear examples instead of a healthy-reef comparison", () => {
+    renderExplorer();
+
+    const gallery = screen.getByLabelText("Ghost fishing gear visual examples");
+    expect(within(gallery).getByText("Trained divers removing a lost net")).toBeInTheDocument();
+    expect(within(gallery).getByText("Sea turtle caught in a lost net")).toBeInTheDocument();
+    expect(within(gallery).queryByText(/for comparison/i)).not.toBeInTheDocument();
+  });
+
   it("compares bleached coral with normally coloured colonies", async () => {
     const user = userEvent.setup();
     renderExplorer();
