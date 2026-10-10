@@ -5,11 +5,14 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 export class ApiError extends Error {
   status: number;
+  /** The message the API itself sent, or null when `message` is a client-side fallback. */
+  serverMessage: string | null;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, serverMessage: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.serverMessage = serverMessage;
   }
 }
 
@@ -20,6 +23,17 @@ export type ApiRequestOptions = Omit<RequestInit, "body" | "signal"> & {
   signal?: AbortSignal;
   timeoutMs?: number;
 };
+
+/** The API's own message: `detail` from error handlers, or `message` from state responses such as an unavailable analysis. */
+function extractServerMessage(payload: unknown): string | null {
+  const detail = extractErrorMessage(payload, "");
+  if (detail) return detail;
+  if (payload && typeof payload === "object" && "message" in payload) {
+    const message = (payload as { message: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return null;
+}
 
 function extractErrorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === "object" && "detail" in payload) {
@@ -107,6 +121,7 @@ async function executeRequest({
     throw new ApiError(
       extractErrorMessage(payload, "ReefCare MY could not complete the request. Please try again."),
       response.status,
+      extractServerMessage(payload),
     );
   }
 
