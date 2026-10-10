@@ -65,14 +65,14 @@ beforeEach(() => {
 
 describe("Epic 2 Reef Explorer", () => {
   it("provides a sourced two-image profile for every backend dive site", () => {
-    expect(reefSites).toHaveLength(24);
+    expect(reefSites).toHaveLength(23);
     expect(reefSites.map((site) => site.backendDiveSiteId).sort((a, b) => a - b)).toEqual(
       diveSiteCatalog.map((site) => site.backendDiveSiteId).sort((a, b) => a - b),
     );
 
     const images = reefSites.flatMap((site) => site.images);
-    expect(images).toHaveLength(48);
-    expect(new Set(images.map((image) => image.src)).size).toBe(48);
+    expect(images).toHaveLength(46);
+    expect(new Set(images.map((image) => image.src)).size).toBe(46);
     images.forEach((image) => {
       expect(image.caption).toMatch(/^Illustrative marine image \(not photographed at this dive site\):/);
       expect(image.credit).toBeTruthy();
