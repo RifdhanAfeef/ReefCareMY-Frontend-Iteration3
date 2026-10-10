@@ -11,8 +11,8 @@
   --color-border: #c9dedc;
   --color-muted: #4f6a6e;
   --color-placeholder: #5f6b6d;
-  /* Amber-700 keeps the warm focus hue but holds 3:1 against every light surface. */
-  --color-focus: #b45309;
+  /* Reef teal makes focus clear without resembling an error. */
+  --color-focus: #0b7476;
   --color-danger: #b42318;
   --color-danger-ink: #8a2d25;
   --color-danger-soft: #fff0ef;
@@ -118,6 +118,7 @@ textarea::placeholder {
 }
 
 .display-date-input {
+  position: relative;
   min-height: 52px;
   display: flex;
   align-items: stretch;
@@ -151,7 +152,7 @@ textarea::placeholder {
 }
 
 .display-date-input__picker-wrap {
-  position: relative;
+  position: static;
   width: 52px;
   flex: 0 0 52px;
   display: grid;
@@ -165,8 +166,7 @@ textarea::placeholder {
 }
 
 .display-date-input__picker-button {
-  position: absolute;
-  inset: 0;
+  position: relative;
   z-index: 2;
   width: 100%;
   height: 100%;
@@ -181,10 +181,9 @@ textarea::placeholder {
 
 .display-date-input input.display-date-input__picker {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   min-height: 0;
   padding: 0;
   pointer-events: none;

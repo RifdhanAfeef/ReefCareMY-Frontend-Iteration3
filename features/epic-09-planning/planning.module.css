@@ -1267,6 +1267,10 @@
   }
 }
 @media (max-width: 520px) {
+  /* Full-width dates keep DD/MM/YYYY readable beside the calendar button. */
+  .search {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .dates {
     grid-template-columns: 1fr;
     gap: 8px;

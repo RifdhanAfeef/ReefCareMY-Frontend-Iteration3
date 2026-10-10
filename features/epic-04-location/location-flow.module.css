@@ -111,3 +111,15 @@
 @media (max-width: 1100px) { .locationChoices { grid-template-columns: 1fr; } }
 @media (max-width: 1000px) { .choiceGrid, .privacyGrid, .formLayout, .confirmGrid, .savedGrid { grid-template-columns: 1fr; } .savedContent { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .page { width: min(calc(100% - 32px), var(--content-width)); padding: 32px 0 48px; } .choiceGrid, .privacyGrid, .savedGrid, .formLayout, .confirmGrid { gap: 22px; margin-top: 30px; } .card, .sidePanel { padding: 24px; } .formGrid, .timeFields { grid-template-columns: 1fr; } .fullField { grid-column: auto; } .map, .mapCanvas { min-height: 220px; } .mapInstruction { max-width: calc(100% - 24px); } .map :global(.leaflet-control-attribution) { max-width: calc(100% - 56px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .actions, .splitActions { align-items: stretch; flex-direction: column-reverse; } .actions > *, .splitActions > *, .primaryButton, .secondaryButton { width: 100%; align-self: stretch; } .accessList div { grid-template-columns: 1fr; gap: 4px; } }
+
+.contextFieldTitle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.contextFieldTitle label { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.contextHelp { position: relative; flex-shrink: 0; }
+.contextHelp summary { display: grid; place-items: center; width: 32px; height: 32px; color: var(--color-primary-hover); border-radius: 50%; cursor: pointer; list-style: none; }
+.contextHelp summary::-webkit-details-marker { display: none; }
+.contextHelp summary:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.contextHelp[open] summary { background: var(--color-info); }
+.contextHelp p { position: absolute; right: 0; top: 100%; z-index: 3; width: min(260px, 65vw); padding: 12px; margin: 4px 0 0; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: 10px; box-shadow: 0 6px 22px rgba(20, 54, 66, .12); font-size: 14px; font-weight: 400; }
+.detailList .contextValue { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.contextValue > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.contextBadge { flex-shrink: 0; display: inline-block; padding: 3px 8px; color: var(--color-primary-hover); background: var(--color-info); border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }

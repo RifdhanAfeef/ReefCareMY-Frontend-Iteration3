@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   displayDateToInputValue,
   formatDisplayDateInput,
   inputDateToDisplayValue,
+  isValidDisplayDate,
   todayInputDateValue,
 } from "@/lib/format/date";
 
@@ -18,6 +19,8 @@ type DisplayDateInputProps = {
   allowFuture?: boolean;
   disabled?: boolean;
   id?: string;
+  valueFormat?: "display" | "iso";
+  maxDate?: string;
 };
 
 export function DisplayDateInput({
@@ -30,8 +33,26 @@ export function DisplayDateInput({
   allowFuture = false,
   disabled = false,
   id,
+  valueFormat = "display",
+  maxDate,
 }: DisplayDateInputProps) {
   const pickerRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLInputElement>(null);
+  // ISO callers keep their API format, while partial typing stays visible locally.
+  const [edit, setEdit] = useState<{ text: string; emittedValue: string } | null>(null);
+  const textValue = edit?.emittedValue === value ? edit.text
+    : valueFormat === "iso" ? inputDateToDisplayValue(value) : value;
+  const calendarValue = displayDateToInputValue(textValue);
+  const maximum = maxDate ?? (allowFuture ? undefined : todayInputDateValue());
+
+  useEffect(() => {
+    const message = textValue && !isValidDisplayDate(textValue)
+      ? "Enter a valid date in dd/mm/yyyy format."
+      : calendarValue && maximum && calendarValue > maximum
+        ? `Choose a date on or before ${inputDateToDisplayValue(maximum)}.`
+        : "";
+    textRef.current?.setCustomValidity(message);
+  }, [textValue, calendarValue, maximum]);
 
   function openCalendar() {
     const picker = pickerRef.current;
@@ -48,6 +69,7 @@ export function DisplayDateInput({
   return (
     <div className="display-date-input" data-invalid={invalid || undefined}>
       <input
+        ref={textRef}
         className="display-date-input__text"
         id={id}
         type="text"
@@ -55,8 +77,13 @@ export function DisplayDateInput({
         autoComplete="off"
         maxLength={10}
         placeholder="dd/mm/yyyy"
-        value={value}
-        onChange={(event) => onChange(formatDisplayDateInput(event.target.value))}
+        value={textValue}
+        onChange={(event) => {
+          const text = formatDisplayDateInput(event.target.value);
+          const emittedValue = valueFormat === "iso" ? displayDateToInputValue(text) : text;
+          setEdit({ text, emittedValue });
+          onChange(emittedValue);
+        }}
         required={required}
         disabled={disabled}
         aria-label={`${label}, format dd/mm/yyyy`}
@@ -85,10 +112,13 @@ export function DisplayDateInput({
           ref={pickerRef}
           className="display-date-input__picker"
           type="date"
-          value={displayDateToInputValue(value)}
-          max={allowFuture ? undefined : todayInputDateValue()}
+          value={calendarValue}
+          max={maximum}
           disabled={disabled}
-          onChange={(event) => onChange(inputDateToDisplayValue(event.target.value))}
+          onChange={(event) => {
+            setEdit(null);
+            onChange(valueFormat === "iso" ? event.target.value : inputDateToDisplayValue(event.target.value));
+          }}
           aria-hidden="true"
           tabIndex={-1}
         />

@@ -5,6 +5,7 @@ import { structureReportDescription } from "@/lib/api/smartReportApi";
 import { getThreatCategories } from "@/lib/api/referenceApi";
 import { clearDraftPhotos, loadDraftPhotos } from "@/features/epic-02-reporting/draft-storage";
 import { recognizeVisualThreat } from "@/lib/api/visualRecognitionApi";
+import { readExifCaptureTime } from "../photo-exif";
 import type { ReportDraft } from "../types";
 
 const { resetReportDraft, updateReportDraft, runtime } = vi.hoisted(() => ({
@@ -68,7 +69,7 @@ vi.mock("@/lib/api/smartReportApi", () => ({
   structureReportDescription: vi.fn(),
 }));
 
-// EXIF parsing has its own tests; here every photo has no EXIF capture time.
+// EXIF parsing has its own tests; form tests control the returned capture time.
 vi.mock("@/features/epic-02-reporting/photo-exif", () => ({
   readExifCaptureTime: vi.fn().mockResolvedValue(null),
 }));
@@ -94,6 +95,7 @@ describe("automatic Smart Report Structuring", () => {
     };
     vi.setSystemTime(new Date("2026-09-16T00:00:00Z"));
     vi.clearAllMocks();
+    vi.mocked(readExifCaptureTime).mockReset().mockResolvedValue(null);
     URL.createObjectURL = vi.fn(() => "blob:restored-photo");
     URL.revokeObjectURL = vi.fn();
     vi.mocked(loadDraftPhotos).mockResolvedValue([]);
@@ -116,17 +118,13 @@ describe("automatic Smart Report Structuring", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("places the threat choices directly after the description in the observation flow", () => {
+  it("shows one category choice in the review sidebar and one depth field in additional details", () => {
     render(<ObservationForm />);
-
-    const description = document.getElementById("observation-description")!;
-    const threatPicker = document.getElementById("threat-picker")!;
-    const assistant = screen.getByRole("heading", { name: "Suggestions from your photo and description" });
-
-    expect(description.parentElement?.nextElementSibling).toBe(threatPicker);
-    expect(threatPicker.compareDocumentPosition(assistant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(threatPicker).getByText(/Your description may fill this in automatically/)).toBeInTheDocument();
-    expect(screen.queryByText(/Nothing is used unless you keep it/)).not.toBeInTheDocument();
+    const sidebar = screen.getByRole("complementary", { name: "Your review" });
+    expect(within(sidebar).getByRole("combobox", { name: "Threat category *" })).toBeInTheDocument();
+    expect(screen.getAllByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveLength(1);
+    expect(screen.queryByText("What did you see? *")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
 
   it("analyses the description after typing pauses without requiring a button", async () => {
@@ -218,18 +216,18 @@ describe("automatic Smart Report Structuring", () => {
     render(<ObservationForm />);
     await act(async () => { await Promise.resolve(); });
 
-    const descriptionCheck = screen.getByRole("heading", { name: "Description check" }).closest("section")!;
+    const descriptionCheck = screen.getByRole("heading", { name: "Additional details" }).closest("section")!;
     expect(within(descriptionCheck).getAllByRole("textbox")).toHaveLength(4);
-    expect(within(descriptionCheck).getByRole("combobox", { name: "Possible threat type structured value" })).toHaveValue("ghost_gear");
-    expect(within(descriptionCheck).getByRole("spinbutton", { name: "Estimated depth structured value" })).toHaveValue(10);
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue("ghost_gear");
+    expect(within(descriptionCheck).getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(10);
     expect(within(descriptionCheck).getByRole("textbox", { name: "Approximate size" })).toBeInTheDocument();
     expect(within(descriptionCheck).getByRole("textbox", { name: "Coral interaction" })).toBeInTheDocument();
     expect(within(descriptionCheck).getByRole("textbox", { name: "Marine-animal interaction" })).toBeInTheDocument();
     expect(within(descriptionCheck).getByRole("textbox", { name: "Site reference" })).toBeInTheDocument();
 
-    fireEvent.change(within(descriptionCheck).getByRole("combobox", { name: "Possible threat type structured value" }), { target: { value: "" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Threat category *" }), { target: { value: "" } });
     expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ threatCategoryCode: "", threatCategoryId: null }));
-    fireEvent.change(within(descriptionCheck).getByRole("spinbutton", { name: "Estimated depth structured value" }), { target: { value: "12" } });
+    fireEvent.change(within(descriptionCheck).getByRole("spinbutton", { name: "Estimated depth (m)" }), { target: { value: "12" } });
     expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ estimatedDepthMetres: "12" }));
   });
 
@@ -277,18 +275,47 @@ describe("automatic Smart Report Structuring", () => {
     expect(automatic.changes.photos).toEqual([expect.objectContaining({ capturedAt: null, capturedAtConfirmed: false })]);
   });
 
+  it("fills blank date and time from an attached photo and explains the source", async () => {
+    const { createPhotoId } = await import("../draft-storage");
+    vi.mocked(createPhotoId).mockReturnValue("photo-1");
+    vi.mocked(readExifCaptureTime).mockResolvedValue("2026-09-15T02:15:00.000Z");
+    render(<ObservationForm />);
+    fireEvent.change(screen.getByLabelText("Add photos"), { target: { files: [new File(["reef"], "reef.png", { type: "image/png" })] } });
+    await act(async () => { for (let tick = 0; tick < 8; tick += 1) await Promise.resolve(); });
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ observationDate: "15/09/2026", observationTime: "10:15" }));
+    expect(screen.getByText(/Photo date and time added/)).toBeInTheDocument();
+  });
+
+  it("preserves dates entered while photo metadata is still loading", async () => {
+    const { createPhotoId } = await import("../draft-storage");
+    vi.mocked(createPhotoId).mockReturnValue("photo-1");
+    let finish!: (time: string | null) => void;
+    vi.mocked(readExifCaptureTime).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const view = render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.change(screen.getByLabelText("Add photos"), { target: { files: [new File(["reef"], "reef.jpg", { type: "image/jpeg" })] } });
+    runtime.reportDraft = { ...runtime.reportDraft, observationDate: "14/09/2026", observationTime: "11:30" };
+    view.rerender(<ObservationForm />);
+    await act(async () => { finish("2026-09-15T02:15:00.000Z"); for (let tick = 0; tick < 8; tick += 1) await Promise.resolve(); });
+    const changes = vi.mocked(updateReportDraft).mock.calls.map(([item]) => item).find((item) => "photos" in item);
+    expect(changes).not.toHaveProperty("observationDate");
+    expect(changes).not.toHaveProperty("observationTime");
+    expect(screen.getByText(/Your existing date and time have been kept/)).toBeInTheDocument();
+  });
+
   it("analyses a newly attached photo without overwriting the observer threat", async () => {
     const file = new File(["reef"], "reef.jpg", { type: "image/jpeg" });
     const { createPhotoId } = await import("@/features/epic-02-reporting/draft-storage");
     vi.mocked(createPhotoId).mockReturnValue("photo-1");
     render(<ObservationForm />);
 
-    fireEvent.change(screen.getByLabelText("Choose photos"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Add photos"), { target: { files: [file] } });
     // Reading the photo's EXIF data adds an asynchronous step before the analysis call.
     await act(async () => {
       for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
     });
 
+    expect(screen.getByText(/No photo capture time found/)).toBeInTheDocument();
     expect(recognizeVisualThreat).toHaveBeenCalledWith(file);
     expect(updateReportDraft).toHaveBeenCalledWith({
       visualRecognition: expect.objectContaining({
@@ -331,11 +358,11 @@ describe("automatic Smart Report Structuring", () => {
     render(<ObservationForm />);
     await act(async () => { await Promise.resolve(); });
 
-    expect(screen.getByRole("heading", { name: "Photo check" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Suggestions from your photo and description" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Description check" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI suggested threat" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Your review" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Additional details" })).toBeInTheDocument();
     expect(screen.queryByText("Possible visual threat")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use image suggestion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use this category" }));
 
     expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
       threatCategoryCode: "coral_bleaching",
@@ -509,7 +536,7 @@ describe("automatic Smart Report Structuring", () => {
     expect(screen.queryByRole("dialog", { name: "Start a fresh report?" })).not.toBeInTheDocument();
   });
 
-  it("asks for the threat type first, as picture choices", async () => {
+  it("keeps manual category selection available in the sidebar", async () => {
     vi.mocked(getThreatCategories).mockResolvedValue([
       { threatCategoryId: 41, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
       { threatCategoryId: 45, code: "unsure", label: "Not sure", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
@@ -517,8 +544,8 @@ describe("automatic Smart Report Structuring", () => {
     render(<ObservationForm />);
     await act(async () => { await Promise.resolve(); });
 
-    const picker = screen.getByRole("group", { name: "What did you see? *" });
-    fireEvent.click(within(picker).getByRole("radio", { name: "Ghost fishing gear" }));
+    const picker = screen.getByRole("combobox", { name: "Threat category *" });
+    fireEvent.change(picker, { target: { value: "ghost_gear" } });
 
     expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
       threatCategoryCode: "ghost_gear",
@@ -542,7 +569,48 @@ describe("automatic Smart Report Structuring", () => {
     runtime.reportDraft = { ...runtime.reportDraft, description: "" };
     render(<ObservationForm />);
 
-    expect(screen.getByText("Add a photo or a description and suggestions will appear here.")).toBeInTheDocument();
+    expect(screen.getByText("Add a photo for an automatic suggestion.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Photo check" })).not.toBeInTheDocument();
   });
+  it("shows conflicting photo and description suggestions separately without changing the category", async () => {
+    runtime.reportDraft = { ...runtime.reportDraft, threatCategoryCode: "coral_bleaching", threatCategoryId: 42,
+      aiSuggestions: [{ source: "smart_report", field: "possible_threat", label: "Possible threat type", suggestedValue: "Ghost fishing gear", confidence: null, status: "unresolved", conflict: false, observerValue: null }],
+      visualRecognition: { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: "coral_bleaching", suggestedThreatLabel: "Coral bleaching", confidence: null, warning: null, resolution: "unresolved" } };
+    vi.mocked(getThreatCategories).mockResolvedValue([
+      { threatCategoryId: 41, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+      { threatCategoryId: 42, code: "coral_bleaching", label: "Coral bleaching", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+    ]);
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText(/The photo and description suggest different threats/)).toBeInTheDocument();
+    expect(screen.getByText("Photo analysis")).toBeInTheDocument();
+    expect(screen.getByText("Description analysis")).toBeInTheDocument();
+    expect(screen.getByText("Confidence unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue("coral_bleaching");
+    expect(screen.getByRole("button", { name: "Use photo threat" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use description" }));
+    expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
+      threatCategoryCode: "ghost_gear", threatCategoryId: 41,
+      aiSuggestions: [expect.objectContaining({ status: "confirmed", conflict: false })],
+      visualRecognition: expect.objectContaining({ resolution: "kept" }),
+    }));
+  });
+  it("allows manual choices when photo analysis is unavailable without a misleading accept button", () => {
+    runtime.reportDraft.visualRecognition = { photoId: "one", photoName: "reef.jpg", status: "unavailable", suggestedThreatCode: null, suggestedThreatLabel: null, confidence: null, warning: "Image analysis is temporarily unavailable.", resolution: "not_required" };
+    render(<ObservationForm />);
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use this category" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Image analysis is temporarily unavailable.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Check this photo")).not.toBeInTheDocument();
+  });
+
+  it("does not show acceptance or confirmation for a response with no supported threat", async () => {
+    runtime.reportDraft.visualRecognition = { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: null, suggestedThreatLabel: null, confidence: null, warning: null, resolution: "not_required" };
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole("button", { name: "Use this category" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Photo suggestion decision confirmed" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toBeInTheDocument();
+  });
+
 });

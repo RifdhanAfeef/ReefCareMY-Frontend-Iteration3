@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { DisplayDateInput } from "@/components/forms/display-date-input";
 import type { HotspotFilters, HotspotInterval, HotspotOptions, HotspotThreat } from "@/lib/api/hotspot-types";
 import { validateHotspotFilters } from "./filters";
 import styles from "./hotspots.module.css";
@@ -40,8 +41,8 @@ export function HotspotFilterForm({ filters, options, onApply, onReset }: {
       <label className={styles.field}>Threat category<select value={draft.threat ?? ""} onChange={(event) => setDraft({ ...draft, threat: event.target.value as HotspotThreat || null })}>
         <option value="">All threats (including Unsure)</option>{options.threats.map((threat) => <option key={threat.code} value={threat.code}>{threat.label}</option>)}
       </select></label>
-      <label className={styles.field}>Observed from<input type="date" required value={draft.observedFrom} onChange={(event) => setDraft({ ...draft, observedFrom: event.target.value })} /></label>
-      <label className={styles.field}>Observed to<input type="date" required value={draft.observedTo} onChange={(event) => setDraft({ ...draft, observedTo: event.target.value })} /></label>
+      <label className={styles.field}>Observed from<DisplayDateInput label="Observed from" valueFormat="iso" required allowFuture value={draft.observedFrom} onChange={(value) => setDraft({ ...draft, observedFrom: value })} /></label>
+      <label className={styles.field}>Observed to<DisplayDateInput label="Observed to" valueFormat="iso" required allowFuture value={draft.observedTo} onChange={(value) => setDraft({ ...draft, observedTo: value })} /></label>
       <label className={styles.field}>Reporting interval<select value={draft.interval} onChange={(event) => setDraft({ ...draft, interval: event.target.value as HotspotInterval })}>
         <option value="day">Daily</option><option value="week">Weekly · Monday start</option><option value="month">Monthly</option>
       </select></label>

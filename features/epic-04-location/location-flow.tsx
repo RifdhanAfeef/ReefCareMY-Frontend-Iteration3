@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Info } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +19,13 @@ import { buildLocationCheckPayload } from "@/features/epic-02-reporting/report-p
 import { ReportProgress } from "@/features/epic-02-reporting/report-progress";
 import { displayDateAndTimeToIso, displayDateToIsoDate, inputDateToDisplayValue, isFutureDisplayDate, isValidDisplayDate } from "@/lib/format/date";
 import styles from "./location-flow.module.css";
+
+function SurfaceContextHelp({ kind }: { kind: "entry" | "exit" }) {
+  return <details className={styles.contextHelp} onKeyDown={(event) => { if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); } }}>
+    <summary aria-label={`About ${kind} notes`}><Info size={18} aria-hidden="true" /></summary>
+    <p>Optional surface notes help the coordinator understand your dive. They are not the exact underwater observation location.</p>
+  </details>;
+}
 
 const confidenceOptions: Array<{ value: LocationConfidenceCode; label: string }> = [
   { value: "exact", label: "Exact" },
@@ -422,25 +430,26 @@ export function LocationFlow() {
         <p className={styles.mapCaption}>{hasExactCoordinates ? `${locationSource === "manual_coordinates" ? "Entered coordinates" : "Selected map pin"}${coordinates ? ` — ${coordinates}` : ""}` : confidence === "unsure" ? "Exact location unknown" : "Named dive-site location only"}</p>
         <details className={styles.surfaceContext} open={Boolean(surfaceEntryContext.trim() || surfaceExitContext.trim()) || undefined}>
           <summary>Add where you entered or left the water <span>Optional</span></summary>
-          <p className={styles.supporting}>Surface notes can help a reviewer. They are never treated as the exact underwater location.</p>
-          <label className={styles.field}>
-            Surface entry context <span>Optional</span>
+          <div className={styles.field}>
+            <div className={styles.contextFieldTitle}><label htmlFor="surface-entry-context">Surface entry context <span>Optional</span></label><SurfaceContextHelp kind="entry" /></div>
             <textarea
+              id="surface-entry-context"
               maxLength={450}
               value={surfaceEntryContext}
               onChange={(event) => updateLocationDraft({ surfaceEntryContext: event.target.value })}
               placeholder="For example, entered from the boat north of the site"
             />
-          </label>
-          <label className={styles.field}>
-            Surface exit context <span>Optional</span>
+          </div>
+          <div className={styles.field}>
+            <div className={styles.contextFieldTitle}><label htmlFor="surface-exit-context">Surface exit context <span>Optional</span></label><SurfaceContextHelp kind="exit" /></div>
             <textarea
+              id="surface-exit-context"
               maxLength={450}
               value={surfaceExitContext}
               onChange={(event) => updateLocationDraft({ surfaceExitContext: event.target.value })}
               placeholder="For example, surfaced beside the mooring line"
             />
-          </label>
+          </div>
         </details>
       </section>
       <aside className={styles.card}>
@@ -470,5 +479,5 @@ export function ReviewLocationSummary() {
   const confidenceLabel = confidenceOptions.find((item) => item.value === locationDraft.confidence)?.label;
   const coordinates = mapCoordinates(locationDraft.pin);
   const aiSiteReference = reportDraft?.aiSuggestions?.find((suggestion) => suggestion.field === "site_reference" && suggestion.status !== "removed")?.suggestedValue;
-  return <section className={styles.card} aria-labelledby="review-location-heading"><h2 id="review-location-heading">Dive and location</h2><dl className={styles.detailList}><div><dt>Dive site</dt><dd>{session?.site ?? "Not yet selected"}</dd></div>{aiSiteReference && <div><dt>Description location note</dt><dd>{aiSiteReference} <small>AI-assisted context only</small></dd></div>}<div><dt>Location source</dt><dd>{locationDraft.locationSource === "manual_coordinates" ? "Entered coordinates" : locationDraft.locationSource === "map_pin" ? "Optional map pin" : locationDraft.confidence === "unsure" ? "Exact location unknown" : "Named dive site"}</dd></div><div><dt>Location confidence</dt><dd>{confidenceLabel ?? "Not yet selected"}</dd></div>{coordinates && <div><dt>Selected coordinates</dt><dd>{coordinates}</dd></div>}{locationDraft.surfaceEntryContext.trim() && <div><dt>Surface entry context</dt><dd>{locationDraft.surfaceEntryContext.trim()} <small>Context only — not an exact underwater location</small></dd></div>}{locationDraft.surfaceExitContext.trim() && <div><dt>Surface exit context</dt><dd>{locationDraft.surfaceExitContext.trim()} <small>Context only — not an exact underwater location</small></dd></div>}</dl><Link className={styles.secondaryButton} href="/report-a-reef/location">Edit location</Link></section>;
+  return <section className={styles.card} aria-labelledby="review-location-heading"><h2 id="review-location-heading">Dive and location</h2><dl className={styles.detailList}><div><dt>Dive site</dt><dd>{session?.site ?? "Not yet selected"}</dd></div>{aiSiteReference && <div><dt>Description location note</dt><dd className={styles.contextValue}><span>{aiSiteReference}</span><span className={styles.contextBadge} title="AI-suggested context; not an exact location">AI context</span></dd></div>}<div><dt>Location source</dt><dd>{locationDraft.locationSource === "manual_coordinates" ? "Entered coordinates" : locationDraft.locationSource === "map_pin" ? "Optional map pin" : locationDraft.confidence === "unsure" ? "Exact location unknown" : "Named dive site"}</dd></div><div><dt>Location confidence</dt><dd>{confidenceLabel ?? "Not yet selected"}</dd></div>{coordinates && <div><dt>Selected coordinates</dt><dd>{coordinates}</dd></div>}{locationDraft.surfaceEntryContext.trim() && <div><dt>Surface entry context</dt><dd className={styles.contextValue}><span>{locationDraft.surfaceEntryContext.trim()}</span><span className={styles.contextBadge} title="Surface context; not an exact underwater location">Context</span></dd></div>}{locationDraft.surfaceExitContext.trim() && <div><dt>Surface exit context</dt><dd className={styles.contextValue}><span>{locationDraft.surfaceExitContext.trim()}</span><span className={styles.contextBadge} title="Surface context; not an exact underwater location">Context</span></dd></div>}</dl><Link className={styles.secondaryButton} href="/report-a-reef/location">Edit location</Link></section>;
 }

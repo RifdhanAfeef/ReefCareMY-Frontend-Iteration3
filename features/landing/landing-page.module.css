@@ -69,7 +69,7 @@
 .lightButton { color: var(--color-deep); background: #fff; border: 2px solid #fff; }
 .lightButton:hover { background: var(--color-info); border-color: var(--color-info); }
 .ghostLink { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
-.closing :focus-visible { outline-color: #f3b63a; }
+.closing :focus-visible { outline-color: #7ed4c5; }
 
 /* Scroll reveal */
 .motionReady .processIntro, .motionReady .sectionHeading { opacity: 0; transform: translateY(18px); }

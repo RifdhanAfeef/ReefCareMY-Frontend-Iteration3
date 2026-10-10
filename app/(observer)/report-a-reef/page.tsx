@@ -29,8 +29,9 @@ export default async function ReportAReefPage({
 
   return (
     <PageTemplate
-      title="Tell us what you observed"
-      description="Capture the reef threat, date, evidence and a short description without requiring scientific training."
+      title="Report a reef observation"
+      description="Add photos and a short description. You do not need to identify the threat yourself."
+      hideHeading
       showBackButton
       backLabel="Back to reef threats"
       backFallbackHref="/reef-threats"

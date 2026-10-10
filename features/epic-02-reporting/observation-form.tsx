@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { CircleHelp } from "lucide-react";
+import { CheckCircle2, Info } from "lucide-react";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { useMockAppState } from "@/features/shared/mock-app-state";
@@ -44,20 +44,14 @@ import styles from "./reporting.module.css";
 type PhotoPreview = StoredDraftPhoto & { previewUrl: string };
 type FieldErrors = Partial<Record<"photos" | "threat" | "date" | "time" | "depth" | "description", string>>;
 const allowedPhotoTypes = ["image/png", "image/jpeg", "image/webp"];
-const threatIcons: Partial<Record<string, string>> = {
-  ghost_gear: "/images/threats/ghost-fishing-gear-icon.png",
-  coral_bleaching: "/images/threats/coral-bleaching-icon-v2.png",
-  marine_debris: "/images/threats/marine-debris-icon.png",
-  physical_reef_damage: "/images/threats/physical-reef-damage-icon-v2.png",
-};
 // Error summary order follows the form's visual order.
 const errorFields: Array<{ key: keyof FieldErrors; target: string }> = [
-  { key: "threat", target: "threat-picker" },
   { key: "photos", target: "report-photos" },
   { key: "date", target: "observation-date" },
   { key: "time", target: "observation-time" },
-  { key: "depth", target: "observation-depth" },
   { key: "description", target: "observation-description" },
+  { key: "depth", target: "observation-depth" },
+  { key: "threat", target: "threat-picker" },
 ];
 const maximumPhotoSize = 10 * 1024 * 1024;
 
@@ -66,7 +60,7 @@ export type PhotoCaptureTimes = Record<string, string | null>;
 
 /** Reads EXIF capture times for photos that do not have recorded metadata yet. */
 export async function readPhotoCaptureTimes(photos: StoredDraftPhoto[], existingPhotos: ReportDraft["photos"]) {
-  const pending = photos.filter((photo) => !existingPhotos.some((item) => item.id === photo.id));
+  const pending = photos.filter((photo) => !existingPhotos.some((item) => item.id === photo.id && item.capturedAt));
   const times = await Promise.all(pending.map((photo) => readExifCaptureTime(photo.file)));
   return Object.fromEntries(pending.map((photo, index) => [photo.id, times[index]])) as PhotoCaptureTimes;
 }
@@ -349,21 +343,27 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   }
 
   async function syncPhotos(next: PhotoPreview[]) {
-    const captureTimes = await readPhotoCaptureTimes(next, reportDraft.photos);
+    const captureTimes = await readPhotoCaptureTimes(next, latestReportDraft.current.photos);
+    // Reading metadata is asynchronous: use any date/time entered while it was loading.
+    const currentDraft = latestReportDraft.current;
     const { changes, automaticValues } = buildAutomaticPhotoDraftChanges(
       next,
-      reportDraft.photos,
-      reportDraft.observationDate,
-      reportDraft.observationTime,
+      currentDraft.photos,
+      currentDraft.observationDate,
+      currentDraft.observationTime,
       captureTimes,
     );
     setPhotos(next);
     updateReportDraft(changes);
-    if (automaticValues) {
-      setErrors((current) => ({ ...current, date: undefined, time: undefined }));
+    if (changes.observationDate || changes.observationTime) {
+      setErrors((current) => ({
+        ...current,
+        ...(changes.observationDate ? { date: undefined } : {}),
+        ...(changes.observationTime ? { time: undefined } : {}),
+      }));
     }
     await saveDraftPhotos(next.map(({ id, file }) => ({ id, file })));
-    return automaticValues;
+    return { changes, automaticValues };
   }
 
   async function analysePhoto(photo: PhotoPreview) {
@@ -421,11 +421,15 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
       });
     if (additions.length === 0) { setUploadMessage("Those photos are already attached to this draft."); return; }
     try {
-      const automaticValues = await syncPhotos([...photos, ...additions]);
+      const { changes, automaticValues } = await syncPhotos([...photos, ...additions]);
       setErrors((current) => ({ ...current, photos: undefined }));
-      setUploadMessage(automaticValues
-        ? `${additions.length} photo${additions.length === 1 ? "" : "s"} attached. The photo date and time were added to the observation fields; review them before continuing.`
-        : `${additions.length} photo${additions.length === 1 ? "" : "s"} attached to this report draft.`);
+      const filledFields = [changes.observationDate && "date", changes.observationTime && "time"].filter(Boolean).join(" and ");
+      const metadataMessage = filledFields
+        ? `Photo ${filledFields} added. Check it before continuing.`
+        : automaticValues
+          ? "Your existing date and time have been kept."
+          : "No photo capture time found. Enter the observation date and time yourself.";
+      setUploadMessage(`${additions.length} photo${additions.length === 1 ? "" : "s"} attached. ${metadataMessage}`);
       void analysePhoto(additions[0]);
     } catch {
       setUploadMessage("The photos could not be saved locally. Please try again.");
@@ -586,22 +590,33 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   }
 
   function focusField(target: string) {
-    const element = target === "threat-picker"
-      ? document.querySelector<HTMLInputElement>("#threat-picker input:checked, #threat-picker input")
-      : document.getElementById(target);
+    const element = document.getElementById(target);
     element?.focus();
     element?.scrollIntoView({ block: "center" });
   }
 
   const visibleErrors = errorFields.filter(({ key }) => errors[key]);
   const threatSuggestion = reportDraft.aiSuggestions.find((item) => item.field === "possible_threat");
-  const depthSuggestion = reportDraft.aiSuggestions.find((item) => item.field === "estimated_depth_metres");
   const selectedThreatLabel = categoryOptions.find((item) => item.code === reportDraft.threatCategoryCode)?.label;
   const orderedThreats = [...categoryOptions].sort((first, second) => Number(first.code === "unsure") - Number(second.code === "unsure"));
-  const hasAiInput = photos.length > 0
-    || Boolean(reportDraft.description.trim())
-    || Boolean(reportDraft.visualRecognition)
-    || reportDraft.aiSuggestions.length > 0;
+  const visual = reportDraft.visualRecognition;
+  const textThreat = threatSuggestion?.status !== "removed" && threatSuggestion?.suggestedValue ? threatSuggestion : undefined;
+  const textCategory = textThreat ? categoryOptions.find((item) => item.label.toLowerCase() === (textThreat.suggestedValue ?? "").toLowerCase() || item.code === textThreat.suggestedValue) : undefined;
+  const sourcesDisagree = !visualRecognitionBusy && !assistantBusy && visual?.status === "recognized" && textThreat && textThreat.status !== "corrected" &&
+    (textCategory ? textCategory.code !== visual.suggestedThreatCode : (textThreat.suggestedValue ?? "").toLowerCase() !== visual.suggestedThreatLabel?.toLowerCase());
+
+  function useDescriptionThreat() {
+    if (!textCategory || !textThreat || !visual) return;
+    updateReportDraft({
+      threatCategoryCode: textCategory.code as ReportDraft["threatCategoryCode"],
+      threatCategoryId: textCategory.threatCategoryId,
+      aiSuggestions: reportDraft.aiSuggestions.map((suggestion) => suggestion === textThreat
+        ? { ...suggestion, status: "confirmed", conflict: false, observerValue: textCategory.label }
+        : suggestion),
+      visualRecognition: { ...visual, resolution: "kept" },
+    });
+    setErrors((current) => ({ ...current, threat: undefined }));
+  }
 
   function suggestionHint(suggestion: typeof threatSuggestion, currentLabel: string | undefined) {
     if (!suggestion || suggestion.status !== "unresolved" || !suggestion.suggestedValue) return null;
@@ -612,7 +627,11 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   }
 
   return (
-    <form className={styles.formShell} onSubmit={continueToLocation} noValidate>
+    <form className={`${styles.formShell} ${styles.observationShell}`} onSubmit={continueToLocation} noValidate>
+      <header className={styles.observationHeader}>
+        <div><span className={styles.reportEyebrow}>New report</span><h1>Report a reef observation</h1><p>Add photos and a short description. You do not need to identify the threat yourself.</p></div>
+        <button className={styles.secondaryButton} type="button" onClick={() => { setResetError(""); setShowResetConfirmation(true); }}>Reset report</button>
+      </header>
       <ReportProgress current={1} />
       {submitAttempt > 0 && visibleErrors.length > 0 && (
         <div className={styles.errorSummary} ref={errorSummaryRef} tabIndex={-1} role="alert" aria-labelledby="error-summary-heading">
@@ -640,30 +659,23 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <p>You can confirm or change this named site in the location step.</p>
         </aside>
       )}
-      <section className={styles.card}>
-        <div className={styles.sectionHeader}>
-          <div><h2>What you observed</h2><p>Record what you saw. Scientific identification is not required.</p></div>
-          <span className={styles.requiredNote}>* Required</span>
-        </div>
-
-        <div className={styles.formGrid}>
-          <section className={styles.uploadArea} aria-labelledby="photo-heading">
-            <h3 id="photo-heading">Photographs *</h3>
-            <p className={styles.supporting}>PNG, JPG or WebP, up to 10 MB each. A clear close photo and a wider one help most.</p>
+      <div className={styles.observationLayout}>
+        <div className={styles.observationMain}>
+          <section className={`${styles.card} ${styles.observationPhotos}`} aria-labelledby="photo-heading">
+            <div className={styles.photoHeading}><h2 id="photo-heading">Photos *</h2><div><input className={styles.fileInput} id="report-photos" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={choosePhotos} aria-describedby={errors.photos ? "photos-error" : "photo-help"} /><label className={styles.uploadLabel} htmlFor="report-photos">Add photos</label></div></div>
+            <p className={styles.supporting} id="photo-help">JPG, PNG or WebP · Up to 10 MB each</p>
             <div className={styles.uploadContent}>
-              <input className={styles.fileInput} id="report-photos" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={choosePhotos} aria-describedby={errors.photos ? "photos-error" : undefined} />
-              <label className={styles.uploadLabel} htmlFor="report-photos">Choose photos</label>
               {errors.photos && <p className={styles.errorText} id="photos-error">{errors.photos}</p>}
               {uploadMessage && <p className={styles.muted} role="status">{uploadMessage}</p>}
               {photos.length > 0 && <div className={styles.photoGrid}>{photos.map((photo) => {
                 const metadata = reportDraft.photos.find((item) => item.id === photo.id);
                 return <article className={styles.photoCard} key={photo.id}>
                   <Image className={styles.photoImage} src={photo.previewUrl} alt={`Selected evidence: ${photo.file.name}`} width={360} height={220} unoptimized />
-                  <div className={styles.photoMeta}><strong title={photo.file.name}>{photo.file.name}</strong><span>{formatFileSize(photo.file.size)}</span><div className={styles.compactActions}><button className={styles.smallButton} type="button" disabled={visualRecognitionBusy} onClick={() => analysePhoto(photo)}>{reportDraft.visualRecognition?.photoId === photo.id ? "Check again" : "Check this photo"}</button><button className={styles.textButton} type="button" onClick={() => removePhoto(photo.id)}>Remove</button></div></div>
+                  <div className={styles.photoMeta}><strong title={photo.file.name}>{photo.file.name}</strong><span>{formatFileSize(photo.file.size)}</span><div className={styles.compactActions}><button className={styles.textButton} type="button" onClick={() => removePhoto(photo.id)}>Remove photo</button></div></div>
                   {metadata?.capturedAt && <div className={styles.metadataPrompt}>
-                    <strong>Photo date and time added</strong>
+                    <strong>Photo capture time</strong>
                     <span>{formatDateTime(new Date(metadata.capturedAt))}</span>
-                    <p>Read from the camera data saved in the photo and copied into the date and time below. Check them and edit them if they are wrong.</p>
+                    <p>From camera metadata. Check your observation date and time below.</p>
                   </div>}
                 </article>;
               })}</div>}
@@ -673,86 +685,25 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <div className={styles.whenRow}>
             <div className={styles.field}><label className={styles.fieldLabel} htmlFor="observation-date">Observation date *</label><DisplayDateInput id="observation-date" label="Observation date" required value={reportDraft.observationDate} onChange={(value) => updateField({ observationDate: value }, "date")} invalid={Boolean(errors.date)} describedBy={errors.date ? "observation-date-error" : undefined} />{errors.date && <span className={styles.errorText} id="observation-date-error">{errors.date}</span>}</div>
             <label className={styles.field}><span className={styles.fieldLabel}>Approximate time *</span><input id="observation-time" type="time" value={reportDraft.observationTime} onChange={(event) => updateField({ observationTime: event.target.value }, "time")} aria-invalid={Boolean(errors.time)} aria-describedby={errors.time ? "observation-time-error" : undefined} />{errors.time && <span className={styles.errorText} id="observation-time-error">{errors.time}</span>}</label>
-            <label className={styles.field}><span className={styles.fieldLabel}>Approximate depth (m) <span className={styles.fieldMeta}>Optional</span></span><input id="observation-depth" type="number" min="0" step="0.1" inputMode="decimal" value={reportDraft.estimatedDepthMetres} onChange={(event) => updateField({ estimatedDepthMetres: event.target.value }, "depth")} aria-invalid={Boolean(errors.depth)} aria-describedby={errors.depth ? "observation-depth-error" : undefined} placeholder="e.g. 12" />{suggestionHint(depthSuggestion, reportDraft.estimatedDepthMetres)}{errors.depth && <span className={styles.errorText} id="observation-depth-error">{errors.depth}</span>}</label>
           </div>
-          <label className={`${styles.field} ${styles.fullWidth}`}><span className={styles.fieldLabel}>Describe what you saw *</span><span className={styles.fieldHelp} id="description-help">Size, contact with coral or animals, and where on the reef, if you remember.</span><textarea id="observation-description" value={reportDraft.description} onChange={(event) => updateField({ description: event.target.value }, "description")} aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? "description-help description-error" : "description-help"} placeholder="Example: Large fishing net tangled around coral north of D'Lagoon, around 10-15 m deep." />{errors.description && <span className={styles.errorText} id="description-error">{errors.description}</span>}</label>
-          <fieldset className={`${styles.threatPicker} ${styles.fullWidth}`} id="threat-picker" data-invalid={Boolean(errors.threat) || undefined} aria-describedby={errors.threat ? "threat-help threat-error" : "threat-help"}>
-            <legend className={styles.fieldLabel}>What did you see? *</legend>
-            <p className={styles.fieldHelp} id="threat-help">Your description may fill this in automatically. Check the result or choose the closest match. If you can&apos;t tell, choose &ldquo;Unsure&rdquo; and a coordinator will check.</p>
-            {categoryOptions.length === 0 && !categoryLoadError && <p className={styles.muted} role="status">Loading threat types…</p>}
-            {categoryLoadError && <p className={styles.errorText} role="alert">{categoryLoadError}</p>}
-            {orderedThreats.length > 0 && <div className={styles.threatOptions}>
-              {orderedThreats.map((category) => {
-                const icon = threatIcons[category.code];
-                return <label className={styles.threatOption} key={category.code}>
-                  <input
-                    type="radio"
-                    name="threat-type"
-                    value={category.code}
-                    checked={reportDraft.threatCategoryCode === category.code}
-                    onChange={() => updateField({ threatCategoryCode: category.code as ReportDraft["threatCategoryCode"], threatCategoryId: category.threatCategoryId }, "threat")}
-                  />
-                  <span className={styles.threatOptionIcon} aria-hidden="true">
-                    {icon ? <Image src={icon} alt="" width={36} height={36} /> : <CircleHelp size={26} strokeWidth={2} />}
-                  </span>
-                  <span>{category.label}</span>
-                </label>;
-              })}
-            </div>}
-            {suggestionHint(threatSuggestion, selectedThreatLabel)}
-            {errors.threat && <span className={styles.errorText} id="threat-error">{errors.threat}</span>}
-          </fieldset>
-        </div>
+          <label className={`${styles.field} ${styles.fullWidth}`}><span className={styles.fieldLabel}>Description *</span><span className={styles.fieldHelp} id="description-help">Tell us what you saw and where it was.</span><textarea id="observation-description" value={reportDraft.description} onChange={(event) => updateField({ description: event.target.value }, "description")} aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? "description-help description-error" : "description-help"} placeholder="Example: Large fishing net tangled around coral north of D'Lagoon, around 10-15 m deep." /><span className={styles.characterCount}>{reportDraft.description.length} characters</span>{errors.description && <span className={styles.errorText} id="description-error">{errors.description}</span>}</label>
 
-        <section className={styles.aiWorkspace} aria-labelledby="ai-assistance-heading">
-          <header className={styles.aiWorkspaceHeader}>
-            <h2 id="ai-assistance-heading">Suggestions from your photo and description</h2>
-            <p>Optional. ReefCare can suggest details from what you add above. Check or edit the suggested details before continuing.</p>
-          </header>
-
-          {!hasAiInput ? <p className={styles.aiEmptyState}>Add a photo or a description and suggestions will appear here.</p> : <>
-          <section className={styles.imageAnalysisPanel} aria-labelledby="visual-recognition-heading">
-            <div className={styles.aiFeatureHeader}>
-              <div><h3 id="visual-recognition-heading">Photo check</h3><p>Looks at your first new photo for one of the four supported threats.</p></div>
-            </div>
-            {visualRecognitionBusy ? <p className={styles.assistantMessage} role="status">{visualRecognitionMessage}</p> : reportDraft.visualRecognition ? <div className={styles.imageAnalysisResult}>
-              <div><small>Possible threat in the photo</small><strong>{reportDraft.visualRecognition.suggestedThreatLabel ?? "No suggestion available"}</strong></div>
-              {reportDraft.visualRecognition.status === "recognized" && <div><small>How sure the check is</small><strong>{confidenceLabel(reportDraft.visualRecognition.confidence)}</strong></div>}
-              <p>{reportDraft.visualRecognition.warning ?? visualRecognitionMessage}</p>
-              <small>A suggestion only. It does not verify the photo or replace your choice.</small>
-              {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution === "unresolved" && <div className={styles.imageAnalysisActions}>
-                <button className={styles.smallButton} type="button" disabled={!categoryOptions.some((item) => item.code === reportDraft.visualRecognition?.suggestedThreatCode)} onClick={useVisualSuggestion}>Use image suggestion</button>
-                <button className={styles.smallButton} type="button" disabled={!reportDraft.threatCategoryId} onClick={keepSelectedThreat}>Keep my selected threat</button>
-              </div>}
-              {reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution !== "unresolved" && <p className={styles.reviewedAnalysis}>Reviewed. Your chosen threat stays in the report.</p>}
-            </div> : <p className={styles.aiEmptyState}>Add a photo above and it will be checked automatically.</p>}
-          </section>
-
-          <section className={styles.assistantCard} aria-labelledby="smart-report-heading">
-          <div className={styles.assistantHeader}><div className={styles.aiFeatureHeader}><div><h3 id="smart-report-heading">Description check</h3><p>Pulls out the possible threat, depth, size, interactions and site landmarks. Check each one. Threat and depth here match the fields above.</p></div></div>{assistantBusy && <span className={styles.muted} role="status">Checking…</span>}</div>
-          {assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
-          <div className={styles.inlineSuggestionGrid}>{smartReportFields.map(({ field, label }) => {
+          <section className={`${styles.card} ${styles.observationDetails}`} aria-labelledby="additional-details-heading">
+            <h2 id="additional-details-heading">Additional details</h2>
+            <p className={styles.supporting}>Some details are AI suggestions from your description. Check or edit them.</p>
+            {assistantBusy && <p className={styles.muted} role="status">Reading your description…</p>}
+            {assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
+          <div className={styles.inlineSuggestionGrid}>{smartReportFields.filter((item) => item.field !== "possible_threat").map(({ field, label }) => {
             const suggestionIndex = reportDraft.aiSuggestions.findIndex((item) => item.field === field);
             const suggestion = suggestionIndex >= 0 ? reportDraft.aiSuggestions[suggestionIndex] : undefined;
             return <label className={`${styles.inlineSuggestionField} ${suggestion?.conflict && suggestion.status === "unresolved" ? styles.conflictField : ""}`} key={field}>
-              <span className={styles.inlineFieldHeading}><strong>{label}</strong><em data-state={suggestionStateLabel(suggestion).toLowerCase().replaceAll(" ", "-")}>{suggestionStateLabel(suggestion)}</em></span>
-              {field === "possible_threat" ? <select
-                aria-label="Possible threat type structured value"
-                value={reportDraft.threatCategoryCode}
-                disabled={categoryOptions.length === 0}
-                onChange={(event) => {
-                  const selected = categoryOptions.find((category) => category.code === event.target.value);
-                  updateField({ threatCategoryCode: (selected?.code ?? "") as ReportDraft["threatCategoryCode"], threatCategoryId: selected?.threatCategoryId ?? null }, "threat");
-                }}
-              >
-                <option value="">{categoryOptions.length === 0 ? "Loading choices…" : "Select a possible threat type"}</option>
-                {categoryOptions.map((category) => <option value={category.code} key={category.code}>{category.label}</option>)}
-              </select> : field === "estimated_depth_metres" ? <input
+              <span className={styles.inlineFieldHeading}><strong>{field === "estimated_depth_metres" ? "Estimated depth (m)" : field === "coral_interaction" ? "Coral contact" : field === "animal_interaction" ? "Marine-animal contact" : label}</strong><em data-state={suggestionStateLabel(suggestion).toLowerCase().replaceAll(" ", "-")}>{suggestionStateLabel(suggestion)}</em></span>
+              {field === "estimated_depth_metres" ? <input
                 type="number"
                 min="0"
                 step="0.1"
                 inputMode="decimal"
-                aria-label="Estimated depth structured value"
+                id="observation-depth" aria-label="Estimated depth (m)" aria-invalid={Boolean(errors.depth)} aria-describedby={errors.depth ? "observation-depth-error" : undefined}
                 placeholder="Not included"
                 value={reportDraft.estimatedDepthMetres}
                 onChange={(event) => updateField({ estimatedDepthMetres: event.target.value }, "depth")}
@@ -765,6 +716,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                   else if (event.target.value.trim()) answerFollowUp({ field, question: label, options: [] }, event.target.value);
                 }}
               />}
+              {field === "estimated_depth_metres" && errors.depth && <span className={styles.errorText} id="observation-depth-error">{errors.depth}</span>}
               {suggestion?.conflict && suggestion.status === "unresolved" && <span className={styles.conflictText}>Your report already says {suggestion.observerValue}. Review this difference before submitting.</span>}
             </label>;
           })}</div>
@@ -775,15 +727,66 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
               <div className={styles.optionButtons}>{question.options.map((option) => <button type="button" key={option} onClick={() => answerFollowUp(question, option)}>{option}</button>)}</div>
             </fieldset>)}
           </div>}
-          </section>
-          </>}
-        </section>
 
-        <div className={styles.formFooter}>
-          <div className={styles.footerStatus}>{reportDraft.lastSavedAt ? <span className={styles.savedText}>Draft saved {reportDraft.lastSavedAt}</span> : <span className={styles.muted}>Draft details stay on this device.</span>}<button className={styles.resetLink} type="button" onClick={() => { setResetError(""); setShowResetConfirmation(true); }}>Reset report</button></div>
-          <div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={saveDraft}>Save draft</button><button className={styles.primaryButton} type="submit">Continue to location</button></div>
+          </section>
         </div>
-      </section>
+        <aside className={styles.observationSidebar} aria-labelledby="your-review-heading">
+          <section className={`${styles.card} ${styles.reviewDecisionCard}`}>
+            <div><h2 id="your-review-heading">Your review</h2><p className={styles.supporting}>Check your choice before continuing.</p></div>
+            <section className={styles.threatSuggestionCard} aria-labelledby="ai-threat-heading" aria-busy={visualRecognitionBusy || assistantBusy}>
+              <h3 id="ai-threat-heading">AI suggested threat</h3>
+              {sourcesDisagree && <p className={styles.conflictNotice}><Info size={18} aria-hidden="true" />The photo and description suggest different threats. {textCategory ? "Use either suggestion, or choose a category below." : "Choose a category below, or use the photo suggestion."}</p>}
+              {visualRecognitionBusy ? <p className={styles.assistantMessage} role="status">{visualRecognitionMessage}</p> : visual?.status === "recognized" && visual.suggestedThreatCode && visual.suggestedThreatLabel ? <div className={styles.threatSource}>
+                <span className={styles.sourceBadge}>Photo analysis</span>
+                <strong className={styles.suggestedCategory}>{visual.suggestedThreatLabel}</strong>
+                <span>Confidence level</span><strong>{confidenceLabel(visual.confidence)}</strong>
+                {visual.resolution === "unresolved" ? <div className={styles.suggestionButtons}>
+                  <button className={styles.primaryButton} type="button" disabled={!categoryOptions.some((item) => item.code === visual.suggestedThreatCode)} onClick={useVisualSuggestion}>{sourcesDisagree ? "Use photo threat" : "Use this category"}</button>
+                  <button className={styles.secondaryButton} type="button" disabled={sourcesDisagree && textCategory ? false : !reportDraft.threatCategoryId} onClick={sourcesDisagree && textCategory ? useDescriptionThreat : keepSelectedThreat}>{sourcesDisagree ? (textCategory ? "Use description" : "Keep selected category") : "Keep my choice"}</button>
+                </div> : visual.resolution !== "not_required" ? <span className={styles.confirmedChoice} role="img" aria-label="Photo suggestion decision confirmed"><CheckCircle2 size={22} aria-hidden="true" /></span> : null}
+              </div> : <p className={styles.muted}>{visual?.warning ?? (photos.length ? "No photo suggestion available. You can choose a category yourself." : "Add a photo for an automatic suggestion.")}</p>}
+              {textThreat && <div className={styles.threatSource}>
+                <span className={styles.sourceBadge}>{textThreat.status === "corrected" ? "Edited by you" : "Description analysis"}</span>
+                <strong className={styles.suggestedCategory}>{textThreat.suggestedValue}</strong>
+                {textThreat.confidence != null && <span>Confidence level: {confidenceLabel(textThreat.confidence)}</span>}
+                {textThreat.status === "unresolved" ? <>
+                  {suggestionHint(textThreat, selectedThreatLabel)}
+                  <p className={styles.fieldHelp}>Check this suggestion using the category below. You can also review it before submitting.</p>
+                </> : <span className={styles.confirmedChoice} role="img" aria-label="Description suggestion decision confirmed"><CheckCircle2 size={22} aria-hidden="true" /></span>}
+              </div>}
+              {!textThreat && assistantBusy && <p className={styles.muted}>Reading your description…</p>}
+              <details className={styles.suggestionDetails}>
+                <summary>Suggestion details</summary>
+                <p>AI suggestions help identify a possible threat; they do not verify it. You can select Unsure.</p>
+                {visual && <p>Analysed photo: <strong>{visual.photoName}</strong></p>}
+                {visual?.warning && <p>{visual.warning}</p>}
+                {photos.length > 0 && <div className={styles.analysisControls}>
+                  <p>Visual threat recognition runs automatically on a new photo. To analyse another photo or retry:</p>
+                  {photos.map((photo) => <button className={styles.smallButton} type="button" disabled={visualRecognitionBusy} key={photo.id} onClick={() => analysePhoto(photo)}>Analyse photo: {photo.file.name}</button>)}
+                </div>}
+              </details>
+            </section>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="threat-picker">Threat category *</label>
+              <p className={styles.fieldHelp} id="threat-help">Choose the closest match, or select Unsure.</p>
+              <select id="threat-picker" value={reportDraft.threatCategoryCode} disabled={categoryOptions.length === 0} aria-invalid={Boolean(errors.threat)} aria-describedby={errors.threat ? "threat-help threat-error" : "threat-help"} onChange={(event) => {
+                const selected = categoryOptions.find((category) => category.code === event.target.value);
+                updateField({ threatCategoryCode: (selected?.code ?? "") as ReportDraft["threatCategoryCode"], threatCategoryId: selected?.threatCategoryId ?? null }, "threat");
+              }}>
+                <option value="">{categoryOptions.length === 0 ? "Loading choices…" : "Select a category"}</option>
+                {orderedThreats.map((category) => <option value={category.code} key={category.code}>{category.label}</option>)}
+              </select>
+              {categoryLoadError && <p className={styles.errorText} role="alert">{categoryLoadError}</p>}
+              {errors.threat && <span className={styles.errorText} id="threat-error">{errors.threat}</span>}
+            </div>
+          </section>
+          <div className={styles.sidebarActions}>
+            <button className={styles.primaryButton} type="submit">Continue to location</button>
+            <button className={styles.secondaryButton} type="button" onClick={saveDraft}>Save draft</button>
+            <p className={styles.muted} role="status">{reportDraft.lastSavedAt ? `Draft saved ${reportDraft.lastSavedAt}` : "Draft details stay on this device."}</p>
+          </div>
+        </aside>
+      </div>
       {showResetConfirmation && <div className={styles.dialogBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !resettingReport) setShowResetConfirmation(false); }}>
         <section className={styles.confirmDialog} role="dialog" aria-modal="true" aria-labelledby="reset-report-heading" aria-describedby="reset-report-description">
           <h2 id="reset-report-heading">Start a fresh report?</h2>

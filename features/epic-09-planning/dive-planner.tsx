@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -615,20 +616,24 @@ export function DivePlanner() {
               <>
                 <label>
                   <span>From</span>
-                  <input
-                    type="date"
+                  <DisplayDateInput
+                    label="From"
+                    valueFormat="iso"
                     value={from}
-                    onChange={(event) => setFrom(event.target.value)}
+                    onChange={setFrom}
                     required
+                    allowFuture
                   />
                 </label>
                 <label>
                   <span>To</span>
-                  <input
-                    type="date"
+                  <DisplayDateInput
+                    label="To"
+                    valueFormat="iso"
                     value={to}
-                    onChange={(event) => setTo(event.target.value)}
+                    onChange={setTo}
                     required
+                    allowFuture
                   />
                 </label>
                 <button className={styles.primary} type="submit">
@@ -1075,11 +1080,12 @@ export function DivePlanner() {
             </label>
             <label>
               Actual observation date
-              <input
-                type="date"
-                max={today}
+              <DisplayDateInput
+                label="Actual observation date"
+                valueFormat="iso"
+                maxDate={today}
                 value={reportDate}
-                onChange={(event) => setReportDate(event.target.value)}
+                onChange={setReportDate}
               />
             </label>
             <label className={styles.checkbox}>

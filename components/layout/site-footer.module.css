@@ -3,7 +3,7 @@
   background: #08232c;
   border-top: 1px solid rgba(156, 197, 194, 0.18);
   /* Light focus ring on the dark ground. */
-  --color-focus: #f3b63a;
+  --color-focus: #7ed4c5;
 }
 
 .inner {

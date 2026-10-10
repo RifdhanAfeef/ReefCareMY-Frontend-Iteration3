@@ -93,7 +93,7 @@ it("clears dependent area/site choices on region change and blocks an invalid da
   expect(screen.getByLabelText("Island / area")).toHaveValue("");
   expect(screen.getByLabelText("Dive site")).toHaveValue("");
   expect(screen.queryByRole("option", { name: "Test Reef North" })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Observed from"), { target: { value: "2026-09-20" } });
+  fireEvent.change(screen.getByLabelText("Observed from, format dd/mm/yyyy"), { target: { value: "20/09/2026" } });
   await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
   expect(screen.getByRole("alert")).toHaveTextContent(/on or after/);
   expect(apply).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -108,6 +109,7 @@ export function ReportReview() {
   const textThreatSuggestion = reportDraft.aiSuggestions.find((suggestion) =>
     suggestion.field === "possible_threat" && suggestion.status !== "removed" && suggestion.suggestedValue,
   );
+  const textThreatSourceLabel = textThreatSuggestion?.status === "corrected" ? "Your edited category" : "Text analysis";
   const imageAndTextAgree = Boolean(
     textThreatSuggestion?.suggestedValue
     && reportDraft.visualRecognition?.suggestedThreatLabel
@@ -249,11 +251,11 @@ export function ReportReview() {
                 {reportDraft.visualRecognition.status === "recognized" && <div><span>Visual confidence</span><strong>{confidenceLabel(reportDraft.visualRecognition.confidence)}</strong></div>}
                 {reportDraft.visualRecognition.warning && <p>{reportDraft.visualRecognition.warning}</p>}
                 {reportDraft.visualRecognition.status === "recognized" && textThreatSuggestion && <p className={imageAndTextAgree ? styles.agreementText : styles.conflictText}>{imageAndTextAgree
-                  ? "Text analysis and image analysis suggest the same category. You still need to confirm the final choice."
-                  : `Text analysis suggests ${textThreatSuggestion.suggestedValue}, while image analysis suggests ${reportDraft.visualRecognition.suggestedThreatLabel}. Choose the final category yourself.`}</p>}
+                  ? `${textThreatSourceLabel} and image analysis suggest the same category.${visualRecognitionNeedsReview ? " You still need to confirm the final choice." : ""}`
+                  : `${textThreatSourceLabel} suggests ${textThreatSuggestion.suggestedValue}, while image analysis suggests ${reportDraft.visualRecognition.suggestedThreatLabel}. Choose the final category yourself.`}</p>}
                 {reportDraft.visualRecognition.status !== "recognized" && <p>This result does not block the report. Continue using your own observation.</p>}
                 {visualRecognitionNeedsReview && <p className={styles.conflictText}>Review this image analysis on the observation page before submitting.</p>}
-                {!visualRecognitionNeedsReview && reportDraft.visualRecognition.status === "recognized" && <p className={styles.agreementText}>Reviewed. Your selected threat category remains the report’s final value.</p>}
+                {!visualRecognitionNeedsReview && reportDraft.visualRecognition.status === "recognized" && reportDraft.visualRecognition.resolution !== "not_required" && <p className={styles.confirmedChoice} role="img" aria-label="Image suggestion decision confirmed"><CheckCircle2 size={24} aria-hidden="true" /></p>}
               </article>
             </section>}
             {(reportDraft.aiSuggestions ?? []).length > 0 && <section className={styles.reviewSuggestions} aria-labelledby="ai-review-heading">
@@ -285,7 +287,7 @@ export function ReportReview() {
           <h2>Before submitting</h2>
           {backendReview && <div className={backendReview.completeness.isSubmittable ? styles.successBox : styles.errorBox}><strong>{backendReview.completeness.summary}</strong>{backendReview.completeness.blockingMissing.length > 0 && <p>Required: {backendReview.completeness.blockingMissing.map(formatCompletenessItem).join(", ")}.</p>}{backendReview.completeness.blockingIssues.length > 0 && <p>Fix: {backendReview.completeness.blockingIssues.map(formatCompletenessItem).join(", ")}.</p>}{backendReview.completeness.recommendedMissing.length > 0 && <p>Recommended: {backendReview.completeness.recommendedMissing.map(formatCompletenessItem).join(", ")}.</p>}</div>}
           <ul className={styles.checkList}><li>The details describe what you observed</li><li>No scientific diagnosis is required</li><li>Exact coordinates remain protected</li><li>Submission creates a traceable report</li></ul>
-          <div className={styles.infoBox}><strong>Initial status: Received</strong><p>Submission places the report in the Case Coordinator queue. Claiming and evidence decisions occur later.</p></div>
+          <div className={styles.infoBox}><p>Your report will be sent to a Case Coordinator for review.</p></div>
           <button className={styles.primaryButton} type="button" disabled={!canSubmit || submitting} onClick={submit}>{submitting ? "Submitting…" : reviewing ? "Checking…" : "Submit report"}</button>
         </aside>
           <section className={styles.privacySummary} aria-labelledby="review-privacy-heading">

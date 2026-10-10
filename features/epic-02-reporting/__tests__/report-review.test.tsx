@@ -150,3 +150,26 @@ it("keeps visual recognition failures non-blocking", async () => {
   expect(await screen.findByText(/temporarily unavailable/)).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
 });
+
+for (const resolution of ["accepted", "kept", "changed"] as const) {
+  it(`shows a confirmation icon without asking again when the image decision is ${resolution}`, async () => {
+    scenario.visualRecognition = { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: "ghost_gear", suggestedThreatLabel: "Ghost fishing gear", confidence: 0.9, warning: null, resolution };
+    scenario.aiSuggestions = [{ source: "smart_report", field: "possible_threat", label: "Possible threat type", suggestedValue: "Ghost fishing gear", confidence: null, status: "confirmed", conflict: false, observerValue: null }];
+    render(<ReportReview />);
+    expect(screen.getByRole("img", { name: "Image suggestion decision confirmed" })).toBeInTheDocument();
+    expect(screen.queryByText(/You still need to confirm the final choice/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your selected threat category remains/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Initial status: Received/)).not.toBeInTheDocument();
+    expect(screen.getByText("Your report will be sent to a Case Coordinator for review.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  });
+}
+it("keeps the decision reminder and submission block for an unresolved image suggestion", async () => {
+  scenario.visualRecognition = { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: "ghost_gear", suggestedThreatLabel: "Ghost fishing gear", confidence: null, warning: null, resolution: "unresolved" };
+  scenario.aiSuggestions = [{ source: "smart_report", field: "possible_threat", label: "Possible threat type", suggestedValue: "Ghost fishing gear", confidence: null, status: "confirmed", conflict: false, observerValue: null }];
+  render(<ReportReview />);
+  expect(screen.getByText(/You still need to confirm the final choice/)).toBeInTheDocument();
+  expect(screen.queryByRole("img", { name: "Image suggestion decision confirmed" })).not.toBeInTheDocument();
+  await waitFor(() => expect(reviewReport).toHaveBeenCalled());
+  expect(screen.getByRole("button", { name: "Submit report" })).toBeDisabled();
+});

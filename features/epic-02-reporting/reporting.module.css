@@ -233,3 +233,56 @@
 .resetLink:hover { color: var(--color-danger-ink); }
 @media (max-width: 760px) { .whenRow { grid-template-columns: 1fr 1fr; } .whenRow > :first-child { grid-column: 1 / -1; } }
 @media (max-width: 480px) { .whenRow { grid-template-columns: 1fr; } .threatOptions { grid-template-columns: 1fr 1fr; } .threatOption { min-height: 72px; flex-direction: column; align-items: flex-start; } }
+
+/* Observation sidebar layout. Other reporting screens retain their existing layout. */
+.observationShell { max-width: 1120px; }
+.observationHeader { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 28px; }
+.observationHeader > div { min-width: 0; }
+.observationHeader h1 { margin: 8px 0; font-size: clamp(28px, 3vw, 40px); line-height: 1.15; }
+.observationHeader p { margin: 0; color: var(--color-muted); }
+.observationHeader > button { flex-shrink: 0; }
+.reportEyebrow { color: var(--color-primary-hover); font-size: 13px; font-weight: 800; text-transform: uppercase; }
+.observationLayout { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
+.observationMain { min-width: 0; display: grid; gap: 24px; }
+.observationSidebar { min-width: 0; display: grid; gap: 24px; }
+.observationLayout .card { padding: 22px; }
+.observationPhotos .uploadContent { align-items: stretch; text-align: left; margin-top: 16px; }
+.photoHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.photoHeading h2 { margin: 0; }
+.photoHeading .uploadLabel { color: #fff; background: var(--color-primary); border-width: 1px; }
+.observationPhotos .photoGrid { display: grid; grid-template-columns: 1fr; }
+.observationPhotos .photoCard { display: grid; grid-template-columns: 142px minmax(0, 1fr); align-items: center; border: 0; }
+.observationPhotos .photoImage { height: 110px; border-radius: 10px; }
+.observationPhotos .photoMeta { padding: 10px 16px; }
+.observationPhotos .metadataPrompt { grid-column: 1 / -1; margin-top: 12px; border: 0; border-radius: 10px; }
+.observationMain .whenRow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.observationMain .whenRow > :first-child { grid-column: auto; }
+.observationMain textarea { min-height: 130px; }
+.characterCount { text-align: right; color: var(--color-muted); font-size: 13px; font-weight: 400; }
+.observationDetails { display: grid; gap: 16px; }
+.observationDetails h2 { margin-bottom: 0; }
+.observationDetails .inlineSuggestionField { align-content: start; padding: 0; border: 0; background: transparent; min-width: 0; }
+.observationDetails .inlineSuggestionField:last-child { grid-column: 1 / -1; }
+.observationDetails .inlineFieldHeading { flex-direction: column; align-items: flex-start; gap: 4px; }
+.observationDetails .inlineFieldHeading em { padding: 0; background: transparent; font-size: 12px; font-weight: 500; text-transform: none; }
+.observationDetails .inlineSuggestionField input { width: 100%; min-width: 0; }
+.reviewDecisionCard { display: grid; gap: 22px; }
+.threatSuggestionCard { display: grid; gap: 16px; padding: 18px; background: #e8f4f1; border: 1px solid #b8dcd2; border-radius: 14px; overflow-wrap: anywhere; }
+.threatSuggestionCard h3, .threatSuggestionCard p { margin: 0; }
+.threatSource { display: grid; gap: 8px; }
+.threatSource + .threatSource { border-top: 1px solid #b8dcd2; padding-top: 16px; }
+.sourceBadge { color: var(--color-muted); font-size: 13px; font-weight: 700; }
+.suggestedCategory { color: var(--color-primary-hover); font-size: 22px; line-height: 1.3; }
+.suggestionButtons, .sidebarActions { display: grid; gap: 10px; }
+.suggestionButtons { margin-top: 8px; }
+.sidebarActions { padding: 0 12px; }
+.sidebarActions p { font-size: 13px; text-align: center; }
+.confirmedChoice { display: inline-flex; width: fit-content; align-items: center; gap: 6px; color: var(--color-success-ink); }
+.conflictNotice { display: flex; align-items: flex-start; gap: 8px; padding: 12px; color: var(--color-warning-ink); background: var(--color-warning-soft); border-radius: 10px; font-size: 14px; }
+.conflictNotice svg { flex: 0 0 18px; margin-top: 2px; }
+.suggestionDetails summary { cursor: pointer; color: var(--color-primary-hover); font-size: 14px; font-weight: 800; min-height: 32px; }
+.suggestionDetails p { margin-top: 10px; color: var(--color-muted); font-size: 13px; }
+.analysisControls { display: grid; gap: 10px; }
+.analysisControls button { text-align: left; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .observationLayout { grid-template-columns: 1fr; } .observationSidebar { gap: 16px; } .sidebarActions { padding: 0; } }
+@media (max-width: 540px) { .observationHeader { align-items: flex-start; flex-direction: column; gap: 16px; } .observationLayout .card { padding: 18px; } .observationMain .whenRow, .observationDetails .inlineSuggestionGrid { grid-template-columns: 1fr; } .observationPhotos .photoCard { grid-template-columns: 100px minmax(0, 1fr); } .observationPhotos .photoImage { height: 100px; } .observationPhotos .photoMeta { padding: 8px 12px; } .photoHeading { gap: 10px; } .photoHeading .uploadLabel { padding: 8px 12px; } }

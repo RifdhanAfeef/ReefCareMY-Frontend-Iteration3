@@ -15,7 +15,7 @@
 .textButton, .textLink { color: var(--color-primary); font: inherit; font-weight: 650; font-size: .875rem; text-underline-offset: 4px; }
 .textButton { cursor: pointer; border: 0; background: none; padding: 9px 0; text-decoration: underline; }
 .page button:disabled, .context button:disabled { cursor: not-allowed; opacity: .5; }
-.page :is(button, a, input, select, summary, [tabindex]):focus-visible, .context :is(button, a):focus-visible { outline: 3px solid #e5aa23; outline-offset: 3px; }
+.page :is(button, a, input, select, summary, [tabindex]):focus-visible, .context :is(button, a):focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 .interpretation { display: flex; align-items: flex-start; gap: 14px; padding: 18px 22px; background: #e4f1ee; border: 1px solid #c8e0da; border-radius: 12px; margin-bottom: 24px; }
 .interpretation > span { font-size: 1.2rem; color: var(--color-primary); }
 .interpretation p { margin: 0; font-size: .875rem; }
