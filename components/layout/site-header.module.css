@@ -196,8 +196,17 @@
 
   .inner {
     width: min(calc(100% - 40px), var(--content-width));
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 14px 0;
+  }
+
+  /* The logo gives way before the Report, avatar and Log out actions do. */
+  .brand {
+    min-width: 0;
+  }
+
+  .brandLogo {
+    width: min(205px, 100%);
   }
 
   .navigation {
@@ -258,7 +267,12 @@
   .brandLogo {
     width: min(170px, 100%);
   }
+}
 
+/* Signed in, the logo, Report, name, avatar and Log out need about 680 px on one row
+   with a long name, so below 720 px only the avatar shows; the name stays available
+   to screen readers (QA-UI-03). */
+@media (max-width: 720px) {
   .identity > span:first-child {
     position: absolute;
     width: 1px;
