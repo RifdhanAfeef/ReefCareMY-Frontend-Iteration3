@@ -1,6 +1,7 @@
 import type { ReefSiteReference } from "./types";
 
-// Synced with GET /api/v1/reference/dive-sites on 15 September 2026.
+// Synced with GET /api/v1/reference/dive-sites on 15 September 2026. Malang Rock (6) was removed
+// on 10 October 2026 as a duplicate of Batu Malang (8).
 // Every backend site has a matching, public-safe visitor profile in reef-sites.ts.
 export const diveSiteCatalog: ReefSiteReference[] = [
   { id: "perhentian-batu-nisan", backendDiveSiteId: 17, name: "Batu Nisan", island: "Perhentian", publicAreaLabel: "Perhentian Islands" },
@@ -20,7 +21,6 @@ export const diveSiteCatalog: ReefSiteReference[] = [
   { id: "tioman-coral-island", backendDiveSiteId: 11, name: "Coral Island (Pulau Tulai)", island: "Tioman", publicAreaLabel: "Tioman Island" },
   { id: "tioman-fan-canyon", backendDiveSiteId: 9, name: "Fan Canyon", island: "Tioman", publicAreaLabel: "Tioman Island" },
   { id: "tioman-labas-island", backendDiveSiteId: 5, name: "Labas Island", island: "Tioman", publicAreaLabel: "Tioman Island" },
-  { id: "tioman-malang-rock", backendDiveSiteId: 6, name: "Malang Rock", island: "Tioman", publicAreaLabel: "Tioman Island" },
   { id: "tioman-marine-park", backendDiveSiteId: 12, name: "Marine Park (Tekek)", island: "Tioman", publicAreaLabel: "Tioman Island" },
   { id: "tioman-pirate-reef", backendDiveSiteId: 10, name: "Pirate Reef", island: "Tioman", publicAreaLabel: "Tioman Island" },
   { id: "tioman-renggis", backendDiveSiteId: 3, name: "Renggis Island", island: "Tioman", publicAreaLabel: "Tioman Island" },
