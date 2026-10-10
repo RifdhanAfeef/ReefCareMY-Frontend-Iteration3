@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { latLng } from "leaflet";
 import {
   Circle,
   CircleMarker,
   MapContainer,
   TileLayer,
+  Tooltip,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -40,19 +42,86 @@ function MapInteraction({
   return null;
 }
 
-function InitialView({ pin, siteCentre }: { pin: MapPin | null; siteCentre: MapPin | null }) {
+function InitialView({
+  pin,
+  siteCentre,
+  diveSiteRadiusMetres,
+  islandRadiusMetres,
+  interactive,
+}: {
+  pin: MapPin | null;
+  siteCentre: MapPin | null;
+  diveSiteRadiusMetres: number | null;
+  islandRadiusMetres: number;
+  interactive: boolean;
+}) {
   const map = useMap();
+  const viewedSite = useRef<string | null>(null);
 
   useEffect(() => {
     map.invalidateSize();
-    if (siteCentre) {
-      map.setView([siteCentre.latitude, siteCentre.longitude], 10, { animate: false });
-    } else if (pin) {
-      map.setView([pin.latitude, pin.longitude], Math.max(map.getZoom(), 9), { animate: false });
-    } else {
-      map.fitBounds(malaysiaBounds, { padding: [18, 18], animate: false });
+    if (!siteCentre) {
+      viewedSite.current = null;
+      if (pin) {
+        map.setView([pin.latitude, pin.longitude], Math.max(map.getZoom(), 9), { animate: false });
+      } else {
+        map.fitBounds(malaysiaBounds, { padding: [18, 18], animate: false });
+      }
+      return;
     }
-  }, [map, pin, siteCentre]);
+
+    const siteKey = `${siteCentre.latitude}:${siteCentre.longitude}:${diveSiteRadiusMetres}:${islandRadiusMetres}`;
+    if (viewedSite.current === siteKey) return;
+
+    if (pin) {
+      viewedSite.current = siteKey;
+      map.setView([pin.latitude, pin.longitude], Math.max(map.getZoom(), 11), { animate: false });
+      return;
+    }
+
+    const centre = latLng(siteCentre.latitude, siteCentre.longitude);
+    const outerBounds = centre.toBounds(islandRadiusMetres * 2);
+    const innerBounds = diveSiteRadiusMetres ? centre.toBounds(diveSiteRadiusMetres * 2) : null;
+    const padding: [number, number] = [12, 12];
+    map.fitBounds(outerBounds, { padding, animate: false });
+
+    if (!innerBounds) {
+      viewedSite.current = siteKey;
+      return;
+    }
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (!interactive || reduceMotion) {
+      viewedSite.current = siteKey;
+      map.fitBounds(innerBounds, { padding, animate: false });
+      return;
+    }
+
+    const container = map.getContainer();
+    let cancelled = false;
+    const cancelOnUserInput = () => {
+      cancelled = true;
+      viewedSite.current = siteKey;
+      window.clearTimeout(startTimer);
+      map.stop();
+    };
+    for (const eventName of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+      container.addEventListener(eventName, cancelOnUserInput);
+    }
+    const startTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        viewedSite.current = siteKey;
+        map.flyToBounds(innerBounds, { padding, duration: 1.5, easeLinearity: 0.25 });
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      for (const eventName of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+        container.removeEventListener(eventName, cancelOnUserInput);
+      }
+      map.stop();
+    };
+  }, [map, pin, siteCentre, diveSiteRadiusMetres, islandRadiusMetres, interactive]);
 
   return null;
 }
@@ -60,6 +129,7 @@ function InitialView({ pin, siteCentre }: { pin: MapPin | null; siteCentre: MapP
 export function MalaysiaMap({
   pin,
   siteCentre,
+  siteName,
   diveSiteRadiusMetres,
   islandRadiusMetres,
   interactive = false,
@@ -67,6 +137,7 @@ export function MalaysiaMap({
 }: {
   pin: MapPin | null;
   siteCentre: MapPin | null;
+  siteName: string | null;
   diveSiteRadiusMetres: number | null;
   islandRadiusMetres: number;
   interactive?: boolean;
@@ -78,7 +149,7 @@ export function MalaysiaMap({
     <div className={styles.map}>
       <MapContainer
         className={styles.mapCanvas}
-        bounds={malaysiaBounds}
+        bounds={siteCentre ? latLng(siteCentre.latitude, siteCentre.longitude).toBounds(islandRadiusMetres * 2) : malaysiaBounds}
         minZoom={5}
         maxZoom={18}
         scrollWheelZoom
@@ -93,11 +164,13 @@ export function MalaysiaMap({
           }}
         />
         <MapInteraction interactive={interactive} onSetPin={onSetPin} />
-        <InitialView pin={pin} siteCentre={siteCentre} />
+        <InitialView pin={pin} siteCentre={siteCentre} diveSiteRadiusMetres={diveSiteRadiusMetres} islandRadiusMetres={islandRadiusMetres} interactive={interactive} />
         {siteCentre && <>
           <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={islandRadiusMetres} pathOptions={{ color: "#c98b2a", weight: 2, dashArray: "7 6", fillColor: "#f4c66f", fillOpacity: 0.08 }} />
           {diveSiteRadiusMetres && <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={diveSiteRadiusMetres} pathOptions={{ color: "#0f8b8d", weight: 2, fillColor: "#29a3a5", fillOpacity: 0.16 }} />}
-          <CircleMarker center={[siteCentre.latitude, siteCentre.longitude]} radius={6} pathOptions={{ color: "#ffffff", weight: 3, fillColor: "#0b6466", fillOpacity: 1 }} />
+          <CircleMarker center={[siteCentre.latitude, siteCentre.longitude]} radius={6} pathOptions={{ color: "#ffffff", weight: 3, fillColor: "#0b6466", fillOpacity: 1 }}>
+            {siteName && <Tooltip direction="top" offset={[0, -8]} opacity={1}>{siteName}</Tooltip>}
+          </CircleMarker>
         </>}
         {pin && (
           <CircleMarker
