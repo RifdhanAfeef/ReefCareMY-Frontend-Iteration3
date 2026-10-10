@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { latLng } from "leaflet";
+import { latLng, point } from "leaflet";
+import type { TileLayer as LeafletTileLayer } from "leaflet";
 import {
   Circle,
   CircleMarker,
@@ -48,12 +49,14 @@ function InitialView({
   diveSiteRadiusMetres,
   islandRadiusMetres,
   interactive,
+  tileLayer,
 }: {
   pin: MapPin | null;
   siteCentre: MapPin | null;
   diveSiteRadiusMetres: number | null;
   islandRadiusMetres: number;
   interactive: boolean;
+  tileLayer: React.RefObject<LeafletTileLayer | null>;
 }) {
   const map = useMap();
   const viewedSite = useRef<string | null>(null);
@@ -98,30 +101,68 @@ function InitialView({
 
     const container = map.getContainer();
     let cancelled = false;
+    let stepTimer: number | undefined;
+    let tileLoadListener: (() => void) | undefined;
+    const clearPendingStep = () => {
+      window.clearTimeout(stepTimer);
+      if (tileLoadListener) tileLayer.current?.off("load", tileLoadListener);
+      tileLoadListener = undefined;
+    };
     const cancelOnUserInput = () => {
       cancelled = true;
       viewedSite.current = siteKey;
       window.clearTimeout(startTimer);
+      clearPendingStep();
       map.stop();
     };
     for (const eventName of ["pointerdown", "touchstart", "wheel", "keydown"]) {
       container.addEventListener(eventName, cancelOnUserInput);
     }
     const startTimer = window.setTimeout(() => {
-      if (!cancelled) {
-        viewedSite.current = siteKey;
-        map.flyToBounds(innerBounds, { padding, duration: 1.5, easeLinearity: 0.25 });
+      if (cancelled) return;
+      const finalZoom = map.getBoundsZoom(innerBounds, false, point(...padding));
+      const startZoom = map.getZoom();
+      viewedSite.current = siteKey;
+      if (finalZoom <= startZoom) {
+        map.fitBounds(innerBounds, { padding, animate: false });
+        return;
       }
+
+      // A flyTo scales low-resolution raster tiles through multiple zoom levels.
+      // Move one whole zoom level at a time and wait for its tiles before continuing.
+      const nextStep = (zoom: number) => {
+        if (cancelled) return;
+        if (zoom > finalZoom) {
+          map.fitBounds(innerBounds, { padding, animate: false });
+          return;
+        }
+        map.setView(centre, zoom, { animate: false });
+        const layer = tileLayer.current;
+        const advance = () => {
+          clearPendingStep();
+          stepTimer = window.setTimeout(() => nextStep(zoom + 1), 180);
+        };
+        if (layer?.isLoading()) {
+          tileLoadListener = advance;
+          layer.once("load", advance);
+          // Do not leave the map stuck if the tile service is slow or unavailable.
+          stepTimer = window.setTimeout(advance, 1500);
+        } else {
+          stepTimer = window.setTimeout(() => nextStep(zoom + 1), 180);
+        }
+      };
+      nextStep(startZoom + 1);
     }, 300);
 
     return () => {
       window.clearTimeout(startTimer);
+      clearPendingStep();
       for (const eventName of ["pointerdown", "touchstart", "wheel", "keydown"]) {
         container.removeEventListener(eventName, cancelOnUserInput);
       }
       map.stop();
     };
-  }, [map, pin, siteCentre, diveSiteRadiusMetres, islandRadiusMetres, interactive]);
+  }, [map, pin, siteCentre, diveSiteRadiusMetres, islandRadiusMetres, interactive, tileLayer]);
 
   return null;
 }
@@ -144,6 +185,7 @@ export function MalaysiaMap({
   onSetPin?: (pin: MapPin) => void;
 }) {
   const [tilesUnavailable, setTilesUnavailable] = useState(false);
+  const tileLayer = useRef<LeafletTileLayer | null>(null);
 
   return (
     <div className={styles.map}>
@@ -152,11 +194,14 @@ export function MalaysiaMap({
         bounds={siteCentre ? latLng(siteCentre.latitude, siteCentre.longitude).toBounds(islandRadiusMetres * 2) : malaysiaBounds}
         minZoom={5}
         maxZoom={18}
+        zoomAnimation={false}
         scrollWheelZoom
         zoomControl
         worldCopyJump
       >
         <TileLayer
+          ref={tileLayer}
+          detectRetina
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           eventHandlers={{
@@ -164,7 +209,7 @@ export function MalaysiaMap({
           }}
         />
         <MapInteraction interactive={interactive} onSetPin={onSetPin} />
-        <InitialView pin={pin} siteCentre={siteCentre} diveSiteRadiusMetres={diveSiteRadiusMetres} islandRadiusMetres={islandRadiusMetres} interactive={interactive} />
+        <InitialView pin={pin} siteCentre={siteCentre} diveSiteRadiusMetres={diveSiteRadiusMetres} islandRadiusMetres={islandRadiusMetres} interactive={interactive} tileLayer={tileLayer} />
         {siteCentre && <>
           <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={islandRadiusMetres} pathOptions={{ color: "#c98b2a", weight: 2, dashArray: "7 6", fillColor: "#f4c66f", fillOpacity: 0.08 }} />
           {diveSiteRadiusMetres && <Circle center={[siteCentre.latitude, siteCentre.longitude]} radius={diveSiteRadiusMetres} pathOptions={{ color: "#0f8b8d", weight: 2, fillColor: "#29a3a5", fillOpacity: 0.16 }} />}
