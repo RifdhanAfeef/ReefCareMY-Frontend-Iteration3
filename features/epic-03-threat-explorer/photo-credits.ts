@@ -20,6 +20,16 @@ export const threatPhotoCredits = [
     "image": "/images/threats/open/net-divers.webp"
   },
   {
+    "name": "net-turtle",
+    "title": "Turtle entangled in marine debris (ghost net).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Turtle_entangled_in_marine_debris_(ghost_net).jpg",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/5/50/Turtle_entangled_in_marine_debris_%28ghost_net%29.jpg",
+    "author": "NOAA",
+    "license": "Public domain",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "image": "/images/threats/open/net-turtle.webp"
+  },
+  {
     "name": "bleaching-fire",
     "title": "Fire Coral Bleaching.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:Fire_Coral_Bleaching.jpg",
@@ -95,15 +105,6 @@ export const threatPhotoCredits = [
     "license": "CC BY 2.5",
     "licenseUrl": "https://creativecommons.org/licenses/by/2.5/",
     "image": "/images/reef-sites/profiles/tioman-labas-island-2.jpg"
-  },
-  {
-    "name": "healthy-plate-reef",
-    "title": "Coral Reef in the Red Sea.JPG",
-    "source": "https://commons.wikimedia.org/wiki/File:Coral_Reef_in_the_Red_Sea.JPG",
-    "author": "Mahmoud Habeeb",
-    "license": "Public domain",
-    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
-    "image": "/images/reef-sites/profiles/tioman-malang-rock-1.jpg"
   },
   {
     "name": "healthy-colourful-reef",

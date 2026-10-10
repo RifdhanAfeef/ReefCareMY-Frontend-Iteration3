@@ -5,8 +5,10 @@ export type ThreatExplorerCode =
   | "physical_reef_damage";
 
 /**
- * One gallery image for a threat module: an "affected" view paired with a
- * "healthy for comparison" view, so the pair reads as a clear before/after.
+ * One gallery image for a threat module. Bleaching, debris and reef damage pair
+ * an "affected" view with a "healthy for comparison" view as a before/after.
+ * Ghost fishing gear shows two examples of the gear itself instead: a healthy
+ * reef says nothing about how a lost net looks.
  * (US3.1 AC2 representative imagery; US3.2 AC2 before/after comparison)
  */
 export type ThreatExplorerImage = {
@@ -30,7 +32,7 @@ export type ThreatExplorerItem = {
   safety: string;
   image: string;
   imageAlt: string;
-  /** Affected vs. healthy comparison pair shown in the detail gallery. (US3.1 AC2, US3.2 AC2) */
+  /** Example images shown in the detail gallery (see ThreatExplorerImage). (US3.1 AC2, US3.2 AC2) */
   examples: ThreatExplorerImage[];
 };
 
@@ -51,7 +53,7 @@ export const threatExplorerItems: ThreatExplorerItem[] = [
     imageAlt: "A lost fishing net draped over coral on a reef slope",
     examples: [
       { image: "/images/threats/open/net-divers.webp", alt: "Two divers working around a large mass of derelict fishing net on a reef", caption: "Trained divers removing a lost net" },
-      { image: "/images/reef-sites/profiles/tioman-malang-rock-1.jpg", alt: "Plate and branching corals on a reef with no netting", caption: "Healthy reef for comparison" },
+      { image: "/images/threats/open/net-turtle.webp", alt: "A sea turtle wrapped in a green derelict fishing net beside a rocky reef ledge", caption: "Sea turtle caught in a lost net" },
     ],
   },
   {
