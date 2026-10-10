@@ -61,6 +61,10 @@ export type FollowUpEvidence = {
   fileSizeBytes: number | null;
   uploadedAt: string;
 };
+export type FollowUpEvidenceUploaded = FollowUpEvidence & {
+  caseActionId: number;
+  caseEventId: number;
+};
 export type FollowUp = {
   caseActionId: number;
   // Older deployments may omit this field; do not assume publication status.

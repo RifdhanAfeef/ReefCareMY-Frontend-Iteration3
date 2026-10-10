@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ApiError } from "@/lib/api/client";
 import {
   getOpenInformationRequest,
   getReportDetail,
-  submitInformationResponse,
+  submitInformationResponseWithPhotos,
 } from "@/lib/api/reportsApi";
 import type {
   ObserverInformationRequest,
@@ -18,6 +20,12 @@ import {
 } from "@/features/epic-02-reporting/submitted-structured-details";
 import styles from "./report-detail.module.css";
 
+const allowedPhotoTypes = ["image/jpeg", "image/png", "image/webp"];
+const maxPhotoSize = 10 * 1024 * 1024;
+const maxReplyPhotos = 5;
+
+type SelectedReplyPhoto = { file: File; previewUrl: string };
+
 type LoadState = "loading" | "loaded" | "error";
 export function ReportDetail({ reportReference }: { reportReference: string }) {
   const [report, setReport] = useState<ReportDetailData | null>(null);
@@ -28,6 +36,14 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
   const [responseError, setResponseError] = useState("");
   const [responseSuccess, setResponseSuccess] = useState("");
   const [submittingResponse, setSubmittingResponse] = useState(false);
+  const [responsePhotos, setResponsePhotos] = useState<SelectedReplyPhoto[]>([]);
+  const [photoError, setPhotoError] = useState("");
+  const responseBusy = useRef(false);
+  const photoUrls = useRef(new Set<string>());
+  useEffect(() => {
+    const urls = photoUrls.current;
+    return () => { for (const url of urls) URL.revokeObjectURL(url); urls.clear(); };
+  }, []);
   const structuredDetails = useMemo<SubmittedStructuredDetails>(
     () => readSubmittedStructuredDetails(reportReference),
     [reportReference],
@@ -59,22 +75,53 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
     };
   }, [reportReference]);
 
+  function clearPhotoSelection() {
+    for (const url of photoUrls.current) URL.revokeObjectURL(url);
+    photoUrls.current.clear();
+    setResponsePhotos([]);
+    setPhotoError("");
+  }
+
+  function choosePhotos(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (responseBusy.current || selected.length === 0) return;
+    if (responsePhotos.length + selected.length > maxReplyPhotos) {
+      setPhotoError("Attach up to 5 photos. Remove a selected photo before adding more.");
+      return;
+    }
+    if (selected.some((file) => !allowedPhotoTypes.includes(file.type) || file.size === 0 || file.size > maxPhotoSize)) {
+      setPhotoError("Choose non-empty JPG, PNG or WebP photos, up to 10 MB each. These files were not added.");
+      return;
+    }
+    setPhotoError("");
+    const photos = selected.map((file) => {
+      const previewUrl = URL.createObjectURL(file);
+      photoUrls.current.add(previewUrl);
+      return { file, previewUrl };
+    });
+    setResponsePhotos((current) => [...current, ...photos]);
+  }
+
   async function respondToRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (responseBusy.current) return;
     const text = responseText.trim();
     setResponseError("");
     setResponseSuccess("");
+    if (photoError) return;
     if (!text) {
       setResponseError("Add the requested details before submitting.");
       return;
     }
 
+    responseBusy.current = true;
     setSubmittingResponse(true);
     try {
       const payload = {
         responseText: text,
       };
-      const result = await submitInformationResponse(reportReference, payload);
+      const result = await submitInformationResponseWithPhotos(reportReference, payload, responsePhotos.map((photo) => photo.file));
       setReport((current) => current ? {
         ...current,
         status: result.status,
@@ -83,13 +130,23 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
       } : current);
       setInformationRequest(null);
       setResponseText("");
+      clearPhotoSelection();
       setResponseSuccess("Your additional information was submitted and attached to this report.");
       window.dispatchEvent(new CustomEvent("reefcare:report-updated", {
         detail: { reportReference },
       }));
     } catch (requestError) {
-      setResponseError(userFacingError(requestError, "Your response could not be submitted. Please try again."));
+      const message = requestError instanceof ApiError && requestError.status === 413
+        ? "A photo exceeds the upload limit. Choose smaller photos and try again."
+        : requestError instanceof ApiError && requestError.status === 400
+          ? "Check that each photo is a non-empty JPG, PNG or WebP file and that no more than 5 are attached."
+          : requestError instanceof ApiError && requestError.status === 409
+            ? "This information request may already be answered or closed. Refresh the report before trying again."
+            : userFacingError(requestError, "Your response could not be submitted. Please try again.");
+      // Keep the text and files for a clean retry; the backend saves them atomically.
+      setResponseError(message);
     } finally {
+      responseBusy.current = false;
       setSubmittingResponse(false);
     }
   }
@@ -172,7 +229,7 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
         </dl>
       </details>
 
-      {(informationRequest?.requestText || report.informationRequestReason) && (
+      {report.status === "needs_more_info" && (informationRequest?.requestText || report.informationRequestReason) && (
         <section className={styles.infoRequest} aria-labelledby="information-request-heading">
           <h2 id="information-request-heading">More information needed</h2>
           <p>{informationRequest?.requestText ?? report.informationRequestReason}</p>
@@ -193,10 +250,31 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
             />
             <div className={styles.responseMeta} id="information-response-help">
               <small>{responseText.length}/2000 characters</small>
-              <small>Photograph uploads are temporarily unavailable. Please respond in writing.</small>
+              <small>Written details are required. Photos are optional.</small>
             </div>
+            <label htmlFor="information-response-photos">Additional photos (optional)</label>
+            <input id="information-response-photos" type="file" multiple
+              accept="image/jpeg,image/png,image/webp" onChange={choosePhotos}
+              disabled={submittingResponse} aria-describedby="information-response-photos-help"
+              aria-invalid={Boolean(photoError)} />
+            <small id="information-response-photos-help">Up to 5 JPG, PNG or WebP photos, 10 MB each. Photos stay private with your report.</small>
+            {responsePhotos.length > 0 && <ul className={styles.replyPhotos} aria-label="Selected additional photos">
+              {responsePhotos.map(({ file, previewUrl }, index) => <li key={previewUrl}>
+                <Image src={previewUrl} width={120} height={90} unoptimized alt={`Selected photo: ${file.name}`} />
+                <span>{file.name}</span>
+                <button className={styles.removePhoto} type="button" disabled={submittingResponse}
+                  aria-label={`Remove photo ${index + 1}: ${file.name}`} onClick={() => {
+                    URL.revokeObjectURL(previewUrl);
+                    photoUrls.current.delete(previewUrl);
+                    setResponsePhotos((current) => current.filter((_, position) => position !== index));
+                    setPhotoError("");
+                  }}>Remove</button>
+              </li>)}
+            </ul>}
+            {photoError && <div><p className={styles.responseError} role="alert">{photoError}</p>
+              <button className={styles.removePhoto} type="button" disabled={submittingResponse} onClick={clearPhotoSelection}>Clear photo selection</button></div>}
             {responseError && <p className={styles.responseError} role="alert">{responseError}</p>}
-            <button type="submit" disabled={submittingResponse}>
+            <button type="submit" disabled={submittingResponse || Boolean(photoError)}>
               {submittingResponse ? "Submitting…" : "Submit additional information"}
             </button>
           </form>

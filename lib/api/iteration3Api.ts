@@ -1,6 +1,6 @@
 import { apiRequest } from "./client";
 import type {
-  ExternalContext, FollowUp, FollowUpCorrection, FollowUpCreate, FollowUpList,
+  ExternalContext, FollowUp, FollowUpCorrection, FollowUpCreate, FollowUpEvidenceUploaded, FollowUpList,
   MonitoringCondition, MonitoringCreate, PublicSiteContext, RejectionReason,
   RelatedComparison, RelatedDecision, RelatedReports, SiteHistory,
 } from "./iteration3-types";
@@ -45,6 +45,14 @@ export function setFollowUpPublication(reference: string, caseActionId: number, 
   return apiRequest<FollowUp & { isPublishable: boolean }>({
     path: `${casePath(reference)}/follow-ups/${caseActionId}/publication`,
     method: "POST", body: { publish },
+  });
+}
+export function uploadFollowUpEvidence(reference: string, caseActionId: number, file: File) {
+  const formData = new FormData();
+  formData.set("file", file);
+  return apiRequest<FollowUpEvidenceUploaded>({
+    path: `${casePath(reference)}/follow-ups/${encodeURIComponent(String(caseActionId))}/evidence`,
+    method: "POST", body: formData, timeoutMs: 60_000,
   });
 }
 export function createMonitoring(reference: string, body: MonitoringCreate) {

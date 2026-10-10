@@ -213,6 +213,19 @@ export type ObserverInformationResponseResult = {
   coordinatorRetained?: number | null;
 };
 
+// Safe metadata only. Images are fetched through authenticated evidence routes.
+export type InformationReplyEvidence = {
+  evidenceId: number;
+  mediaType: string;
+  fileSizeBytes: number | null;
+  uploadedAt: string;
+};
+
+export type ObserverInformationResponseWithPhotosResult = ObserverInformationResponseResult & {
+  caseEventId: number;
+  evidence: InformationReplyEvidence[];
+};
+
 export type ReportTimelineEvent = {
   statusLabel: string;
   occurredAt: string;
@@ -501,6 +514,8 @@ export type CoordinatorAiAssisted = {
 };
 
 export type CoordinatorInformationExchangeEntry = {
+  caseEventId?: number;
+  evidence?: InformationReplyEvidence[];
   eventType: string;
   message?: string | null;
   occurredAt: string;

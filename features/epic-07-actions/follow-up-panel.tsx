@@ -3,9 +3,9 @@
 import Image from "next/image";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
-import { getConservationActionTypes, getCoordinatorEvidence, uploadConservationActionEvidence } from "@/lib/api/coordinatorApi";
+import { getConservationActionTypes, getCoordinatorEvidence } from "@/lib/api/coordinatorApi";
 import {
-  correctFollowUp, createFollowUp, createMonitoring, getFollowUps, getMonitoringConditions, setFollowUpPublication,
+  correctFollowUp, createFollowUp, createMonitoring, getFollowUps, getMonitoringConditions, setFollowUpPublication, uploadFollowUpEvidence,
 } from "@/lib/api/iteration3Api";
 import type { ConservationActionTypeOption } from "@/lib/api/types";
 import type { FollowUp, FollowUpCorrection, MonitoringCondition } from "@/lib/api/iteration3-types";
@@ -81,7 +81,7 @@ export function FollowUpPanel({
   const [nextDate, setNextDate] = useState("");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
-  const [pendingPhoto, setPendingPhoto] = useState<{ eventId: number; file: File } | null>(null);
+  const [pendingPhoto, setPendingPhoto] = useState<{ caseActionId: number; file: File } | null>(null);
   const [correctionId, setCorrectionId] = useState<number | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
   const [correctedTeam, setCorrectedTeam] = useState("");
@@ -162,23 +162,28 @@ export function FollowUpPanel({
     setPhoto(file);
   }
 
-  async function attachPhoto(eventId: number, file: File) {
-    await uploadConservationActionEvidence(reportReference, eventId, file);
-    await reload();
+  async function attachPhoto(caseActionId: number, file: File) {
+    const evidence = await uploadFollowUpEvidence(reportReference, caseActionId, file);
+    // An accepted upload must not be retried just because refreshing history failed.
     setPendingPhoto(null);
+    setRecords((items) => items.map((record) => record.caseActionId === caseActionId
+      ? { ...record, evidence: [...(record.evidence ?? []).filter((item) => item.evidenceId !== evidence.evidenceId), evidence] }
+      : record));
+    try { await reload(); }
+    catch { setError("The photo was attached, but the latest history could not be loaded. Refresh the case to check it."); }
   }
 
   async function retryPhoto() {
-    if (!pendingPhoto) return;
+    if (!pendingPhoto || saving) return;
     setSaving(true); setError("");
-    try { await attachPhoto(pendingPhoto.eventId, pendingPhoto.file); setNotice("The evidence photo was attached."); }
+    try { await attachPhoto(pendingPhoto.caseActionId, pendingPhoto.file); setNotice("The evidence photo was attached."); }
     catch (requestError) { setError(userFacingError(requestError, "The photo could not be attached. Try again.")); }
     finally { setSaving(false); }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving || publicationBusy.current) return;
+    if (saving || publicationBusy.current || pendingPhoto) return;
     setError(""); setNotice(""); setPublicationNotice("");
     if (!date && (mode !== "action" || actionState === "action_taken")) {
       setError("Enter the date of the completed follow-up."); return;
@@ -221,17 +226,22 @@ export function FollowUpPanel({
             recordedOutcome: outcome.trim(), responsibleTeam: team.trim() || undefined,
             notes: notes.trim() || undefined,
           });
-      await reload();
+      // Keep the saved record even if refreshing its list fails. Never create it again for a photo retry.
+      setRecords((items) => [...items.filter((item) => item.caseActionId !== saved.caseActionId), saved]);
       setNotice(mode === "action" && actionState === "action_planned"
         ? "The planned action was recorded. It has not been completed."
         : mode === "sourced_outcome" ? "The sourced outcome was recorded."
           : mode === "monitoring" ? "The monitoring visit was recorded." : "The completed action was recorded.");
       if (photo) {
-        try { await attachPhoto(saved.caseEventId, photo); }
+        try { await attachPhoto(saved.caseActionId, photo); }
         catch (requestError) {
-          setPendingPhoto({ eventId: saved.caseEventId, file: photo });
+          setPendingPhoto({ caseActionId: saved.caseActionId, file: photo });
           setError(userFacingError(requestError, "The record was saved, but its photo could not be attached. Try the upload again."));
         }
+      }
+      if (!photo) {
+        try { await reload(); }
+        catch { setError("The follow-up was saved, but the latest history could not be loaded. Refresh the case to check it."); }
       }
       setDate(""); setTeam(""); setOutcome(""); setSource(""); setObservations(""); setNotes(""); setPhoto(null); setNextDate(""); setNextRequired(false);
     } catch (requestError) { setError(userFacingError(requestError, "The follow-up could not be saved.")); }
@@ -240,7 +250,7 @@ export function FollowUpPanel({
 
   async function saveCorrection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving || publicationBusy.current) return;
+    if (saving || publicationBusy.current || pendingPhoto) return;
     if (correctionId == null || !correctionReason.trim()) { setError("Explain the correction before saving."); return; }
     const original = records.find((record) => record.caseActionId === correctionId);
     if (!original) return;
@@ -312,7 +322,7 @@ export function FollowUpPanel({
           </div>
           {(record.evidence?.length ?? 0) > 0 && <div className={styles.photos}>{record.evidence.map((evidence) =>
             <EvidencePreview key={evidence.evidenceId} reportReference={reportReference} evidenceId={evidence.evidenceId} />)}</div>}
-          {record.followUpType !== "monitoring" && !record.supersededByCaseActionId && <button className={styles.textButton} type="button" disabled={saving || publicationTarget != null} onClick={() => {
+          {record.followUpType !== "monitoring" && !record.supersededByCaseActionId && <button className={styles.textButton} type="button" disabled={saving || publicationTarget != null || pendingPhoto != null} onClick={() => {
             setCorrectionId(record.caseActionId); setCorrectedTeam(record.responsibleTeam ?? "");
             setCorrectedOutcome(record.recordedOutcome ?? "");
             setCorrectedNotes(record.notes ?? "");
@@ -378,11 +388,11 @@ export function FollowUpPanel({
         {mode !== "monitoring" && <label>Recorded outcome{mode === "sourced_outcome" ? " *" : ""}
           <textarea required={mode === "sourced_outcome"} value={outcome} onChange={(event) => setOutcome(event.target.value)} /></label>}
         <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-        <label>Supporting photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} />{photo && <small>{photo.name}</small>}</label>
+        <label>Supporting photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} disabled={saving || pendingPhoto != null} />{photo && <small>{photo.name}</small>}</label>
         {error && <p className={styles.error} role="alert">{error}</p>}
         {notice && <p className={styles.success} role="status">{notice}</p>}
-        {pendingPhoto && <button type="button" disabled={saving} onClick={retryPhoto}>Retry photo upload</button>}
-        <button className={styles.save} type="submit" disabled={saving}>{saving ? "Saving…" : "Save follow-up"}</button>
+        {pendingPhoto && <aside className={styles.notice}><p>The follow-up is already saved. Retry {pendingPhoto.file.name} without creating another record.</p><button type="button" disabled={saving} onClick={retryPhoto}>Retry photo upload</button></aside>}
+        <button className={styles.save} type="submit" disabled={saving || pendingPhoto != null}>{saving ? "Saving…" : "Save follow-up"}</button>
       </form>}
       {!assessed && <p className={styles.notice}>Follow-up can be recorded after the evidence assessment.</p>}
       {!assessed && error && <p role="alert" className={styles.error}>{error}</p>}

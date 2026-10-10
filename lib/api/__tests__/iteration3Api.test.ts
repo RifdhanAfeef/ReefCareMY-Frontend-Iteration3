@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../client";
 import {
   claimAndCompare, createFollowUp, createMonitoring, decideRelationship,
-  setFollowUpPublication, getExternalContext, getFollowUps, getPublicSiteContext, getRelatedReports, getSiteHistory,
+  uploadFollowUpEvidence, setFollowUpPublication, getExternalContext, getFollowUps, getPublicSiteContext, getRelatedReports, getSiteHistory,
 } from "../iteration3Api";
 
 vi.mock("../client", () => ({ apiRequest: vi.fn() }));
@@ -54,4 +54,17 @@ it("publishes and withdraws through the owner-scoped publication route", async (
   await setFollowUpPublication("RC/1", 12, false);
   expect(apiRequest).toHaveBeenNthCalledWith(1, { path: "/api/v1/coordinator/reports/RC%2F1/follow-ups/8/publication", method: "POST", body: { publish: true } });
   expect(apiRequest).toHaveBeenNthCalledWith(2, { path: "/api/v1/coordinator/reports/RC%2F1/follow-ups/12/publication", method: "POST", body: { publish: false } });
+});
+
+
+it("uploads follow-up evidence to the caseActionId route using the file multipart field", async () => {
+  const file = new File(["photo"], "reef.jpg", { type: "image/jpeg" });
+  await uploadFollowUpEvidence("RC/1", 8, file);
+  const request = vi.mocked(apiRequest).mock.calls[0][0];
+  expect(request.path).toBe("/api/v1/coordinator/reports/RC%2F1/follow-ups/8/evidence");
+  expect(request.method).toBe("POST");
+  expect(request.timeoutMs).toBe(60_000);
+  expect(request.body).toBeInstanceOf(FormData);
+  expect((request.body as FormData).get("file")).toBe(file);
+  expect(Array.from((request.body as FormData).keys())).toEqual(["file"]);
 });

@@ -7,6 +7,7 @@ import type {
   ObserverInformationRequest,
   ObserverInformationResponseCreate,
   ObserverInformationResponseResult,
+  ObserverInformationResponseWithPhotosResult,
   ReportCompletenessRequest,
   ReportCompletenessResponse,
   ReportDetail,
@@ -110,6 +111,22 @@ export async function submitInformationResponse(
     path: `/api/v1/reports/${encodeURIComponent(reportReference)}/information-response`,
     method: "POST",
     body: payload,
+  });
+}
+
+export async function submitInformationResponseWithPhotos(
+  reportReference: string,
+  payload: ObserverInformationResponseCreate,
+  photos: File[] = [],
+): Promise<ObserverInformationResponseWithPhotosResult> {
+  const formData = new FormData();
+  formData.set("responseText", payload.responseText);
+  for (const photo of photos) formData.append("photos", photo);
+  return apiRequest<ObserverInformationResponseWithPhotosResult>({
+    path: `/api/v1/reports/${encodeURIComponent(reportReference)}/information-response/with-photos`,
+    method: "POST",
+    body: formData,
+    timeoutMs: 60_000,
   });
 }
 

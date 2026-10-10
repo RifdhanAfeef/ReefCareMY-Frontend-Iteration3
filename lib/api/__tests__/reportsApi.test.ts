@@ -5,6 +5,7 @@ import {
   getReportDetail,
   getReportTimeline,
   submitInformationResponse,
+  submitInformationResponseWithPhotos,
 } from "../reportsApi";
 import * as client from "../client";
 
@@ -79,4 +80,26 @@ describe("observer information requests", () => {
     });
   });
 
+});
+
+
+describe("observer replies with photos", () => {
+  it("sends text and repeated photos in one multipart request to the same report", async () => {
+    const files = [new File(["first"], "wide.jpg", { type: "image/jpeg" }), new File(["second"], "close.png", { type: "image/png" })];
+    await submitInformationResponseWithPhotos("RC/0241", { responseText: "Wider and closer views." }, files);
+    const request = mockedApiRequest.mock.calls[0][0];
+    expect(request.path).toBe("/api/v1/reports/RC%2F0241/information-response/with-photos");
+    expect(request.method).toBe("POST");
+    expect(request.timeoutMs).toBe(60_000);
+    expect(request.body).toBeInstanceOf(FormData);
+    expect((request.body as FormData).get("responseText")).toBe("Wider and closer views.");
+    expect((request.body as FormData).getAll("photos")).toEqual(files);
+  });
+
+  it("allows a text-only answer through the new multipart route", async () => {
+    await submitInformationResponseWithPhotos("RC-0241", { responseText: "About three metres wide." });
+    const form = mockedApiRequest.mock.calls[0][0].body as FormData;
+    expect(form.get("responseText")).toBe("About three metres wide.");
+    expect(form.getAll("photos")).toEqual([]);
+  });
 });

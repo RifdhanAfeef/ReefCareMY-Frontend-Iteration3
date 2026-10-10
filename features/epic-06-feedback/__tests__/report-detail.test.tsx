@@ -8,10 +8,13 @@ import { ApiError } from "@/lib/api/client";
 vi.mock("@/lib/api/reportsApi");
 const mockedGetReportDetail = vi.mocked(reportsApi.getReportDetail);
 const mockedGetOpenInformationRequest = vi.mocked(reportsApi.getOpenInformationRequest);
-const mockedSubmitInformationResponse = vi.mocked(reportsApi.submitInformationResponse);
+const mockedSubmitInformationResponse = vi.mocked(reportsApi.submitInformationResponseWithPhotos);
 
 beforeEach(() => {
   window.localStorage.clear();
+  let previewNumber = 0;
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => `blob:reply-photo-${++previewNumber}`) });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
   mockedGetReportDetail.mockReset();
   mockedGetOpenInformationRequest.mockReset();
   mockedGetOpenInformationRequest.mockResolvedValue(null);
@@ -142,6 +145,8 @@ describe("US6.3 — information request reason is visible", () => {
       status: "under_review",
       responseText: "The net was approximately 3 metres wide.",
       respondedAt: "2026-09-11T04:00:00Z",
+      caseEventId: 881,
+      evidence: [],
     });
 
     render(<ReportDetail reportReference="RC-0241" />);
@@ -152,12 +157,13 @@ describe("US6.3 — information request reason is visible", () => {
     await waitFor(() => expect(mockedSubmitInformationResponse).toHaveBeenCalledWith(
       "RC-0241",
       { responseText: "The net was approximately 3 metres wide." },
+      [],
     ));
     expect(await screen.findByText(/attached to this report/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Additional details/)).not.toBeInTheDocument();
   });
 
-  it("keeps information responses text-only until the backend upload contract exists", async () => {
+  it("offers optional photos with the documented limits", async () => {
     mockedGetReportDetail.mockResolvedValue(
       baseReport({
         status: "needs_more_info",
@@ -166,8 +172,9 @@ describe("US6.3 — information request reason is visible", () => {
       }),
     );
     render(<ReportDetail reportReference="RC-0241" />);
-    expect(await screen.findByText(/Photograph uploads are temporarily unavailable/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText("Choose photographs")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("Additional photos (optional)")).toHaveAttribute("multiple");
+    expect(screen.getByText(/Up to 5 JPG, PNG or WebP photos/)).toBeInTheDocument();
+    expect(screen.queryByText(/Photograph uploads are temporarily unavailable/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Additional details/)).toHaveAttribute("maxlength", "2000");
   });
 
@@ -317,4 +324,113 @@ describe("Observer contribution feedback", () => {
     await screen.findByText("Ghost fishing gear");
     expect(screen.queryByRole("heading", { name: "Your contribution" })).not.toBeInTheDocument();
   });
+});
+
+
+async function openPhotoReply() {
+  mockedGetReportDetail.mockResolvedValue(baseReport({ status: "needs_more_info", statusLabel: "More information needed", informationRequestReason: "Please add a wider photo." }));
+  render(<ReportDetail reportReference="RC-0241" />);
+  const input = await screen.findByLabelText("Additional photos (optional)");
+  fireEvent.change(screen.getByLabelText("Additional details"), { target: { value: "Wider view attached." } });
+  return input;
+}
+
+const acceptedPhotoReply = {
+  reportReference: "RC-0241", status: "under_review" as const,
+  responseText: "Wider view attached.", respondedAt: "2026-10-10T03:00:00Z", caseEventId: 881,
+  evidence: [{ evidenceId: 501, mediaType: "photo", fileSizeBytes: 5, uploadedAt: "2026-10-10T03:00:00Z" }],
+};
+
+describe("Observer photo replies", () => {
+  it("previews photos, removes one and submits the remaining photo together with text", async () => {
+    mockedSubmitInformationResponse.mockResolvedValueOnce(acceptedPhotoReply);
+    const input = await openPhotoReply();
+    const files = [new File(["one"], "wide.jpg", { type: "image/jpeg" }), new File(["two"], "close.webp", { type: "image/webp" })];
+    fireEvent.change(input, { target: { files } });
+    expect(await screen.findByRole("img", { name: "Selected photo: wide.jpg" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove photo 1: wide.jpg" }));
+    expect(URL.revokeObjectURL).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+    await waitFor(() => expect(mockedSubmitInformationResponse).toHaveBeenCalledWith("RC-0241", { responseText: "Wider view attached." }, [files[1]]));
+    expect(await screen.findByRole("status")).toHaveTextContent("attached to this report");
+    expect(screen.queryByLabelText("Additional photos (optional)")).not.toBeInTheDocument();
+  });
+
+  it("enforces the five-photo limit across multiple selections", async () => {
+    const input = await openPhotoReply();
+    const files = Array.from({ length: 5 }, (_, i) => new File(["photo"], `${i}.jpg`, { type: "image/jpeg" }));
+    fireEvent.change(input, { target: { files } });
+    fireEvent.change(input, { target: { files: [new File(["extra"], "extra.jpg", { type: "image/jpeg" })] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("up to 5 photos");
+    expect(screen.getAllByRole("img", { name: /Selected photo:/ })).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Submit additional information" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove photo 1: 0.jpg" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit additional information" })).toBeEnabled();
+  });
+
+  it.each(["wrong type", "empty", "too large"])("rejects a %s photo before sending", async (kind) => {
+    const input = await openPhotoReply();
+    const file = new File(kind === "empty" ? [] : ["photo"], "photo.jpg", { type: kind === "wrong type" ? "image/gif" : "image/jpeg" });
+    if (kind === "too large") Object.defineProperty(file, "size", { value: 10 * 1024 * 1024 + 1 });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("non-empty JPG, PNG or WebP");
+    expect(mockedSubmitInformationResponse).not.toHaveBeenCalled();
+    expect(screen.queryByRole("img", { name: /Selected photo:/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps text and files after a server failure so the complete reply can be retried", async () => {
+    mockedSubmitInformationResponse.mockRejectedValueOnce(new ApiError("Unavailable", 500)).mockResolvedValueOnce(acceptedPhotoReply);
+    const input = await openPhotoReply();
+    const file = new File(["photo"], "wide.jpg", { type: "image/jpeg" });
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("temporarily unavailable");
+    expect(screen.getByLabelText("Additional details")).toHaveValue("Wider view attached.");
+    expect(screen.getByRole("img", { name: "Selected photo: wide.jpg" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+    await screen.findByRole("status");
+    expect(mockedSubmitInformationResponse).toHaveBeenNthCalledWith(2, "RC-0241", { responseText: "Wider view attached." }, [file]);
+  });
+
+  it("still requires written details when photos have been selected", async () => {
+    const input = await openPhotoReply();
+    fireEvent.change(input, { target: { files: [new File(["photo"], "reef.png", { type: "image/png" })] } });
+    fireEvent.change(screen.getByLabelText("Additional details"), { target: { value: "  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Add the requested details");
+    expect(mockedSubmitInformationResponse).not.toHaveBeenCalled();
+  });
+
+  it.each([[409, "already be answered or closed"], [413, "exceeds the upload limit"]])("explains a backend %s rejection", async (status, message) => {
+    mockedSubmitInformationResponse.mockRejectedValueOnce(new ApiError("Rejected", status));
+    await openPhotoReply();
+    fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  });
+
+  it("locks the form while sending and prevents duplicate requests", async () => {
+    let resolve!: (result: typeof acceptedPhotoReply) => void;
+    mockedSubmitInformationResponse.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const input = await openPhotoReply();
+    const submit = screen.getByRole("button", { name: "Submit additional information" });
+    fireEvent.click(submit); fireEvent.click(submit);
+    expect(mockedSubmitInformationResponse).toHaveBeenCalledTimes(1);
+    expect(input).toBeDisabled();
+    expect(screen.getByLabelText("Additional details")).toBeDisabled();
+    resolve(acceptedPhotoReply);
+    await screen.findByRole("status");
+  });
+});
+
+
+it("lets the Observer clear an invalid photo selection and send a text-only answer", async () => {
+  mockedSubmitInformationResponse.mockResolvedValueOnce({ ...acceptedPhotoReply, evidence: [] });
+  const input = await openPhotoReply();
+  fireEvent.change(input, { target: { files: [new File(["bad"], "bad.gif", { type: "image/gif" })] } });
+  fireEvent.click(screen.getByRole("button", { name: "Clear photo selection" }));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+  await screen.findByRole("status");
+  expect(mockedSubmitInformationResponse).toHaveBeenCalledWith("RC-0241", { responseText: "Wider view attached." }, []);
 });

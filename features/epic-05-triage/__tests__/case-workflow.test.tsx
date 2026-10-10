@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CoordinatorCaseRoute } from "../case-workflow";
 import * as coordinatorApi from "@/lib/api/coordinatorApi";
@@ -158,12 +158,14 @@ describe("Coordinator case workflow", () => {
     expect(mockedClaimReport).toHaveBeenCalledTimes(1);
   });
 
-  it("does not enable follow-up creation from a browser-cached decision", async () => {
+  it("does not enable action creation from a browser-cached decision; monitoring is allowed after assessment", async () => {
     window.sessionStorage.setItem(`reefcare.coordinator-decision.${report.reportReference}`, JSON.stringify({ responseType: "monitoring_only" }));
     mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted", latestDecision: null });
     render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
-    expect(await screen.findByText(/Record a response decision before adding a follow-up/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save follow-up" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Action" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Monitoring" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save follow-up" })).toBeInTheDocument();
+    expect(iteration3Api.createFollowUp).not.toHaveBeenCalled();
   });
 
   it("keeps the optional case context compact until a coordinator expands it", async () => {
@@ -707,4 +709,26 @@ describe("Coordinator case workflow", () => {
     expect(await screen.findByRole("heading", { name: "Review reef observation" })).toBeInTheDocument();
     expect(mockedGetCoordinatorCase).toHaveBeenCalledTimes(2);
   });
+});
+
+
+it("groups reply photos with their specific Observer response without duplicating them as original evidence", async () => {
+  const evidence = { evidenceId: 501, mediaType: "photo", fileSizeBytes: 5, uploadedAt: "2026-10-10T03:00:00Z" };
+  mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, evidence: [...report.evidence, evidence],
+    informationExchange: [
+      { caseEventId: 880, eventType: "info_requested", message: "Please add a wider view.", occurredAt: "2026-10-09T03:00:00Z", evidence: [] },
+      { caseEventId: 881, eventType: "info_provided", message: "Wider view attached.", occurredAt: "2026-10-10T03:00:00Z", evidence: [evidence] },
+      { caseEventId: 882, eventType: "info_provided", message: "Text-only clarification.", occurredAt: "2026-10-10T04:00:00Z", evidence: [] },
+    ],
+  });
+  render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+  const replyPhotos = await screen.findByRole("region", { name: "Photos attached to this Observer reply", hidden: true });
+  const disclosure = replyPhotos.closest("details")!;
+  fireEvent.click(within(disclosure).getByText("Information request history"));
+  expect(await within(replyPhotos).findByRole("img", { name: "Submitted evidence 501" })).toBeInTheDocument();
+  expect(replyPhotos.parentElement).toHaveTextContent("Wider view attached.");
+  const originalEvidence = screen.getByRole("heading", { name: "Submitted evidence" }).closest("section")!;
+  expect(within(originalEvidence).queryByRole("img", { name: "Submitted evidence 501" })).not.toBeInTheDocument();
+  expect(within(originalEvidence).getByRole("img", { name: "Submitted evidence 13" })).toBeInTheDocument();
+  expect(mockedGetCoordinatorEvidence).toHaveBeenCalledWith(report.reportReference, 501);
 });

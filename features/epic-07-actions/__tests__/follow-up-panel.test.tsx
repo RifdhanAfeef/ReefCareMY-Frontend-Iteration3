@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FollowUpPanel } from "../follow-up-panel";
 import * as api from "@/lib/api/iteration3Api";
@@ -11,6 +11,9 @@ vi.mock("@/lib/api/coordinatorApi");
 
 beforeEach(() => {
   vi.resetAllMocks();
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:follow-up-photo") });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  vi.mocked(coordinatorApi.getCoordinatorEvidence).mockResolvedValue(new Blob(["image"]));
   vi.mocked(api.getFollowUps).mockResolvedValue({ reportReference: "RC-1", items: [], total: 0, message: "No follow-up recorded." });
   vi.mocked(api.getMonitoringConditions).mockResolvedValue([
     { code: "stable", label: "Stable", description: null },
@@ -168,9 +171,9 @@ describe("follow-up publication", () => {
     expect(api.correctFollowUp).toHaveBeenCalledWith("RC-1", 8, { recordedOutcome: "Updated outcome.", correctionReason: "Corrected description" });
   });
 
-  it("attaches follow-up evidence by caseEventId", async () => {
+  it("attaches follow-up evidence by caseActionId, not caseEventId", async () => {
     vi.mocked(api.createMonitoring).mockResolvedValueOnce({ ...taken, caseActionId: 8, caseEventId: 88 });
-    vi.mocked(coordinatorApi.uploadConservationActionEvidence).mockResolvedValueOnce({ evidenceId: 19, mediaType: "photo", uploadedAt: "2026-10-05T10:00:00Z" });
+    vi.mocked(api.uploadFollowUpEvidence).mockResolvedValueOnce({ evidenceId: 19, mediaType: "photo", fileSizeBytes: 5, uploadedAt: "2026-10-05T10:00:00Z", caseActionId: 8, caseEventId: 88 });
     render(<FollowUpPanel reportReference="RC-1" statusCode="evidence_accepted" />);
     await screen.findByText("No follow-up recorded.");
     fireEvent.change(screen.getByRole("textbox", { name: /Follow-up date/ }), { target: { value: "05102026" } });
@@ -178,6 +181,45 @@ describe("follow-up publication", () => {
     const file = new File(["photo"], "reef.jpg", { type: "image/jpeg" });
     fireEvent.change(screen.getByLabelText(/Supporting photo/), { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: "Save follow-up" }));
-    await waitFor(() => expect(coordinatorApi.uploadConservationActionEvidence).toHaveBeenCalledWith("RC-1", 88, file));
+    await waitFor(() => expect(api.uploadFollowUpEvidence).toHaveBeenCalledWith("RC-1", 8, file));
   });
+});
+
+
+async function saveVisitWithPhoto() {
+  render(<FollowUpPanel reportReference="RC-1" statusCode="evidence_accepted" />);
+  await screen.findByRole("button", { name: "Save follow-up" });
+  fireEvent.change(screen.getByRole("textbox", { name: /Follow-up date/ }), { target: { value: "05102026" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /Site observations/ }), { target: { value: "Condition unchanged." } });
+  const file = new File(["photo"], "reef.jpg", { type: "image/jpeg" });
+  fireEvent.change(screen.getByLabelText(/Supporting photo/), { target: { files: [file] } });
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save follow-up" })); });
+  return file;
+}
+
+it("retries only the photo against the saved action ID, without creating another follow-up", async () => {
+  vi.mocked(api.createMonitoring).mockResolvedValueOnce({ ...taken, caseActionId: 8, caseEventId: 88 });
+  vi.mocked(api.uploadFollowUpEvidence).mockRejectedValueOnce(new ApiError("Upload failed", 500))
+    .mockResolvedValueOnce({ evidenceId: 19, mediaType: "photo", fileSizeBytes: 5, uploadedAt: "2026-10-05T10:00:00Z", caseActionId: 8, caseEventId: 88 });
+  const file = await saveVisitWithPhoto();
+  const retry = await screen.findByRole("button", { name: "Retry photo upload" });
+  expect(screen.getByRole("button", { name: "Save follow-up" })).toBeDisabled();
+  fireEvent.click(retry);
+  expect(await screen.findByText("The evidence photo was attached.")).toBeInTheDocument();
+  expect(api.createMonitoring).toHaveBeenCalledTimes(1);
+  expect(api.uploadFollowUpEvidence).toHaveBeenNthCalledWith(1, "RC-1", 8, file);
+  expect(api.uploadFollowUpEvidence).toHaveBeenNthCalledWith(2, "RC-1", 8, file);
+  expect(coordinatorApi.uploadConservationActionEvidence).not.toHaveBeenCalled();
+});
+
+it("does not offer an upload retry when upload succeeded but refreshing history failed", async () => {
+  vi.mocked(api.createMonitoring).mockResolvedValueOnce({ ...taken, caseActionId: 8, caseEventId: 88 });
+  vi.mocked(api.getFollowUps).mockResolvedValueOnce(list()).mockRejectedValueOnce(new ApiError("History unavailable", 500));
+  vi.mocked(api.uploadFollowUpEvidence).mockResolvedValueOnce({ evidenceId: 19, mediaType: "photo", fileSizeBytes: 5, uploadedAt: "2026-10-05T10:00:00Z", caseActionId: 8, caseEventId: 88 });
+  await saveVisitWithPhoto();
+  expect(await screen.findByRole("alert")).toHaveTextContent("The photo was attached");
+  expect(screen.queryByRole("button", { name: "Retry photo upload" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("img", { name: "Supporting follow-up evidence" })).toBeInTheDocument();
+  expect(api.createMonitoring).toHaveBeenCalledTimes(1);
+  expect(api.uploadFollowUpEvidence).toHaveBeenCalledTimes(1);
 });
