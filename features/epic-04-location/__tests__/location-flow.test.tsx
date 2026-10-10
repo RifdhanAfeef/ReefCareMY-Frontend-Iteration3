@@ -299,6 +299,7 @@ describe("Location validation", () => {
 
     await waitFor(() => expect(captureMapProps).toHaveBeenCalledWith(expect.objectContaining({
       siteCentre: expect.objectContaining({ latitude: 2.965, longitude: 104.12 }),
+      siteName: "Batu Nisan",
       diveSiteRadiusMetres: 5000,
     })));
   });
