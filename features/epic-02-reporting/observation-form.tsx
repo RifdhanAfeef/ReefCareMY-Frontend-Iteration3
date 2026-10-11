@@ -20,6 +20,8 @@ import type { ThreatCategoryReference } from "@/lib/api/types";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import {
   applySuggestionValue,
+  automaticDepthChanges,
+  automaticThreatChanges,
   contextualFollowUps,
   mergeSmartReportSuggestions,
   normaliseSmartReportField,
@@ -54,6 +56,19 @@ const errorFields: Array<{ key: keyof FieldErrors; target: string }> = [
   { key: "threat", target: "threat-picker" },
 ];
 const maximumPhotoSize = 10 * 1024 * 1024;
+
+function threatSuggestionsDiffer(
+  visual: ReportDraft["visualRecognition"],
+  text: ReportDraft["aiSuggestions"][number] | undefined,
+  categories: ThreatCategoryReference[],
+) {
+  if (visual?.status !== "recognized" || !visual.suggestedThreatCode || !text?.suggestedValue
+    || text.status === "removed" || text.status === "corrected") return false;
+  const value = text.suggestedValue.trim().toLowerCase();
+  const category = categories.find((item) => item.label.toLowerCase() === value || item.code.toLowerCase() === value);
+  return category ? category.code !== visual.suggestedThreatCode
+    : value !== visual.suggestedThreatLabel?.trim().toLowerCase();
+}
 
 // Capture times by photo id, read from each photo's EXIF data (null when it has none).
 export type PhotoCaptureTimes = Record<string, string | null>;
@@ -171,22 +186,20 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
         setAssistantMessage(result.message ?? "Smart Report Structuring is unavailable. Continue manually.");
         return;
       }
-      const nextSuggestions = mergeSmartReportSuggestions(reportDraft, result.suggestions);
-      const automaticChanges: Partial<ReportDraft> = { aiSuggestions: nextSuggestions };
-      let nextReport = { ...reportDraft, ...automaticChanges };
-      for (const suggestion of nextSuggestions) {
-        if (suggestion.status !== "unresolved" || suggestion.conflict) continue;
-        if (suggestion.field === "possible_threat" && !nextReport.threatCategoryCode) {
-          const changes = applySuggestionValue(nextReport, suggestion, categoryOptions);
-          Object.assign(automaticChanges, changes);
-          nextReport = { ...nextReport, ...changes };
-        }
-        if (suggestion.field === "estimated_depth_metres" && !nextReport.estimatedDepthMetres) {
-          const changes = applySuggestionValue(nextReport, suggestion, categoryOptions);
-          Object.assign(automaticChanges, changes);
-          nextReport = { ...nextReport, ...changes };
-        }
+      const currentDraft = latestReportDraft.current;
+      const nextSuggestions = mergeSmartReportSuggestions(currentDraft, result.suggestions);
+      const automaticChanges: Partial<ReportDraft> = {
+        aiSuggestions: nextSuggestions,
+        ...automaticDepthChanges(currentDraft, nextSuggestions),
+        ...automaticThreatChanges(currentDraft, nextSuggestions, categoryOptions),
+      };
+      const nextThreat = nextSuggestions.find((suggestion) => suggestion.field === "possible_threat");
+      // A prior photo decision cannot confirm a conflicting suggestion that arrived later.
+      if (nextThreat?.status === "unresolved" && currentDraft.visualRecognition
+        && threatSuggestionsDiffer(currentDraft.visualRecognition, nextThreat, categoryOptions)) {
+        automaticChanges.visualRecognition = { ...currentDraft.visualRecognition, resolution: "unresolved" };
       }
+      const nextReport = { ...currentDraft, ...automaticChanges };
       updateReportDraft(automaticChanges);
       setFollowUpQuestions(contextualFollowUps(nextReport, result.followUpQuestions));
       if (result.missingFields.length > 0) {
@@ -202,7 +215,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     } finally {
       if (requestId === smartStructuringRequest.current) setAssistantBusy(false);
     }
-  }, [categoryOptions, reportDraft, updateReportDraft]);
+  }, [categoryOptions, updateReportDraft]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -288,6 +301,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     updateReportDraft({
       threatCategoryCode: matchedThreat.code,
       threatCategoryId: matchedThreat.threatCategoryId,
+      threatCategorySource: "observer",
     });
   }, [categoryOptions, draftChoice, initialThreat, reportDraft.threatCategoryCode, reportDraft.threatCategoryId, updateReportDraft]);
 
@@ -313,6 +327,8 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   }, [reportDraft.threatCategoryCode, reportDraft.threatCategoryId, updateReportDraft]);
 
   function updateField(changes: Partial<ReportDraft>, errorField?: keyof FieldErrors) {
+    if ("estimatedDepthMetres" in changes) changes = { ...changes, estimatedDepthSource: "observer" };
+    if ("threatCategoryCode" in changes || "threatCategoryId" in changes) changes = { ...changes, threatCategorySource: "observer" };
     const nextReport = { ...reportDraft, ...changes };
     const manuallyChangedFields = new Set<string>();
     if ("threatCategoryCode" in changes || "threatCategoryId" in changes) manuallyChangedFields.add("possible_threat");
@@ -460,6 +476,21 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     });
   }
 
+  function acceptDetailSuggestion(index: number) {
+    const suggestion = reportDraft.aiSuggestions[index];
+    if (!suggestion || suggestion.field === "possible_threat" || !suggestion.suggestedValue) return;
+    const changes = applySuggestionValue(reportDraft, suggestion);
+    if (suggestion.field === "estimated_depth_metres" && changes.estimatedDepthMetres === undefined) return;
+    updateReportDraft({
+      ...changes,
+      ...(suggestion.field === "estimated_depth_metres" ? { estimatedDepthSource: "observer" as const } : {}),
+      aiSuggestions: reportDraft.aiSuggestions.map((item, itemIndex) => itemIndex === index
+        ? { ...item, status: "confirmed", conflict: false, observerValue: changes.estimatedDepthMetres !== undefined ? `${changes.estimatedDepthMetres} m` : item.suggestedValue }
+        : item),
+    });
+    setErrors((current) => ({ ...current, depth: undefined }));
+  }
+
   function answerFollowUp(question: SmartReportFollowUpQuestion, answer: string) {
     const field = normaliseSmartReportField(question.field);
     if (!field) return;
@@ -492,7 +523,15 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     updateReportDraft({
       threatCategoryCode: category.code as ReportDraft["threatCategoryCode"],
       threatCategoryId: category.threatCategoryId,
+      threatCategorySource: "observer",
       visualRecognition: { ...recognition, resolution: "accepted" },
+      ...(sourcesDisagree && textThreat?.status === "unresolved" ? {
+        // Match manual category corrections so final review does not ask for the
+        // same conflict again after the observer explicitly chooses the photo.
+        aiSuggestions: reportDraft.aiSuggestions.map((suggestion) => suggestion === textThreat
+          ? { ...suggestion, suggestedValue: category.label, observerValue: category.label, status: "corrected" as const, conflict: false }
+          : suggestion),
+      } : {}),
     });
     setErrors((current) => ({ ...current, threat: undefined }));
   }
@@ -502,6 +541,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     if (!recognition || !reportDraft.threatCategoryId) return;
     updateReportDraft({
       visualRecognition: { ...recognition, resolution: "kept" },
+      threatCategorySource: "observer",
     });
   }
 
@@ -602,13 +642,15 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   const visual = reportDraft.visualRecognition;
   const textThreat = threatSuggestion?.status !== "removed" && threatSuggestion?.suggestedValue ? threatSuggestion : undefined;
   const textCategory = textThreat ? categoryOptions.find((item) => item.label.toLowerCase() === (textThreat.suggestedValue ?? "").toLowerCase() || item.code === textThreat.suggestedValue) : undefined;
-  const sourcesDisagree = !visualRecognitionBusy && !assistantBusy && visual?.status === "recognized" && textThreat && textThreat.status !== "corrected" &&
-    (textCategory ? textCategory.code !== visual.suggestedThreatCode : (textThreat.suggestedValue ?? "").toLowerCase() !== visual.suggestedThreatLabel?.toLowerCase());
+  const sourcesDisagree = !visualRecognitionBusy && !assistantBusy && threatSuggestionsDiffer(visual, textThreat, categoryOptions);
+  // Also recover drafts saved with the earlier photo decision and an unresolved conflict.
+  const threatDecisionNeeded = visual?.resolution === "unresolved" || (sourcesDisagree && textThreat?.status === "unresolved");
 
   function useDescriptionThreat() {
     if (!textCategory || !textThreat || !visual) return;
     updateReportDraft({
       threatCategoryCode: textCategory.code as ReportDraft["threatCategoryCode"],
+      threatCategorySource: "observer",
       threatCategoryId: textCategory.threatCategoryId,
       aiSuggestions: reportDraft.aiSuggestions.map((suggestion) => suggestion === textThreat
         ? { ...suggestion, status: "confirmed", conflict: false, observerValue: textCategory.label }
@@ -696,8 +738,11 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <div className={styles.inlineSuggestionGrid}>{smartReportFields.filter((item) => item.field !== "possible_threat").map(({ field, label }) => {
             const suggestionIndex = reportDraft.aiSuggestions.findIndex((item) => item.field === field);
             const suggestion = suggestionIndex >= 0 ? reportDraft.aiSuggestions[suggestionIndex] : undefined;
-            return <label className={`${styles.inlineSuggestionField} ${suggestion?.conflict && suggestion.status === "unresolved" ? styles.conflictField : ""}`} key={field}>
-              <span className={styles.inlineFieldHeading}><strong>{field === "estimated_depth_metres" ? "Estimated depth (m)" : field === "coral_interaction" ? "Coral contact" : field === "animal_interaction" ? "Marine-animal contact" : label}</strong><em data-state={suggestionStateLabel(suggestion).toLowerCase().replaceAll(" ", "-")}>{suggestionStateLabel(suggestion)}</em></span>
+            const suggestedDepth = suggestion?.field === "estimated_depth_metres" ? applySuggestionValue(reportDraft, suggestion).estimatedDepthMetres : undefined;
+            const stateLabel = field === "estimated_depth_metres" && !suggestion && reportDraft.estimatedDepthMetres
+              ? "Entered by you" : suggestionStateLabel(suggestion);
+            return <div className={`${styles.inlineSuggestionField} ${suggestion?.conflict && suggestion.status === "unresolved" ? styles.conflictField : ""}`} key={field}>
+              <span className={styles.inlineFieldHeading}><strong>{field === "estimated_depth_metres" ? "Estimated depth (m)" : field === "coral_interaction" ? "Coral contact" : field === "animal_interaction" ? "Marine-animal contact" : label}</strong><em data-state={stateLabel.toLowerCase().replaceAll(" ", "-")}>{stateLabel}</em></span>
               {field === "estimated_depth_metres" ? <input
                 type="number"
                 min="0"
@@ -710,15 +755,19 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
               /> : <input
                 aria-label={label}
                 placeholder="Not included"
-                value={suggestion?.status === "removed" ? "" : suggestion?.suggestedValue ?? ""}
+                value={suggestion?.status === "removed" ? "" : suggestion?.conflict && suggestion.status === "unresolved" ? suggestion.observerValue ?? "" : suggestion?.suggestedValue ?? ""}
                 onChange={(event) => {
                   if (suggestionIndex >= 0) updateSuggestion(suggestionIndex, { suggestedValue: event.target.value, status: event.target.value.trim() ? "corrected" : "removed" });
                   else if (event.target.value.trim()) answerFollowUp({ field, question: label, options: [] }, event.target.value);
                 }}
               />}
               {field === "estimated_depth_metres" && errors.depth && <span className={styles.errorText} id="observation-depth-error">{errors.depth}</span>}
-              {suggestion?.conflict && suggestion.status === "unresolved" && <span className={styles.conflictText}>Your report already says {suggestion.observerValue}. Review this difference before submitting.</span>}
-            </label>;
+              {suggestion?.conflict && suggestion.status === "unresolved" && <>
+                <span className={styles.conflictText}>Your description suggests {suggestion.suggestedValue}. Your report currently says {suggestion.observerValue || "Not included"}.</span>
+                {field === "estimated_depth_metres" ? suggestedDepth !== undefined && <button className={styles.smallButton} type="button" disabled={assistantBusy} onClick={() => acceptDetailSuggestion(suggestionIndex)}>Use {suggestedDepth} m</button>
+                  : <button className={styles.smallButton} type="button" disabled={assistantBusy} aria-label={`Use suggestion for ${label.toLowerCase()}`} onClick={() => acceptDetailSuggestion(suggestionIndex)}>Use suggestion</button>}
+              </>}
+            </div>;
           })}</div>
           {followUpQuestions.length > 0 && <div className={styles.followUpSection}>
             <h4>{followUpQuestions.length} optional detail{followUpQuestions.length === 1 ? "" : "s"} could make this report more useful</h4>
@@ -740,7 +789,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                 <span className={styles.sourceBadge}>Photo analysis</span>
                 <strong className={styles.suggestedCategory}>{visual.suggestedThreatLabel}</strong>
                 <span>Confidence level</span><strong>{confidenceLabel(visual.confidence)}</strong>
-                {visual.resolution === "unresolved" ? <div className={styles.suggestionButtons}>
+                {threatDecisionNeeded ? <div className={styles.suggestionButtons}>
                   <button className={styles.primaryButton} type="button" disabled={!categoryOptions.some((item) => item.code === visual.suggestedThreatCode)} onClick={useVisualSuggestion}>{sourcesDisagree ? "Use photo threat" : "Use this category"}</button>
                   <button className={styles.secondaryButton} type="button" disabled={sourcesDisagree && textCategory ? false : !reportDraft.threatCategoryId} onClick={sourcesDisagree && textCategory ? useDescriptionThreat : keepSelectedThreat}>{sourcesDisagree ? (textCategory ? "Use description" : "Keep selected category") : "Keep my choice"}</button>
                 </div> : visual.resolution !== "not_required" ? <span className={styles.confirmedChoice} role="img" aria-label="Photo suggestion decision confirmed"><CheckCircle2 size={22} aria-hidden="true" /></span> : null}
@@ -783,7 +832,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <div className={styles.sidebarActions}>
             <button className={styles.primaryButton} type="submit">Continue to location</button>
             <button className={styles.secondaryButton} type="button" onClick={saveDraft}>Save draft</button>
-            <p className={styles.muted} role="status">{reportDraft.lastSavedAt ? `Draft saved ${reportDraft.lastSavedAt}` : "Draft details stay on this device."}</p>
+            {reportDraft.lastSavedAt && <p className={styles.muted} role="status">Draft saved {reportDraft.lastSavedAt}</p>}
           </div>
         </aside>
       </div>

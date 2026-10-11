@@ -44,25 +44,38 @@ export function observerValueFor(report: ReportDraft, field: SmartReportField) {
   if (field === "estimated_depth_metres") {
     return report.estimatedDepthMetres ? `${report.estimatedDepthMetres} m` : null;
   }
-  const existing = report.aiSuggestions.find((suggestion) =>
-    suggestion.field === field && ["confirmed", "corrected"].includes(suggestion.status));
-  return existing?.suggestedValue ?? null;
+  const existing = report.aiSuggestions.find((suggestion) => suggestion.field === field);
+  if (existing?.status === "removed") return "";
+  if (existing?.status === "unresolved" && existing.conflict) return existing.observerValue;
+  return existing && ["confirmed", "corrected"].includes(existing.status) ? existing.suggestedValue : null;
+}
+
+function hasObserverEntry(suggestion: ReportAISuggestion | undefined) {
+  return Boolean(suggestion && (["confirmed", "corrected", "removed"].includes(suggestion.status)
+    || (suggestion.status === "unresolved" && suggestion.conflict && suggestion.observerValue !== null)));
 }
 
 export function mergeSmartReportSuggestions(
   report: ReportDraft,
   incoming: SmartReportSuggestion[],
 ): ReportAISuggestion[] {
-  return incoming.flatMap((suggestion) => {
+  const merged: ReportAISuggestion[] = incoming.flatMap((suggestion) => {
     const field = normaliseSmartReportField(suggestion.field);
     const value = suggestion.suggestedValue?.trim() || null;
     if (!field || !value || normalise(value) === "not specified") return [];
 
     const previous = report.aiSuggestions.find((item) => item.field === field);
-    const observerValue = observerValueFor(report, field);
+    const protectedDepth = field === "estimated_depth_metres" && report.estimatedDepthSource === "observer";
+    const protectedThreat = field === "possible_threat" && report.threatCategorySource === "observer";
+    const protectedDetail = field !== "possible_threat" && field !== "estimated_depth_metres" && hasObserverEntry(previous);
+    const observerValue = observerValueFor(report, field) ?? (protectedDepth || protectedThreat ? "" : null);
+    const refreshableValue = (field === "estimated_depth_metres" && isAutomaticDepth(report) && singleDepth(value) !== null)
+      || (field === "possible_threat" && isAutomaticThreat(report) && threatCodeFor(value) !== null);
     const matchesObserver = Boolean(observerValue) && normalise(observerValue) === normalise(value);
     const sameSuggestion = previous && normalise(previous.suggestedValue) === normalise(value);
-    const status = matchesObserver
+    const status = refreshableValue
+      ? "unresolved"
+      : matchesObserver
       ? "confirmed"
       : sameSuggestion && previous.status !== "unresolved"
         ? previous.status
@@ -75,10 +88,23 @@ export function mergeSmartReportSuggestions(
       suggestedValue: value,
       confidence: null,
       status,
-      conflict: Boolean(observerValue) && !matchesObserver,
+      conflict: (Boolean(observerValue) || protectedDepth || protectedThreat || protectedDetail) && !matchesObserver && !refreshableValue,
       observerValue,
     } satisfies ReportAISuggestion];
   });
+  // Description analysis may omit a detail. Keep human entries, but discard old
+  // automatic suggestions that are no longer supported by the description.
+  for (const previous of report.aiSuggestions) {
+    if (merged.some((item) => item.field === previous.field) || !hasObserverEntry(previous)) continue;
+    if ((previous.field === "estimated_depth_metres" && isAutomaticDepth(report))
+      || (previous.field === "possible_threat" && isAutomaticThreat(report))) continue;
+    if (previous.status === "unresolved") {
+      const value = previous.observerValue;
+      merged.push({ ...previous, suggestedValue: value, observerValue: value,
+        status: value ? "corrected" : "removed", conflict: false });
+    } else merged.push(previous);
+  }
+  return merged;
 }
 
 function threatCodeFor(value: string | null): ThreatCategoryCode | null {
@@ -92,6 +118,46 @@ function singleDepth(value: string | null) {
   if (!value || /\d\s*[-–—]\s*\d/.test(value)) return null;
   const match = value.match(/\d+(?:\.\d+)?/);
   return match?.[0] ?? null;
+}
+
+/** Older drafts qualify only when an unreviewed suggestion matches the field. */
+function isAutomaticDepth(report: ReportDraft) {
+  if (report.estimatedDepthSource) return report.estimatedDepthSource === "ai";
+  const previous = report.aiSuggestions.find((item) => item.field === "estimated_depth_metres");
+  const value = previous ? singleDepth(previous.suggestedValue) : null;
+  return Boolean(report.estimatedDepthMetres && previous?.status === "unresolved" && !previous.conflict
+    && value !== null && Number(value) === Number(report.estimatedDepthMetres));
+}
+
+/** Refresh untouched AI depth, or fill an empty field that the observer has not cleared. */
+export function automaticDepthChanges(report: ReportDraft, suggestions: ReportAISuggestion[]): Partial<ReportDraft> {
+  if (report.estimatedDepthSource === "observer" || (report.estimatedDepthMetres && !isAutomaticDepth(report))) return {};
+  const suggestion = suggestions.find((item) => item.field === "estimated_depth_metres" && item.status === "unresolved");
+  if (!suggestion && isAutomaticDepth(report)) return { estimatedDepthMetres: "", estimatedDepthSource: "ai" };
+  const value = suggestion ? singleDepth(suggestion.suggestedValue) : null;
+  return value !== null ? { estimatedDepthMetres: value, estimatedDepthSource: "ai" } : {};
+}
+
+/** A photo or dropdown decision always takes priority over automatic text choices. */
+function isAutomaticThreat(report: ReportDraft) {
+  const visual = report.visualRecognition;
+  if (visual?.status === "recognized" && ["accepted", "kept", "changed"].includes(visual.resolution)) return false;
+  if (report.threatCategorySource) return report.threatCategorySource === "ai";
+  const previous = report.aiSuggestions.find((item) => item.field === "possible_threat");
+  return Boolean(report.threatCategoryCode && previous?.status === "unresolved" && !previous.conflict
+    && threatCodeFor(previous.suggestedValue) === report.threatCategoryCode);
+}
+
+export function automaticThreatChanges(
+  report: ReportDraft,
+  suggestions: ReportAISuggestion[],
+  categoryReferences?: ThreatCategoryReference[],
+): Partial<ReportDraft> {
+  if (report.threatCategorySource === "observer" || (report.threatCategoryCode && !isAutomaticThreat(report))) return {};
+  const suggestion = suggestions.find((item) => item.field === "possible_threat" && item.status === "unresolved");
+  if (!suggestion && isAutomaticThreat(report)) return { threatCategoryCode: "", threatCategoryId: null, threatCategorySource: "ai" };
+  const changes = suggestion ? applySuggestionValue(report, suggestion, categoryReferences) : {};
+  return changes.threatCategoryCode ? { ...changes, threatCategorySource: "ai" } : {};
 }
 
 export function applySuggestionValue(

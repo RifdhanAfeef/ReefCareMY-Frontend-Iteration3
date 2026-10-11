@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   claimReport,
   closeCase as closeCoordinatorCase,
@@ -56,6 +56,27 @@ function reviewOutcomeFor(responseType: ResponseType): Exclude<ReviewOutcome, "n
   if (responseType === "monitoring_only") return "monitoring";
   if (responseType === "refer_or_share") return "referral";
   return "intervention";
+}
+
+const plannedClosureMessage = "This case is still marked Response Planned. If the work is finished, record it as Taken in Follow-up and monitoring. Logged for reference is unavailable while an action is planned.";
+
+function closureStatusBlocked(status: string, reason: ClosureReasonCode) {
+  // This transition is explicitly rejected by the deployed closure endpoint.
+  // Other transitions remain subject to backend validation.
+  return status.startsWith("closed_") || (status === "response_planned" && reason === "logged_for_reference");
+}
+
+function closureConflict(error: unknown) {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const match = (error.serverMessage ?? error.message).match(/^A case in ([a-z_]+) cannot be closed as ([a-z_]+), which would move it to ([a-z_]+)\.?$/);
+  const reason = closureReasons.find((item) => item.value === match?.[2]);
+  if (!match || !reason) return null;
+  return {
+    status: match[1], reason: reason.value,
+    message: match[1] === "response_planned" && reason.value === "logged_for_reference"
+      ? plannedClosureMessage
+      : `${reason.label} is unavailable while this case is ${formatFieldName(match[1])}. Choose another valid reason or ask the backend team to check the closure rule.`,
+  };
 }
 
 function parseStoredDecision(value: string | null): RestorableDecision | null {
@@ -361,15 +382,25 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
   const [closureReason, setClosureReason] = useState<ClosureReasonCode | "">("");
   const [closureNote, setClosureNote] = useState("");
   const [closureError, setClosureError] = useState("");
+  const [closureStatusReady, setClosureStatusReady] = useState(true);
+  const [rejectedClosure, setRejectedClosure] = useState<{ status: string; reason: ClosureReasonCode } | null>(null);
   const [closureReturnStage, setClosureReturnStage] = useState<Stage | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [currentStatus, setCurrentStatus] = useState(report.statusCode);
   const [dismissedRestoredDecision, setDismissedRestoredDecision] = useState(false);
   const [actionEvidenceIds, setActionEvidenceIds] = useState<number[]>([]);
+  const followUpRef = useRef<HTMLDivElement>(null);
+  const followUpHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [followUpHighlighted, setFollowUpHighlighted] = useState(false);
+  useEffect(() => () => {
+    if (followUpHighlightTimer.current != null) clearTimeout(followUpHighlightTimer.current);
+  }, []);
   const [persistedResponseType, setPersistedResponseType] = useState<ResponseType | null>(null);
   const [historyOpen, setHistoryOpen] = useState(report.statusCode.startsWith("closed_") || report.statusCode === "referred");
   const closure = closureReasons.find((item) => item.value === closureReason);
-  const allowedClosures = useMemo(() => closureReasons.filter((item) => item.allowedOutcomes.includes(reviewOutcome)), [reviewOutcome]);
+  const allowedClosures = useMemo(() => closureReasons.filter((item) => item.allowedOutcomes.includes(reviewOutcome)
+    && !closureStatusBlocked(currentStatus, item.value)
+    && !(rejectedClosure?.status === currentStatus && rejectedClosure.reason === item.value)), [reviewOutcome, currentStatus, rejectedClosure]);
   const storedDecisionValue = useSyncExternalStore(
     subscribeToStoredDecision,
     () => window.sessionStorage.getItem(`${decisionStoragePrefix}${report.reportReference}`),
@@ -538,14 +569,47 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
 
   async function submitClosure(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pendingAction !== null || !closureStatusReady) return;
     if (!closureReason || !allowedClosures.some((item) => item.value === closureReason)) { setClosureError("Select one valid closure reason for the recorded assessment and response."); return; }
     if (!closureNote.trim()) { setClosureError("Enter a closure note explaining the recorded outcome."); return; }
     setPendingAction("closure"); setClosureError("");
     try {
-      await closeCoordinatorCase(report.reportReference, { closureReasonCode: closureReason, publicClosureNote: closureNote.trim(), ...(reviewOutcome === "referral" && responder ? { referredTo: responder } : {}) });
+      // Follow-up writes or another tab may have changed the case since this form opened.
+      const latestCase = await refreshCase();
+      setCurrentStatus(latestCase.statusCode);
+      if (closureStatusBlocked(latestCase.statusCode, closureReason)) {
+        setClosureReason("");
+        setClosureError(latestCase.statusCode === "response_planned" ? plannedClosureMessage : "This case has already been closed. Return to the case to view its recorded outcome.");
+        return;
+      }
+      if (latestCase.latestDecision) {
+        const latestOutcome = reviewOutcomeFor(latestCase.latestDecision.responseType);
+        setReviewOutcome(latestOutcome);
+        if (!closureReasons.some((item) => item.value === closureReason && item.allowedOutcomes.includes(latestOutcome))) {
+          setClosureReason("");
+          setClosureError("The response decision changed. Choose a closure reason for the latest decision.");
+          return;
+        }
+      }
+      await closeCoordinatorCase(report.reportReference, { closureReasonCode: closureReason, publicClosureNote: closureNote.trim(), ...(reviewOutcome === "referral" && (latestCase.latestDecision?.referredTo?.trim() || responder) ? { referredTo: latestCase.latestDecision?.referredTo?.trim() || responder } : {}) });
       clearStoredDecision(report.reportReference);
       setStage("closed");
-    } catch (requestErrorValue) { setClosureError(userFacingError(requestErrorValue, "The case could not be closed.")); }
+    } catch (requestErrorValue) {
+      if (requestErrorValue instanceof ApiError && requestErrorValue.status === 409) {
+        const conflict = closureConflict(requestErrorValue);
+        if (conflict) { setRejectedClosure(conflict); setClosureReason(""); }
+        let message = conflict?.message ?? "The backend did not allow this closure. Refresh the case and check its current status and selected reason. If it still fails, ask the backend team to check the closure rules.";
+        try {
+          const latestCase = await refreshCase();
+          setCurrentStatus(latestCase.statusCode);
+          if (latestCase.latestDecision) setReviewOutcome(reviewOutcomeFor(latestCase.latestDecision.responseType));
+        } catch {
+          setClosureStatusReady(false);
+          message += " The latest case could not be loaded. Refresh the case before trying again.";
+        }
+        setClosureError(message);
+      } else { setClosureError(userFacingError(requestErrorValue, "The case could not be closed.")); }
+    }
     finally { setPendingAction(null); }
   }
 
@@ -560,20 +624,27 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
     finally { setPendingAction(null); }
   }
 
-  function openClosure() {
-    const closureDecision = report.latestDecision ?? (persistedResponseType
-      ? { responseType: persistedResponseType, notes: responseNote, referredTo: responder }
-      : restoredDecision);
-    if (closureDecision) {
-      setResponseType(closureDecision.responseType);
-      setResponseNote(closureDecision.notes?.trim() || defaultResponseNote);
-      setResponder(closureDecision.referredTo?.trim() ?? "");
-      setReviewOutcome(reviewOutcomeFor(closureDecision.responseType));
-      setSavedResponse(responseLabels[closureDecision.responseType]);
-    }
-    setClosureReturnStage(activeStage === "detail" ? "detail" : "response-saved");
-    setClosureError("");
-    setStage("close");
+  async function openClosure() {
+    if (pendingAction !== null) return;
+    if (activeStage !== "close") setClosureReturnStage(activeStage === "detail" ? "detail" : "response-saved");
+    setClosureError(""); setClosureStatusReady(false); setPendingAction("closure-refresh"); setStage("close");
+    try {
+      const latestCase = await refreshCase();
+      setCurrentStatus(latestCase.statusCode);
+      const closureDecision = latestCase.latestDecision ?? report.latestDecision ?? (persistedResponseType
+        ? { responseType: persistedResponseType, notes: responseNote, referredTo: responder }
+        : restoredDecision);
+      if (closureDecision) {
+        setResponseType(closureDecision.responseType);
+        setResponseNote(closureDecision.notes?.trim() || defaultResponseNote);
+        setResponder(closureDecision.referredTo?.trim() ?? "");
+        setReviewOutcome(reviewOutcomeFor(closureDecision.responseType));
+        setSavedResponse(responseLabels[closureDecision.responseType]);
+      }
+      setClosureReason((reason) => reason && !closureStatusBlocked(latestCase.statusCode, reason) ? reason : "");
+      setClosureStatusReady(true);
+    } catch (requestErrorValue) { setClosureError(userFacingError(requestErrorValue, "The latest case could not be loaded. Refresh the case before choosing a closure reason.")); }
+    finally { setPendingAction(null); }
   }
 
   const exactLocation = report.preciseLocation?.latitude != null && report.preciseLocation.longitude != null ? `${report.preciseLocation.latitude.toFixed(6)}, ${report.preciseLocation.longitude.toFixed(6)}` : "No exact coordinates were submitted";
@@ -601,13 +672,38 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
   const informationExchange = report.informationExchange;
   const structuredAiItems = aiStructuredItems(report.aiAssisted?.suggestions, report.aiAssisted?.source);
   const displayedDepth = report.estimatedDepthMetres == null ? "Not provided" : `${report.estimatedDepthMetres} m`;
-  const replyEvidenceIds = new Set(informationExchange?.flatMap((entry) => entry.evidence?.map((item) => item.evidenceId) ?? []) ?? []);
-  const observerEvidence = report.evidence.filter((item) => !actionEvidenceIds.includes(item.evidenceId) && !replyEvidenceIds.has(item.evidenceId));
+  const observerEvidenceById = new Map(report.evidence
+    .filter((item) => !actionEvidenceIds.includes(item.evidenceId))
+    .map((item) => [item.evidenceId, item]));
+  for (const entry of informationExchange ?? []) {
+    for (const item of entry.evidence ?? []) {
+      if (!actionEvidenceIds.includes(item.evidenceId) && !observerEvidenceById.has(item.evidenceId)) {
+        observerEvidenceById.set(item.evidenceId, item);
+      }
+    }
+  }
+  const observerEvidence = [...observerEvidenceById.values()];
+
+  function goToFollowUp() {
+    const target = followUpRef.current;
+    if (!target) return;
+    const heading = target.querySelector<HTMLHeadingElement>("#follow-up-heading");
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+    const reducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "start" });
+    setFollowUpHighlighted(true);
+    if (followUpHighlightTimer.current != null) clearTimeout(followUpHighlightTimer.current);
+    followUpHighlightTimer.current = setTimeout(() => setFollowUpHighlighted(false), 1800);
+  }
 
   if (activeStage === "detail") return <section className={styles.page}>
     <Link className={styles.backLink} href="/coordinator/my-cases">← Back to My Cases</Link>
     <Heading eyebrow={`My Cases / ${report.reportReference}`} title="Review reef observation" description="Review the submitted evidence, observation details and protected location before making a decision." />
     <span className={styles.ownerChip}>Owned by {report.owner.displayName}</span>
+    {showFollowUps && <div className={styles.mobileFollowUpShortcut}><button className={styles.secondaryButton} type="button" onClick={goToFollowUp} aria-controls="case-follow-up">Go to follow-up</button></div>}
     {claimConfirmation && <div className={styles.successBox} role="status"><strong>{claimConfirmation.statusLabel}: report assigned successfully</strong><p>Claimed at {displayDateTime(claimConfirmation.claimedAt)}. You can now begin reviewing its evidence.</p></div>}
     <div className={styles.caseContextStack} aria-label="Additional case context">
       <details className={styles.caseDisclosure} open={historyOpen} onToggle={(event) => setHistoryOpen(event.currentTarget.open)}>
@@ -620,7 +716,7 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
       {informationExchange && informationExchange.length > 0 && <details className={styles.caseDisclosure}><summary><span><strong>Information request history</strong><small>{informationExchange.length} recorded update{informationExchange.length === 1 ? "" : "s"}</small></span></summary><section className={styles.informationExchange} aria-labelledby="information-exchange-heading"><h2 id="information-exchange-heading">Information request and response</h2>{informationExchange.map((entry, index) => <div key={entry.caseEventId ?? `${entry.eventType}-${entry.occurredAt}-${index}`}><strong>{informationExchangeLabel(entry.eventType)}</strong>{entry.message && <p>{entry.message}</p>}<small>{entry.actorDisplayName ? `${entry.actorDisplayName} · ` : ""}{displayDateTime(entry.occurredAt)}</small>{Boolean(entry.evidence?.length) && <section aria-label="Photos attached to this Observer reply"><h3>Reply photos</h3><EvidenceRecords reportReference={report.reportReference} evidence={entry.evidence ?? []} /></section>}</div>)}</section></details>}
     </div>
     <div className={styles.reviewGrid}><section className={styles.card}>
-      <h2>Submitted evidence</h2><p className={styles.muted}>Evidence provided by the observer with this report.</p><EvidenceRecords reportReference={report.reportReference} evidence={observerEvidence} />
+      <h2>Submitted evidence</h2><p className={styles.muted}>Photos uploaded with this report and in observer replies.</p><EvidenceRecords reportReference={report.reportReference} evidence={observerEvidence} />
       <dl className={styles.detailList}>
         <div><dt>Threat type</dt><dd>{report.threat}</dd></div>
         <div><dt>Observed</dt><dd>{observationDateMissing ? "Unavailable" : displayDateTime(report.observedAt)}</dd></div>
@@ -637,11 +733,11 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
         <p className={styles.inlineAiDisclaimer}>AI-assisted values were reviewed by the Observer before submission. They do not independently verify that the reported threat is present and are not Coordinator-confirmed findings. Model confidence describes the AI suggestion, not evidence verification.</p>
       </section>}
       {observationDateMissing && <div className={styles.warningBox} role="status"><strong>Observation date could not be loaded</strong><p>The observation date is temporarily unavailable. Refresh the case and try again. If it remains unavailable, report the problem to your system administrator.</p></div>}
-      <div className={styles.protectedBox}><strong>Submitted location</strong><p>{exactLocation}</p>{report.preciseLocation?.confidenceLabel && <small>Confidence: {report.preciseLocation.confidenceLabel}</small>}{report.preciseLocation?.sourceLabel && <small>Source: {report.preciseLocation.sourceLabel}</small>}{uncertainty && <small>{uncertainty}</small>}{report.preciseLocation?.relocationNotes && <div className={styles.surfaceContext}><strong>Surface entry and exit context</strong><p>{report.preciseLocation.relocationNotes}</p><small>Context only — not an exact underwater location.</small></div>}</div>
+      <div className={styles.protectedBox}><strong>Submitted location</strong><p>{exactLocation}</p>{report.preciseLocation?.confidenceLabel && <small>Confidence: {report.preciseLocation.confidenceLabel}</small>}{report.preciseLocation?.sourceLabel && <small>Source: {report.preciseLocation.sourceLabel}</small>}{uncertainty && <small>{uncertainty}</small>}{report.preciseLocation?.relocationNotes && <div className={styles.surfaceContext}><strong>Surface entry and exit context</strong><p>{report.preciseLocation.relocationNotes.replace(/^Surface entry(?: context)?:[ \t]*/gim, "Surface Entry: ").replace(/^Surface exit(?: context)?:[ \t]*/gim, "Surface Exit: ")}</p><small>Supporting notes — not an exact underwater location.</small></div>}</div>
     </section><div className={styles.caseSidebar}>
-      <aside className={styles.sidePanel}><h2>Case control</h2><dl className={styles.detailList}><div><dt>Active owner</dt><dd>{report.owner.displayName}</dd></div><div><dt>Status</dt><dd>{report.statusLabel}</dd></div></dl><div className={styles.infoBox}><strong>Review type</strong><p>Your assessment is a desk review, not an on-site confirmation.</p></div>{assessmentError && <p className={styles.errorText} role="alert">{assessmentError}</p>}<button className={styles.primaryButton} type="button" onClick={beginAssessment} disabled={pendingAction !== null || !["claimed", "under_review", "evidence_accepted"].includes(currentStatus)}>{pendingAction === "start-review" ? "Starting review…" : currentStatus === "evidence_accepted" ? "Continue to response" : "Start evidence assessment"}</button>{canOpenClosure && <><button className={styles.secondaryButton} type="button" onClick={openClosure} disabled={pendingAction !== null}>Close case</button><p className={styles.muted}>Choose a closure reason and note before the case is closed.</p></>}</aside>
+      <aside className={styles.sidePanel}><h2>Case control</h2><dl className={styles.detailList}><div><dt>Active owner</dt><dd>{report.owner.displayName}</dd></div><div><dt>Status</dt><dd>{report.statusLabel}</dd></div></dl><div className={styles.infoBox}><strong>Review type</strong><p>Your assessment is a desk review, not an on-site confirmation.</p></div>{assessmentError && <p className={styles.errorText} role="alert">{assessmentError}</p>}<button className={styles.primaryButton} type="button" onClick={beginAssessment} disabled={pendingAction !== null || !["claimed", "under_review", "evidence_accepted"].includes(currentStatus)}>{pendingAction === "start-review" ? "Starting review…" : currentStatus === "evidence_accepted" ? "Continue to response" : "Start evidence assessment"}</button>{canOpenClosure && <><button className={styles.secondaryButton} type="button" onClick={openClosure} disabled={pendingAction !== null}>Close case</button><p className={styles.muted}>Choose a closure reason and note before the case is closed.</p></>}{showFollowUps && <button className={styles.secondaryButton} type="button" onClick={goToFollowUp} aria-controls="case-follow-up">Go to follow-up</button>}</aside>
     </div></div>
-    {showFollowUps && <FollowUpPanel reportReference={report.reportReference} statusCode={currentStatus} responseType={recordedResponseType} onEvidenceIdsChange={handleActionEvidenceIds} />}
+    {showFollowUps && <div id="case-follow-up" ref={followUpRef} className={`${styles.followUpTarget} ${followUpHighlighted ? styles.followUpHighlighted : ""}`}> <FollowUpPanel reportReference={report.reportReference} statusCode={currentStatus} responseType={recordedResponseType} onEvidenceIdsChange={handleActionEvidenceIds} /></div>}
   </section>;
 
   if (activeStage === "assess") return <section className={styles.page}>
@@ -665,11 +761,11 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
     <form className={styles.reviewGrid} onSubmit={saveResponse}><section className={styles.card}><h2>Report {report.reportReference}</h2><p className={styles.muted}>{report.threat} — {report.area ?? "Location not provided"}</p><fieldset className={styles.optionCards}><legend className="sr-only">Response type</legend><label><input type="radio" name="response" checked={responseType === "monitoring_only"} onChange={() => setResponseType("monitoring_only")} /><span><strong>Monitoring Only</strong><small>Record monitoring without promising intervention.</small></span></label><label><input type="radio" name="response" checked={responseType === "refer_or_share"} onChange={() => setResponseType("refer_or_share")} /><span><strong>Refer / Share for Possible Response</strong><small>Choose a contact before the decision is saved.</small></span></label><label><input type="radio" name="response" checked={responseType === "intervention_required"} onChange={() => setResponseType("intervention_required")} /><span><strong>Intervention Required</strong><small>Record a recommendation, not a guarantee.</small></span></label></fieldset><label className={styles.field}>Decision note <span>Optional</span><textarea value={responseNote} onChange={(event) => setResponseNote(event.target.value)} /></label>{responseError && <p className={styles.errorText} role="alert">{responseError}</p>}<div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage("assess")} disabled={pendingAction !== null}>Back to assessment</button><button className={styles.primaryButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "decision" ? "Recording…" : "Record response"}</button></div></section><aside className={styles.sidePanel}><h2>Honest status language</h2><div className={styles.warningBox}><strong>Referral</strong><p>Shared for consideration does not mean accepted.</p></div><div className={styles.infoBox}><strong>Monitoring</strong><p>Monitoring Recommended records the coordinator decision.</p></div></aside></form>
   </section>;
 
-  if (activeStage === "response-saved") return <section className={styles.page}><Heading eyebrow={`My Cases / ${report.reportReference}`} title="Response decision recorded" description="The recommendation was saved without promising completed conservation action." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{displayedResponse}</h2><p>{displayedResponseNote}</p>{responseError && <p className={styles.errorText} role="alert">{responseError}</p>}<div className={styles.warningBox}><strong>Case remains open by default</strong><p>A recommendation is not the same as confirmed action. Close only when a valid outcome applies.</p></div><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={returnToDetail} disabled={pendingAction !== null}>{pendingAction === "refresh" ? "Refreshing…" : "Keep case open"}</button><button className={styles.primaryButton} type="button" onClick={openClosure}>Record a closure outcome</button></div></section><FollowUpPanel reportReference={report.reportReference} statusCode={currentStatus} responseType={recordedResponseType} onEvidenceIdsChange={handleActionEvidenceIds} /></section>;
+  if (activeStage === "response-saved") return <section className={styles.page}><Heading eyebrow={`My Cases / ${report.reportReference}`} title="Response decision recorded" description="The recommendation was saved without promising completed conservation action." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{displayedResponse}</h2><p>{displayedResponseNote}</p>{responseError && <p className={styles.errorText} role="alert">{responseError}</p>}<div className={styles.warningBox}><strong>Case remains open by default</strong><p>A recommendation is not the same as confirmed action. Close only when a valid outcome applies.</p></div><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={returnToDetail} disabled={pendingAction !== null}>{pendingAction === "refresh" ? "Refreshing…" : "Keep case open"}</button><button className={styles.primaryButton} type="button" onClick={openClosure}>Record a closure outcome</button><button className={styles.secondaryButton} type="button" onClick={goToFollowUp} aria-controls="case-follow-up">Go to follow-up</button></div></section><div id="case-follow-up" ref={followUpRef} className={`${styles.followUpTarget} ${followUpHighlighted ? styles.followUpHighlighted : ""}`}> <FollowUpPanel reportReference={report.reportReference} statusCode={currentStatus} responseType={recordedResponseType} onEvidenceIdsChange={handleActionEvidenceIds} /></div></section>;
 
   if (activeStage === "referral") return <section className={styles.page}><Heading eyebrow="My Cases / Referral" title="Share for possible response" description="Record the recipient and sharing note before saving the referral decision." /><form className={styles.card} onSubmit={confirmReferral}><h2>Sharing summary</h2><p className={styles.muted}>Report {report.reportReference} — {report.threat} — {report.area ?? "Location not provided"}</p><div className={styles.referralGrid}><label className={styles.field}>Recipient organisation or contact *<input type="text" value={responder} onChange={(event) => setResponder(event.target.value)} maxLength={255} placeholder="For example, Tioman Marine Park Department" aria-invalid={Boolean(referralError)} /></label><aside className={styles.warningBox}><strong>Sharing status</strong><p>The observer sees that the case was shared, not that action is guaranteed.</p></aside><label className={`${styles.field} ${styles.fullWidth}`}>Sharing note *<textarea value={referralNote} onChange={(event) => setReferralNote(event.target.value)} /></label></div>{referralError && <p className={styles.errorText} role="alert">{referralError}</p>}<div className={styles.splitActions}><button className={styles.secondaryButton} type="button" onClick={closeWithoutPartner} disabled={pendingAction !== null}>{pendingAction === "referral" ? "Recording…" : "No partner available"}</button><button className={styles.primaryButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "referral" ? "Recording…" : "Record referral"}</button></div></form></section>;
 
-  if (activeStage === "close") return <section className={styles.page}><Heading eyebrow="My Cases / Close report" title="Choose a closure reason" description="Choose a reason that matches the recorded assessment and response." /><form className={styles.reviewGrid} onSubmit={submitClosure}><section className={styles.card}><fieldset className={styles.closureList}><legend>Select one closure reason</legend>{closureReasons.map((item) => { const available = allowedClosures.some((allowed) => allowed.value === item.value); return <label key={item.value}><input type="radio" name="closure" checked={closureReason === item.value} disabled={!available} onChange={() => { setClosureReason(item.value); setClosureError(""); }} /><span><strong>{item.label}</strong><small>{item.observer}</small>{!available && <small>Not available for the recorded response decision</small>}</span></label>; })}</fieldset><label className={styles.field}>Public closure note *<textarea value={closureNote} onChange={(event) => setClosureNote(event.target.value)} aria-invalid={Boolean(closureError)} /></label>{closureError && <p className={styles.errorText} role="alert">{closureError}</p>}</section><aside className={styles.sidePanel}><h2>Before closing</h2><ul className={styles.checkList}><li>One compatible reason selected</li><li>Observer-safe explanation recorded</li><li>Your name and completion time will be recorded</li></ul><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage(closureReturnStage ?? (reviewOutcome === "not_substantiated" ? "assess" : reviewOutcome === "referral" ? "referral" : "response-saved"))} disabled={pendingAction !== null}>Back</button><button className={styles.dangerButton} type="submit" disabled={pendingAction !== null}>{pendingAction === "closure" ? "Closing…" : "Close case"}</button></div></aside></form></section>;
+  if (activeStage === "close") return <section className={styles.page}><Heading eyebrow="My Cases / Close report" title="Choose a closure reason" description="Choose a reason that matches the recorded assessment and response." /><form className={styles.reviewGrid} onSubmit={submitClosure}><section className={styles.card}><fieldset className={styles.closureList} disabled={!closureStatusReady || pendingAction !== null}><legend>Select one closure reason</legend>{closureReasons.map((item) => { const available = allowedClosures.some((allowed) => allowed.value === item.value); return <label key={item.value}><input type="radio" name="closure" checked={closureReason === item.value} disabled={!available} onChange={() => { setClosureReason(item.value); setClosureError(""); }} /><span><strong>{item.label}</strong><small>{item.observer}</small>{!available && <small>{closureStatusBlocked(currentStatus, item.value) || (rejectedClosure?.status === currentStatus && rejectedClosure.reason === item.value) ? "Not available for the current case status" : "Not available for the recorded response decision"}</small>}</span></label>; })}</fieldset><label className={styles.field}>Public closure note *<textarea value={closureNote} onChange={(event) => setClosureNote(event.target.value)} aria-invalid={Boolean(closureError)} /></label>{closureError && <p className={styles.errorText} role="alert">{closureError}</p>}</section><aside className={styles.sidePanel}><h2>Before closing</h2>{pendingAction === "closure-refresh" && <p role="status">Checking the latest case status…</p>}{currentStatus === "response_planned" && <p className={styles.warningBox}>{plannedClosureMessage}</p>}{!closureStatusReady && pendingAction === null && <button className={styles.secondaryButton} type="button" onClick={openClosure}>Refresh case</button>}<ul className={styles.checkList}><li>One compatible reason selected</li><li>Observer-safe explanation recorded</li><li>Your name and completion time will be recorded</li></ul><div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStage(closureReturnStage ?? (reviewOutcome === "not_substantiated" ? "assess" : reviewOutcome === "referral" ? "referral" : "response-saved"))} disabled={pendingAction !== null}>Back</button><button className={styles.dangerButton} type="submit" disabled={pendingAction !== null || !closureStatusReady || !closureReason || !allowedClosures.some((item) => item.value === closureReason)}>{pendingAction === "closure" ? "Closing…" : "Close case"}</button></div></aside></form></section>;
 
   return <section className={styles.page}><Heading eyebrow={`My Cases / ${report.reportReference}`} title="Case outcome recorded" description="The closure reason, public note and time were saved." /><section className={`${styles.card} ${styles.resultCard}`}><span className={styles.successIcon} aria-hidden="true">✓</span><h2>{closure?.label ?? "Case closed"}</h2><p>Report {report.reportReference} now has a traceable outcome.</p><div className={styles.infoBox}><strong>Message shown to observer</strong><p>{closureNote}</p></div><div className={styles.actions}><Link className={styles.primaryButton} href="/coordinator/report-queue">Return to queue</Link></div></section></section>;
 }

@@ -53,6 +53,9 @@ export type ReportDraft = {
   observationDate: string;
   observationTime: string;
   estimatedDepthMetres: string;
+  // Frontend draft bookkeeping; never included in API payloads.
+  threatCategorySource?: "ai" | "observer";
+  estimatedDepthSource?: "ai" | "observer";
   description: string;
   photos: ReportPhotoMetadata[];
   aiSuggestions: ReportAISuggestion[];

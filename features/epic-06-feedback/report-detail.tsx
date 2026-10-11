@@ -210,8 +210,10 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
       {report.preciseLocation?.relocationNotes && (
         <div className={styles.surfaceContextNote}>
           <strong>Surface entry and exit context</strong>
-          <p>{report.preciseLocation.relocationNotes}</p>
-          <small>Context only — not the exact underwater threat location.</small>
+          <p>{report.preciseLocation.relocationNotes
+            .replace(/^Surface entry(?: context)?:[ \t]*/gim, "Surface Entry: ")
+            .replace(/^Surface exit(?: context)?:[ \t]*/gim, "Surface Exit: ")}</p>
+          <small>Supporting notes — not the exact underwater threat location.</small>
         </div>
       )}
 
@@ -260,15 +262,17 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
             <small id="information-response-photos-help">Up to 5 JPG, PNG or WebP photos, 10 MB each. Photos stay private with your report.</small>
             {responsePhotos.length > 0 && <ul className={styles.replyPhotos} aria-label="Selected additional photos">
               {responsePhotos.map(({ file, previewUrl }, index) => <li key={previewUrl}>
-                <Image src={previewUrl} width={120} height={90} unoptimized alt={`Selected photo: ${file.name}`} />
-                <span>{file.name}</span>
+                <Image src={previewUrl} width={360} height={220} unoptimized alt={`Selected photo: ${file.name}`} />
+                <div className={styles.replyPhotoMeta}>
+                <strong title={file.name}>{file.name}</strong>
                 <button className={styles.removePhoto} type="button" disabled={submittingResponse}
                   aria-label={`Remove photo ${index + 1}: ${file.name}`} onClick={() => {
                     URL.revokeObjectURL(previewUrl);
                     photoUrls.current.delete(previewUrl);
                     setResponsePhotos((current) => current.filter((_, position) => position !== index));
                     setPhotoError("");
-                  }}>Remove</button>
+                  }}>Remove photo</button>
+                </div>
               </li>)}
             </ul>}
             {photoError && <div><p className={styles.responseError} role="alert">{photoError}</p>

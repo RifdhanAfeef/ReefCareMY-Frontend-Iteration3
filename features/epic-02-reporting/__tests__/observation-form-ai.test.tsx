@@ -95,6 +95,7 @@ describe("automatic Smart Report Structuring", () => {
     };
     vi.setSystemTime(new Date("2026-09-16T00:00:00Z"));
     vi.clearAllMocks();
+    updateReportDraft.mockReset();
     vi.mocked(readExifCaptureTime).mockReset().mockResolvedValue(null);
     URL.createObjectURL = vi.fn(() => "blob:restored-photo");
     URL.revokeObjectURL = vi.fn();
@@ -389,6 +390,7 @@ describe("automatic Smart Report Structuring", () => {
     expect(updateReportDraft).toHaveBeenCalledWith({
       threatCategoryCode: "physical_reef_damage",
       threatCategoryId: 44,
+      threatCategorySource: "observer",
     });
   });
 
@@ -595,6 +597,77 @@ describe("automatic Smart Report Structuring", () => {
       visualRecognition: expect.objectContaining({ resolution: "kept" }),
     }));
   });
+  it.each(["Use photo threat", "Use description"])("reopens a photo decision after a conflicting description and resolves it with %s", async (choice) => {
+    runtime.reportDraft = { ...runtime.reportDraft, description: "",
+      visualRecognition: { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: "coral_bleaching", suggestedThreatLabel: "Coral bleaching", confidence: 0.9, warning: null, resolution: "unresolved" } };
+    vi.mocked(getThreatCategories).mockResolvedValue([
+      { threatCategoryId: 41, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+      { threatCategoryId: 42, code: "coral_bleaching", label: "Coral bleaching", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+    ]);
+    vi.mocked(structureReportDescription).mockResolvedValue({ available: true,
+      suggestions: [{ field: "possible_threat", label: "Possible threat", suggestedValue: "Ghost fishing gear" }],
+      missingFields: [], followUpQuestions: [], warnings: [], requiresUserConfirmation: true });
+    const view = render(<ObservationForm />);
+    await act(async () => { for (let tick = 0; tick < 8; tick += 1) await Promise.resolve(); });
+    const applyChange = () => {
+      runtime.reportDraft = { ...runtime.reportDraft, ...updateReportDraft.mock.lastCall![0] };
+      view.rerender(<ObservationForm />);
+    };
+    fireEvent.click(screen.getByRole("button", { name: "Use this category" }));
+    applyChange();
+    expect(screen.getByRole("img", { name: "Photo suggestion decision confirmed" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: /^Description \*/ }), { target: { value: "A fishing net was tangled around the coral." } });
+    applyChange();
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    expect(updateReportDraft).toHaveBeenLastCalledWith(expect.objectContaining({
+      visualRecognition: expect.objectContaining({ resolution: "unresolved" }),
+      aiSuggestions: [expect.objectContaining({ status: "unresolved", conflict: true })],
+    }));
+    applyChange();
+    expect(screen.getByRole("button", { name: "Use photo threat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use description" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Photo suggestion decision confirmed" })).not.toBeInTheDocument();
+    // A new AI suggestion must not change the category until a human chooses.
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue("coral_bleaching");
+    fireEvent.click(screen.getByRole("button", { name: choice }));
+    applyChange();
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue(choice === "Use photo threat" ? "coral_bleaching" : "ghost_gear");
+    expect(runtime.reportDraft.aiSuggestions[0]).toEqual(expect.objectContaining({
+      status: choice === "Use photo threat" ? "corrected" : "confirmed", conflict: false,
+    }));
+    expect(screen.getByRole("img", { name: "Photo suggestion decision confirmed" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use photo threat" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use description" })).not.toBeInTheDocument();
+  });
+
+  it.each(["accepted", "kept", "changed"] as const)("restores both conflict buttons for an older draft with photo resolution %s", async (resolution) => {
+    runtime.reportDraft = { ...runtime.reportDraft, threatCategoryCode: "coral_bleaching", threatCategoryId: 42,
+      aiSuggestions: [{ source: "smart_report", field: "possible_threat", label: "Possible threat", suggestedValue: "Ghost fishing gear", confidence: null, status: "unresolved", conflict: true, observerValue: "Coral bleaching" }],
+      visualRecognition: { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: "coral_bleaching", suggestedThreatLabel: "Coral bleaching", confidence: 0.9, warning: null, resolution } };
+    vi.mocked(getThreatCategories).mockResolvedValue([
+      { threatCategoryId: 41, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+      { threatCategoryId: 42, code: "coral_bleaching", label: "Coral bleaching", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+    ]);
+    render(<ObservationForm />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole("button", { name: "Use photo threat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use description" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Photo suggestion decision confirmed" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a photo decision confirmed when the later description agrees", async () => {
+    runtime.reportDraft = { ...runtime.reportDraft, threatCategoryCode: "coral_bleaching", threatCategoryId: 42,
+      visualRecognition: { photoId: "one", photoName: "reef.jpg", status: "recognized", suggestedThreatCode: "coral_bleaching", suggestedThreatLabel: "Coral bleaching", confidence: 0.9, warning: null, resolution: "accepted" } };
+    vi.mocked(structureReportDescription).mockResolvedValue({ available: true,
+      suggestions: [{ field: "possible_threat", label: "Possible threat", suggestedValue: "Coral bleaching" }],
+      missingFields: [], followUpQuestions: [], warnings: [], requiresUserConfirmation: true });
+    render(<ObservationForm />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    const changes = updateReportDraft.mock.lastCall![0];
+    expect(changes).not.toHaveProperty("visualRecognition");
+    expect(changes.aiSuggestions).toEqual([expect.objectContaining({ status: "confirmed", conflict: false })]);
+  });
+
   it("allows manual choices when photo analysis is unavailable without a misleading accept button", () => {
     runtime.reportDraft.visualRecognition = { photoId: "one", photoName: "reef.jpg", status: "unavailable", suggestedThreatCode: null, suggestedThreatLabel: null, confidence: null, warning: "Image analysis is temporarily unavailable.", resolution: "not_required" };
     render(<ObservationForm />);
@@ -611,6 +684,142 @@ describe("automatic Smart Report Structuring", () => {
     expect(screen.queryByRole("button", { name: "Use this category" })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Photo suggestion decision confirmed" })).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Threat category *" })).toBeInTheDocument();
+  });
+
+  function useStatefulDraft() {
+    updateReportDraft.mockImplementation((changes: Partial<ReportDraft>) => {
+      runtime.reportDraft = { ...runtime.reportDraft, ...changes };
+    });
+    const view = render(<ObservationForm />);
+    return {
+      async analyse(suggestions: Array<{ field: string; label: string; suggestedValue: string }>, description: string) {
+        vi.mocked(structureReportDescription).mockResolvedValue({ available: true, suggestions,
+          missingFields: [], followUpQuestions: [], warnings: [], requiresUserConfirmation: true });
+        fireEvent.change(screen.getByRole("textbox", { name: /^Description/ }), { target: { value: description } });
+        view.rerender(<ObservationForm />);
+        await act(async () => { await Promise.resolve(); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+        view.rerender(<ObservationForm />);
+      },
+      refresh() { view.rerender(<ObservationForm />); },
+    };
+  }
+
+  it("automatically refreshes depth after the description changes, without marking it confirmed", async () => {
+    const draft = useStatefulDraft();
+    await draft.analyse([{ field: "estimated_depth", label: "Estimated depth", suggestedValue: "2 metres" }], "A net at 2 metres deep.");
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(2);
+    await draft.analyse([{ field: "estimated_depth", label: "Estimated depth", suggestedValue: "5 metres" }], "A net at 5 metres deep.");
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(5);
+    expect(runtime.reportDraft).toMatchObject({ estimatedDepthSource: "ai", aiSuggestions: [expect.objectContaining({ status: "unresolved", conflict: false })] });
+    expect(screen.queryByText("Needs checking")).not.toBeInTheDocument();
+  });
+
+  it("preserves edited depth and lets the observer explicitly use the new suggestion", async () => {
+    const draft = useStatefulDraft();
+    const suggestion = (depth: number) => [{ field: "estimated_depth", label: "Estimated depth", suggestedValue: `${depth} m` }];
+    await draft.analyse(suggestion(2), "A net at 2 metres deep.");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Estimated depth (m)" }), { target: { value: "3" } });
+    draft.refresh();
+    await draft.analyse(suggestion(5), "A net at 5 metres deep.");
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(3);
+    fireEvent.click(screen.getByRole("button", { name: "Use 5 m" }));
+    draft.refresh();
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(5);
+    expect(runtime.reportDraft.estimatedDepthSource).toBe("observer");
+    await draft.analyse(suggestion(7), "A net at 7 metres deep.");
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(5);
+    expect(screen.getByRole("button", { name: "Use 7 m" })).toBeInTheDocument();
+  });
+
+  it("keeps depth deliberately cleared by the observer blank", async () => {
+    const draft = useStatefulDraft();
+    await draft.analyse([{ field: "estimated_depth", label: "Estimated depth", suggestedValue: "2 m" }], "A net at 2 metres deep.");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Estimated depth (m)" }), { target: { value: "" } });
+    draft.refresh();
+    await draft.analyse([{ field: "estimated_depth", label: "Estimated depth", suggestedValue: "5 m" }], "A net at 5 metres deep.");
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(null);
+    expect(screen.getByRole("button", { name: "Use 5 m" })).toBeInTheDocument();
+  });
+
+  const otherDetails = [
+    ["approximate_size", "Approximate size", "Small patch", "Several metres"],
+    ["coral_interaction", "Coral interaction", "No coral contact", "Touching coral"],
+    ["animal_interaction", "Marine-animal interaction", "No animals trapped", "A trapped fish"],
+    ["site_reference", "Site reference", "North of the reef", "South of the reef"],
+  ];
+  it.each(otherDetails)("automatically refreshes untouched %s", async (field, label, oldValue, newValue) => {
+    const draft = useStatefulDraft();
+    await draft.analyse([{ field, label, suggestedValue: oldValue }], `I saw ${oldValue}.`);
+    expect(screen.getByRole("textbox", { name: label })).toHaveValue(oldValue);
+    await draft.analyse([{ field, label, suggestedValue: newValue }], `I saw ${newValue}.`);
+    expect(screen.getByRole("textbox", { name: label })).toHaveValue(newValue);
+    expect(runtime.reportDraft.aiSuggestions[0]).toMatchObject({ status: "unresolved", conflict: false });
+  });
+
+  it.each(otherDetails)("preserves an edited %s and offers the new suggestion", async (field, label, oldValue, newValue) => {
+    const draft = useStatefulDraft();
+    await draft.analyse([{ field, label, suggestedValue: oldValue }], `I saw ${oldValue}.`);
+    fireEvent.change(screen.getByRole("textbox", { name: label }), { target: { value: "My own entry" } });
+    draft.refresh();
+    await draft.analyse([{ field, label, suggestedValue: newValue }], `I saw ${newValue}.`);
+    expect(screen.getByRole("textbox", { name: label })).toHaveValue("My own entry");
+    expect(runtime.reportDraft.aiSuggestions[0]).toMatchObject({ observerValue: "My own entry", suggestedValue: newValue, conflict: true });
+    fireEvent.click(screen.getByRole("button", { name: `Use suggestion for ${label.toLowerCase()}` }));
+    draft.refresh();
+    expect(screen.getByRole("textbox", { name: label })).toHaveValue(newValue);
+    expect(runtime.reportDraft.aiSuggestions[0]).toMatchObject({ status: "confirmed", conflict: false });
+    await draft.analyse([{ field, label, suggestedValue: "Another suggestion" }], "I saw something else instead.");
+    expect(screen.getByRole("textbox", { name: label })).toHaveValue(newValue);
+  });
+
+  it("keeps a confirmed detail when the revised description no longer includes it", async () => {
+    const draft = useStatefulDraft();
+    await draft.analyse([{ field: "site_reference", label: "Site reference", suggestedValue: "North reef" }], "Net on the north reef.");
+    runtime.reportDraft.aiSuggestions[0].status = "confirmed";
+    draft.refresh();
+    await draft.analyse([], "A fishing net tangled on coral.");
+    expect(screen.getByRole("textbox", { name: "Site reference" })).toHaveValue("North reef");
+    expect(runtime.reportDraft.aiSuggestions[0].status).toBe("confirmed");
+  });
+
+  it("preserves manual details entered while description analysis is still loading", async () => {
+    const draft = useStatefulDraft();
+    let finish!: (value: Awaited<ReturnType<typeof structureReportDescription>>) => void;
+    vi.mocked(structureReportDescription).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Estimated depth (m)" }), { target: { value: "3" } });
+    draft.refresh();
+    fireEvent.change(screen.getByRole("textbox", { name: "Site reference" }), { target: { value: "My reef" } });
+    draft.refresh();
+    await act(async () => { finish({ available: true, suggestions: [
+      { field: "estimated_depth", label: "Estimated depth", suggestedValue: "5 m" },
+      { field: "site_reference", label: "Site reference", suggestedValue: "Another reef" },
+    ], missingFields: [], followUpQuestions: [], warnings: [], requiresUserConfirmation: true }); });
+    draft.refresh();
+    expect(screen.getByRole("spinbutton", { name: "Estimated depth (m)" })).toHaveValue(3);
+    expect(screen.getByRole("textbox", { name: "Site reference" })).toHaveValue("My reef");
+    expect(screen.getByRole("button", { name: "Use 5 m" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use suggestion for site reference" })).toBeInTheDocument();
+  });
+
+  it("refreshes an untouched text threat category but preserves a later dropdown choice", async () => {
+    vi.mocked(getThreatCategories).mockResolvedValue([
+      { threatCategoryId: 41, code: "ghost_gear", label: "Ghost fishing gear", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+      { threatCategoryId: 42, code: "coral_bleaching", label: "Coral bleaching", shortExplanation: "", usefulEvidence: "", safetyReminder: "", iconReference: null },
+    ]);
+    const draft = useStatefulDraft();
+    await draft.analyse([{ field: "possible_threat", label: "Possible threat", suggestedValue: "Ghost fishing gear" }], "Fishing gear tangled in coral.");
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue("ghost_gear");
+    await draft.analyse([{ field: "possible_threat", label: "Possible threat", suggestedValue: "Coral bleaching" }], "The coral looks bleached.");
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue("coral_bleaching");
+    expect(runtime.reportDraft).toMatchObject({ threatCategorySource: "ai", aiSuggestions: [expect.objectContaining({ status: "unresolved", conflict: false })] });
+    fireEvent.change(screen.getByRole("combobox", { name: "Threat category *" }), { target: { value: "ghost_gear" } });
+    draft.refresh();
+    await draft.analyse([{ field: "possible_threat", label: "Possible threat", suggestedValue: "Coral bleaching" }], "I saw pale coral colonies.");
+    expect(screen.getByRole("combobox", { name: "Threat category *" })).toHaveValue("ghost_gear");
+    expect(runtime.reportDraft.threatCategorySource).toBe("observer");
   });
 
 });

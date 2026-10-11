@@ -6,12 +6,32 @@
 .history li p { margin:7px 0; white-space:pre-wrap; }
 .historyHead { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; }
 .historyHead span,.history small { color:#547078; }
+.history .editingRecord { border-color:#297d79; box-shadow:inset 3px 0 #297d79; }
+.planSummary { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; width:100%; padding:0; border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.planSummary:focus-visible { outline:3px solid #297d79; outline-offset:5px; border-radius:4px; }
+.panel .planSummary:disabled { opacity:1; cursor:default; }
+.summaryMain { display:grid; gap:7px; min-width:0; overflow-wrap:anywhere; }
+.summaryLabels { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.planBadge,.editingBadge { display:inline-flex; width:fit-content; border-radius:20px; padding:4px 9px; font-size:.8rem; font-weight:700; }
+.planBadge { background:#e2efee; color:#21545f; }
+.editingBadge { background:#176474; color:#fff; }
+.summaryAside { display:flex; align-items:center; gap:12px; color:#547078; font-size:.9rem; }
+.summaryAside svg { flex-shrink:0; transition:transform .15s ease; }
+.expandedChevron { transform:rotate(180deg); }
+.recordBody { margin-top:14px; padding-top:14px; border-top:1px solid #d5e4e7; }
+.recordBody[hidden] { display:none; }
 .photos { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
 .photos img { border-radius:8px; object-fit:cover; }
-.form { display:grid; gap:13px; border-top:1px solid #d9e7e9; margin-top:20px; padding-top:18px; }
-.form h3,.form p { margin:0; } .form label { display:grid; gap:5px; font-weight:600; }
+.form { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; gap:13px; border-top:1px solid #d9e7e9; margin-top:20px; padding-top:18px; }
+.form h3,.form p { margin:0; } .form label { display:grid; min-width:0; gap:5px; font-weight:600; }
+.form .formHeading { display:grid; gap:5px; }
+.form .formHeading h3 { font-size:1.2rem; }
+.form.updateForm { border:1px solid #a6cdca; border-radius:12px; background:#eaf4f3; padding:18px; margin-top:16px; }
+.form.createForm { border:1px solid #d9e7e9; border-radius:12px; padding:20px; margin-top:24px; }
+.addPaused { background:#f5f8f8; border:1px dashed #abc2c7; border-radius:12px; margin-top:24px; padding:18px; }
+.addPaused h3 { margin:0 0 8px; } .addPaused p { margin:0; color:#547078; }
 .form input:not([type="checkbox"]):not([type="file"]),.form select,.form textarea { width:100%; background:#fff; border:1px solid #abc2c7; border-radius:8px; padding:9px; color:#153a47; font:inherit; }
-.form textarea { min-height:80px; } .form input[type=file] { font:inherit; }
+.form textarea { min-height:80px; } .form input[type=file] { width:100%; max-width:100%; min-width:0; font:inherit; }
 .tabs,.buttons { display:flex; gap:8px; flex-wrap:wrap; }
 .tabs button,.buttons button,.textButton,.form button { cursor:pointer; border:1px solid #297181; border-radius:8px; background:white; color:#155464; padding:9px 12px; font:inherit; font-weight:600; }
 .tabs button[aria-pressed=true],.form .save { background:#176474; color:#fff; }
@@ -27,3 +47,13 @@
 .publicationConfirmation p { white-space:pre-wrap; overflow-wrap:anywhere; }
 .panel button:disabled { opacity:.5; cursor:not-allowed; }
 @media(max-width:640px) { .panel { padding:16px; } }
+@media(max-width:540px) { .summaryAside { gap:6px; font-size:.8rem; } .planSummary { gap:8px; } .form.updateForm,.form.createForm { padding:14px; } }
+@media(prefers-reduced-motion:reduce) { .summaryAside svg { transition:none; } }
+
+.selectedPhoto { display:grid; grid-template-columns:142px minmax(0,1fr); align-items:center; min-width:0; overflow:hidden; background:#fff; border-radius:12px; }
+.selectedPhotoImage { display:block; width:100%; height:110px; object-fit:cover; border-radius:10px; }
+.selectedPhotoMeta { display:grid; gap:8px; min-width:0; padding:12px; }
+.selectedPhotoMeta strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.selectedPhotoMeta span { color:var(--color-muted); font-size:14px; }
+.form .removePhoto { justify-self:start; padding:0; border:0; background:transparent; color:var(--color-primary-hover); font-size:14px; font-weight:800; text-decoration:underline; }
+@media(max-width:540px) { .selectedPhoto { grid-template-columns:100px minmax(0,1fr); } .selectedPhotoImage { height:100px; } .selectedPhotoMeta { padding:8px 12px; } }

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FollowUpPanel } from "../follow-up-panel";
 import * as api from "@/lib/api/iteration3Api";
@@ -60,6 +60,97 @@ const taken: FollowUp = {
 function list(...items: FollowUp[]) {
   return { reportReference: "RC-1", items, total: items.length, message: "Follow-up history." };
 }
+
+const planned: FollowUp = { ...taken, followUpState: "action_planned", recordedOutcome: null };
+
+describe("planned action layout and updates", () => {
+  it("expands plans independently and loads their photos only when opened", async () => {
+    vi.mocked(api.getFollowUps).mockResolvedValue(list(
+      { ...planned, responsibleTeam: "First team", evidence: [{ evidenceId: 91, mediaType: "photo", fileSizeBytes: 5, uploadedAt: taken.createdAt }] },
+      { ...planned, caseActionId: 9, actionTypeLabel: "Gear removal", responsibleTeam: "Second team" },
+    ));
+    render(<FollowUpPanel reportReference="RC-1" statusCode="response_planned" />);
+    const first = await screen.findByRole("button", { name: /Action planned Reef clean-up/ });
+    const second = screen.getByRole("button", { name: /Action planned Gear removal/ });
+    expect(first).toHaveAttribute("aria-expanded", "false");
+    expect(second).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("First team")).not.toBeInTheDocument();
+    expect(coordinatorApi.getCoordinatorEvidence).not.toHaveBeenCalled();
+    fireEvent.click(first);
+    expect(first).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("First team")).toBeVisible();
+    await waitFor(() => expect(coordinatorApi.getCoordinatorEvidence).toHaveBeenCalledWith("RC-1", 91));
+    fireEvent.click(second);
+    expect(screen.getByText("Second team")).toBeVisible();
+    fireEvent.click(first);
+    expect(first).toHaveAttribute("aria-expanded", "false");
+    expect(second).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByText("First team")).not.toBeInTheDocument();
+    expect(screen.getByText("Second team")).toBeVisible();
+  });
+
+  it("opens an inline update and preserves a new follow-up draft when cancelled", async () => {
+    vi.mocked(api.getFollowUps).mockResolvedValue(list(planned));
+    render(<FollowUpPanel reportReference="RC-1" statusCode="response_planned" />);
+    const summary = await screen.findByRole("button", { name: /Action planned Reef clean-up/ });
+    fireEvent.change(screen.getByRole("textbox", { name: /Site observations/ }), { target: { value: "Unsubmitted monitoring notes." } });
+    const file = new File(["image"], "reef-photo.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText(/Supporting photo/), { target: { files: [file] } });
+    fireEvent.click(summary);
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    const form = screen.getByRole("form", { name: "Update planned action" });
+    expect(summary.closest("li")).toContainElement(form);
+    expect(screen.getByRole("heading", { name: "Update planned action" })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Save follow-up" })).not.toBeInTheDocument();
+    expect(screen.getByText("Save or cancel your update before adding another follow-up.")).toBeVisible();
+    expect(within(form).getByRole("button", { name: "Save update" })).toBeVisible();
+    fireEvent.click(within(form).getByRole("button", { name: "Cancel update" }));
+    expect(screen.queryByRole("form", { name: "Update planned action" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Site observations/ })).toHaveValue("Unsubmitted monitoring notes.");
+    expect(screen.getByRole("article", { name: "Selected supporting photo" })).toHaveTextContent("reef-photo.png");
+    expect(screen.getByRole("button", { name: "Save follow-up" })).toBeVisible();
+    expect(api.correctFollowUp).not.toHaveBeenCalled();
+    expect(api.createFollowUp).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed update and its error inside the selected action", async () => {
+    vi.mocked(api.getFollowUps).mockResolvedValue(list(planned));
+    vi.mocked(api.correctFollowUp).mockRejectedValueOnce(new Error("Rejected"));
+    render(<FollowUpPanel reportReference="RC-1" statusCode="response_planned" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Action planned Reef clean-up/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    const form = screen.getByRole("form", { name: "Update planned action" });
+    fireEvent.change(within(form).getByRole("textbox", { name: "Notes" }), { target: { value: "Updated plan." } });
+    fireEvent.change(within(form).getByRole("textbox", { name: /Reason for update/ }), { target: { value: "Team confirmed the plan." } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save update" }));
+    expect(await within(form).findByRole("alert")).toHaveTextContent("The update could not be saved.");
+    expect(within(form).getByRole("textbox", { name: "Notes" })).toHaveValue("Updated plan.");
+    expect(screen.queryByRole("button", { name: "Save follow-up" })).not.toBeInTheDocument();
+    expect(api.correctFollowUp).toHaveBeenCalledWith("RC-1", 8, { correctionReason: "Team confirmed the plan.", notes: "Updated plan." });
+    expect(api.createFollowUp).not.toHaveBeenCalled();
+  });
+
+  it("updates the selected plan to Taken through the existing correction endpoint", async () => {
+    vi.mocked(api.getFollowUps).mockResolvedValueOnce(list(planned)).mockResolvedValueOnce(list({ ...taken, caseActionId: 15 }));
+    vi.mocked(api.correctFollowUp).mockResolvedValueOnce({ ...taken, caseActionId: 15 });
+    render(<FollowUpPanel reportReference="RC-1" statusCode="response_planned" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Action planned Reef clean-up/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    const form = screen.getByRole("form", { name: "Update planned action" });
+    fireEvent.change(within(form).getByRole("combobox", { name: "Action stage" }), { target: { value: "action_taken" } });
+    fireEvent.change(within(form).getByRole("textbox", { name: "Recorded outcome" }), { target: { value: "Net removed from the reef." } });
+    fireEvent.change(within(form).getByRole("textbox", { name: /Reason for update/ }), { target: { value: "Work completed." } });
+    fireEvent.click(within(form).getByRole("button", { name: "Save update" }));
+    expect(await screen.findByText(/The update was saved/)).toBeInTheDocument();
+    expect(api.correctFollowUp).toHaveBeenCalledWith("RC-1", 8, {
+      correctionReason: "Work completed.", followUpState: "action_taken", recordedOutcome: "Net removed from the reef.",
+    });
+    expect(screen.getByText("Action taken")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save follow-up" })).toBeVisible();
+    expect(api.createFollowUp).not.toHaveBeenCalled();
+    expect(api.setFollowUpPublication).not.toHaveBeenCalled();
+  });
+});
 
 async function openPublication() {
   fireEvent.click(await screen.findByRole("button", { name: "Publish to public activity" }));
@@ -160,11 +251,11 @@ describe("follow-up publication", () => {
       .mockResolvedValueOnce(list({ ...taken, caseActionId: 15, supersedesCaseActionId: 8, recordedOutcome: "Updated outcome." }));
     vi.mocked(api.correctFollowUp).mockResolvedValueOnce({ ...taken, caseActionId: 15 });
     render(<FollowUpPanel reportReference="RC-1" statusCode="response_complete" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Correct this record" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Update" }));
     fireEvent.change(screen.getByRole("textbox", { name: /^Recorded outcome$/ }), { target: { value: "Updated outcome." } });
-    fireEvent.change(screen.getByRole("textbox", { name: /Reason for correction/ }), { target: { value: "Corrected description" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save correction" }));
-    expect(await screen.findByText(/corrected version is private until published again/)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: /Reason for update/ }), { target: { value: "Corrected description" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save update" }));
+    expect(await screen.findByText(/updated version is private until published again/)).toBeInTheDocument();
     expect(screen.getByText("Private — not published")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publish to public activity" })).toBeInTheDocument();
     expect(api.setFollowUpPublication).not.toHaveBeenCalled();
@@ -222,4 +313,36 @@ it("does not offer an upload retry when upload succeeded but refreshing history 
   expect(await screen.findByRole("img", { name: "Supporting follow-up evidence" })).toBeInTheDocument();
   expect(api.createMonitoring).toHaveBeenCalledTimes(1);
   expect(api.uploadFollowUpEvidence).toHaveBeenCalledTimes(1);
+});
+
+
+it("previews a selected photo and omits it from upload after removal", async () => {
+  vi.mocked(api.createMonitoring).mockResolvedValueOnce({ ...taken, caseActionId: 8, caseEventId: 88 });
+  render(<FollowUpPanel reportReference="RC-1" statusCode="evidence_accepted" />);
+  await screen.findByRole("button", { name: "Save follow-up" });
+  const file = new File(["photo"], "reef.jpg", { type: "image/jpeg" });
+  fireEvent.change(screen.getByLabelText(/Supporting photo/), { target: { files: [file] } });
+  expect(screen.getByRole("img", { name: "Selected evidence: reef.jpg" })).toHaveAttribute("src", "blob:follow-up-photo");
+  fireEvent.click(screen.getByRole("button", { name: "Remove photo" }));
+  expect(screen.queryByRole("img", { name: "Selected evidence: reef.jpg" })).not.toBeInTheDocument();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:follow-up-photo");
+  fireEvent.change(screen.getByRole("textbox", { name: /Follow-up date/ }), { target: { value: "05102026" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /Site observations/ }), { target: { value: "Condition unchanged." } });
+  fireEvent.click(screen.getByRole("button", { name: "Save follow-up" }));
+  await screen.findByText("The monitoring visit was recorded.");
+  expect(api.createMonitoring).toHaveBeenCalledTimes(1);
+  expect(api.uploadFollowUpEvidence).not.toHaveBeenCalled();
+});
+
+it("releases preview URLs when the selection changes and the panel unmounts", async () => {
+  vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:first-photo").mockReturnValueOnce("blob:second-photo");
+  const { unmount } = render(<FollowUpPanel reportReference="RC-1" statusCode="evidence_accepted" />);
+  await screen.findByRole("button", { name: "Save follow-up" });
+  const input = screen.getByLabelText(/Supporting photo/);
+  fireEvent.change(input, { target: { files: [new File(["first"], "first.jpg", { type: "image/jpeg" })] } });
+  fireEvent.change(input, { target: { files: [new File(["second"], "second.png", { type: "image/png" })] } });
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:first-photo");
+  expect(screen.getByRole("img", { name: "Selected evidence: second.png" })).toHaveAttribute("src", "blob:second-photo");
+  unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:second-photo");
 });

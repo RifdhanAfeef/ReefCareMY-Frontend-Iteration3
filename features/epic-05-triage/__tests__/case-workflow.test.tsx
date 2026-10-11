@@ -108,6 +108,37 @@ beforeEach(() => {
 });
 
 describe("Coordinator case workflow", () => {
+  it.each([false, true])("navigates to follow-up without changing the case, with reduced motion: %s", async (reducedMotion) => {
+    const originalScroll = HTMLElement.prototype.scrollIntoView;
+    const originalMatchMedia = window.matchMedia;
+    const scroll = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scroll;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: reducedMotion });
+    try {
+      mockedGetCoordinatorCase.mockResolvedValue({ ...report, statusCode: "response_planned", statusLabel: "Response Planned",
+        latestDecision: { responseType: "intervention_required", notes: "Clean-up planned.", referredTo: null } });
+      render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+      const controls = (await screen.findByRole("heading", { name: "Case control" })).closest("aside")!;
+      fireEvent.click(within(controls).getByRole("button", { name: "Go to follow-up" }));
+      expect(screen.getByRole("heading", { name: "Follow-up and monitoring" })).toHaveFocus();
+      expect(scroll).toHaveBeenCalledWith({ behavior: reducedMotion ? "instant" : "smooth", block: "start" });
+      expect(scroll.mock.instances[0]).toBe(document.getElementById("case-follow-up"));
+      expect(screen.getByRole("heading", { name: "Case control" })).toBeInTheDocument();
+      expect(mockedRecordCaseDecision).not.toHaveBeenCalled();
+      expect(mockedCloseCase).not.toHaveBeenCalled();
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScroll;
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("does not offer the follow-up shortcut before assessment", async () => {
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await screen.findByRole("heading", { name: "Case control" });
+    expect(screen.queryByRole("button", { name: "Go to follow-up" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Follow-up and monitoring" })).not.toBeInTheDocument();
+  });
+
   it("refreshes permitted ownership after a stale claim without opening protected details", async () => {
     mockedClaimReport.mockRejectedValueOnce(new ApiError("Already claimed", 409));
     vi.mocked(hotspotsApi.getHotspotIntake).mockResolvedValue({
@@ -535,6 +566,8 @@ describe("Coordinator case workflow", () => {
     expect(mockedRecordCaseDecision).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole("button", { name: "Record a closure outcome" }));
+    await screen.findByRole("heading", { name: "Choose a closure reason" });
+    await waitFor(() => expect(screen.getByLabelText(/Monitored, no action required/)).toBeEnabled());
     expect(screen.getByLabelText(/Referred to another organisation/)).toBeDisabled();
     expect(screen.getByLabelText(/Monitored, no action required/)).toBeEnabled();
     expect(screen.getByLabelText(/Not substantiated/)).toBeDisabled();
@@ -610,6 +643,7 @@ describe("Coordinator case workflow", () => {
     mockedGetCoordinatorCase.mockResolvedValue({ ...report, statusCode: "evidence_accepted", statusLabel: "Evidence Accepted" });
     await user.click(screen.getByRole("button", { name: "Keep case open" }));
     await user.click(await screen.findByRole("button", { name: "Close case" }));
+    await waitFor(() => expect(screen.getByLabelText(/No responsible partner available/)).toBeEnabled());
     expect(screen.getByLabelText(/No responsible partner available/)).toBeEnabled();
     expect(screen.getByLabelText(/Monitored, no action required/)).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Back" }));
@@ -646,7 +680,7 @@ describe("Coordinator case workflow", () => {
 
   it("opens the closure workflow from a response-complete case", async () => {
     const user = userEvent.setup();
-    mockedGetCoordinatorCase.mockResolvedValueOnce({
+    mockedGetCoordinatorCase.mockResolvedValue({
       ...report,
       statusCode: "response_complete",
       statusLabel: "Response Complete",
@@ -666,8 +700,96 @@ describe("Coordinator case workflow", () => {
     await user.click(closeButton);
 
     expect(await screen.findByRole("heading", { name: "Choose a closure reason" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/Logged for reference/)).toBeEnabled());
     expect(screen.getByLabelText(/No responsible partner available/)).toBeEnabled();
     expect(screen.getByLabelText(/Logged for reference/)).toBeEnabled();
+  });
+
+  const interventionCase: CoordinatorCase = {
+    ...report, statusCode: "response_recommended", statusLabel: "Intervention Recommended",
+    latestDecision: { responseType: "intervention_required", notes: "Clean-up recommended.", referredTo: null },
+  };
+
+  it("checks the latest status before offering closure and blocks logging a planned response", async () => {
+    const user = userEvent.setup();
+    mockedGetCoordinatorCase.mockResolvedValueOnce(interventionCase)
+      .mockResolvedValue({ ...interventionCase, statusCode: "response_planned", statusLabel: "Response Planned" });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Close case" }));
+    await waitFor(() => expect(mockedGetCoordinatorCase).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/This case is still marked Response Planned/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Logged for reference/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close case" })).toBeDisabled();
+    expect(mockedCloseCase).not.toHaveBeenCalled();
+    expect(mockedRecordCaseDecision).not.toHaveBeenCalled();
+  });
+
+  it("rechecks status at submission without discarding the note or posting a now-invalid closure", async () => {
+    const user = userEvent.setup();
+    mockedGetCoordinatorCase.mockResolvedValueOnce(interventionCase).mockResolvedValueOnce(interventionCase)
+      .mockResolvedValue({ ...interventionCase, statusCode: "response_planned", statusLabel: "Response Planned" });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Close case" }));
+    await waitFor(() => expect(screen.getByLabelText(/Logged for reference/)).toBeEnabled());
+    await user.click(screen.getByLabelText(/Logged for reference/));
+    await user.type(screen.getByLabelText("Public closure note *"), "Activities and actions complete.");
+    await user.click(screen.getByRole("button", { name: "Close case" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("record it as Taken");
+    expect(screen.getByLabelText("Public closure note *")).toHaveValue("Activities and actions complete.");
+    expect(screen.getByLabelText(/Logged for reference/)).toBeDisabled();
+    expect(mockedCloseCase).not.toHaveBeenCalled();
+  });
+
+  it("explains the backend workflow conflict and preserves the entered closure note", async () => {
+    const user = userEvent.setup();
+    const detail = "A case in response_planned cannot be closed as logged_for_reference, which would move it to closed_logged";
+    mockedGetCoordinatorCase.mockResolvedValueOnce(interventionCase).mockResolvedValueOnce(interventionCase)
+      .mockResolvedValueOnce(interventionCase)
+      .mockResolvedValue({ ...interventionCase, statusCode: "response_planned", statusLabel: "Response Planned" });
+    mockedCloseCase.mockRejectedValueOnce(new ApiError(detail, 409, detail));
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Close case" }));
+    await waitFor(() => expect(screen.getByLabelText(/Logged for reference/)).toBeEnabled());
+    await user.click(screen.getByLabelText(/Logged for reference/));
+    await user.type(screen.getByLabelText("Public closure note *"), "Retain the completed work.");
+    await user.click(screen.getByRole("button", { name: "Close case" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("record it as Taken");
+    expect(screen.queryByText("This item has changed. Refresh the page and try again.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Public closure note *")).toHaveValue("Retain the completed work.");
+    expect(screen.queryByRole("heading", { name: "Case outcome recorded" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Logged for reference/)).toBeDisabled();
+    expect(mockedCloseCase).toHaveBeenCalledTimes(1);
+    expect(mockedRecordCaseDecision).not.toHaveBeenCalled();
+  });
+
+  it("keeps closure disabled when the latest status cannot be loaded and allows a refresh", async () => {
+    const user = userEvent.setup();
+    mockedGetCoordinatorCase.mockResolvedValueOnce(interventionCase).mockRejectedValueOnce(new TypeError("Offline"))
+      .mockResolvedValue(interventionCase);
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Close case" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText(/Logged for reference/)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Close case" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Refresh case" }));
+    await waitFor(() => expect(screen.getByLabelText(/Logged for reference/)).toBeEnabled());
+    expect(mockedCloseCase).not.toHaveBeenCalled();
+  });
+
+  it("does not expose an unrecognised backend error as a stale-record explanation", async () => {
+    const user = userEvent.setup();
+    mockedGetCoordinatorCase.mockResolvedValue(interventionCase);
+    mockedCloseCase.mockRejectedValueOnce(new ApiError("Internal SQL detail", 409, "Internal SQL detail"));
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    await user.click(await screen.findByRole("button", { name: "Close case" }));
+    await waitFor(() => expect(screen.getByLabelText(/Logged for reference/)).toBeEnabled());
+    await user.click(screen.getByLabelText(/Logged for reference/));
+    await user.type(screen.getByLabelText("Public closure note *"), "Retained for reference.");
+    await user.click(screen.getByRole("button", { name: "Close case" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The backend did not allow this closure");
+    expect(screen.queryByText(/Internal SQL detail/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Case outcome recorded" })).not.toBeInTheDocument();
+    expect(mockedCloseCase).toHaveBeenCalledTimes(1);
   });
 
   it("records the entered referral recipient as referredTo", async () => {
@@ -712,9 +834,9 @@ describe("Coordinator case workflow", () => {
 });
 
 
-it("groups reply photos with their specific Observer response without duplicating them as original evidence", async () => {
+it.each([true, false])("shows reply photos in submitted evidence and reply history, whether included in the report evidence list: %s", async (includedInReportEvidence) => {
   const evidence = { evidenceId: 501, mediaType: "photo", fileSizeBytes: 5, uploadedAt: "2026-10-10T03:00:00Z" };
-  mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, evidence: [...report.evidence, evidence],
+  mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, evidence: includedInReportEvidence ? [...report.evidence, evidence] : report.evidence,
     informationExchange: [
       { caseEventId: 880, eventType: "info_requested", message: "Please add a wider view.", occurredAt: "2026-10-09T03:00:00Z", evidence: [] },
       { caseEventId: 881, eventType: "info_provided", message: "Wider view attached.", occurredAt: "2026-10-10T03:00:00Z", evidence: [evidence] },
@@ -728,7 +850,8 @@ it("groups reply photos with their specific Observer response without duplicatin
   expect(await within(replyPhotos).findByRole("img", { name: "Submitted evidence 501" })).toBeInTheDocument();
   expect(replyPhotos.parentElement).toHaveTextContent("Wider view attached.");
   const originalEvidence = screen.getByRole("heading", { name: "Submitted evidence" }).closest("section")!;
-  expect(within(originalEvidence).queryByRole("img", { name: "Submitted evidence 501" })).not.toBeInTheDocument();
+  expect(await within(originalEvidence).findByRole("img", { name: "Submitted evidence 501" })).toBeInTheDocument();
+  expect(within(originalEvidence).getAllByRole("img", { name: "Submitted evidence 501" })).toHaveLength(1);
   expect(within(originalEvidence).getByRole("img", { name: "Submitted evidence 13" })).toBeInTheDocument();
   expect(mockedGetCoordinatorEvidence).toHaveBeenCalledWith(report.reportReference, 501);
 });

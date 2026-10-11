@@ -6,6 +6,7 @@ import { getThreatCategories } from "@/lib/api/referenceApi";
 import { clearDraftPhotos, loadDraftPhotos } from "../draft-storage";
 import { ReportReview } from "../report-review";
 
+const updateReportDraft = vi.hoisted(() => vi.fn());
 const push = vi.hoisted(() => vi.fn());
 const scenario = vi.hoisted(() => ({
   aiSuggestions: [] as Array<Record<string, unknown>>,
@@ -32,7 +33,10 @@ vi.mock("@/features/shared/mock-app-state", async (importOriginal) => {
     return { reportDraft, locationDraft, resetReportDraft: () => {
       setReport(original.initialReportDraft);
       setLocation(original.initialLocationDraft);
-    }, updateReportDraft: (changes: Partial<typeof original.initialReportDraft>) => setReport((current) => ({ ...current, ...changes })) };
+    }, updateReportDraft: (changes: Partial<typeof original.initialReportDraft>) => {
+      updateReportDraft(changes);
+      setReport((current) => ({ ...current, ...changes }));
+    } };
   } };
 });
 
@@ -172,4 +176,35 @@ it("keeps the decision reminder and submission block for an unresolved image sug
   expect(screen.queryByRole("img", { name: "Image suggestion decision confirmed" })).not.toBeInTheDocument();
   await waitFor(() => expect(reviewReport).toHaveBeenCalled());
   expect(screen.getByRole("button", { name: "Submit report" })).toBeDisabled();
+});
+
+
+it.each(["Accept AI suggestions", "Use AI suggestion"])("protects confirmed depth after %s at final review", async (action) => {
+  scenario.aiSuggestions = [{ source: "smart_report", field: "estimated_depth_metres", label: "Estimated depth",
+    suggestedValue: "2 m", confidence: null, status: "unresolved", conflict: false, observerValue: null }];
+  render(<ReportReview />);
+  fireEvent.click(await screen.findByRole("button", { name: action }));
+  expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ estimatedDepthMetres: "2", estimatedDepthSource: "observer" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+});
+
+it.each(["3 m", ""])("protects depth edited to '%s' at final review from later automatic updates", async (value) => {
+  scenario.aiSuggestions = [{ source: "smart_report", field: "estimated_depth_metres", label: "Estimated depth",
+    suggestedValue: "2 m", confidence: null, status: "unresolved", conflict: false, observerValue: null }];
+  render(<ReportReview />);
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Edit Estimated depth" }), { target: { value } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ estimatedDepthMetres: value ? "3" : "", estimatedDepthSource: "observer" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+});
+
+
+it.each(["Accept AI suggestions", "Use AI suggestion"])("protects the text threat choice after %s at final review", async (action) => {
+  scenario.aiSuggestions = [{ source: "smart_report", field: "possible_threat", label: "Possible threat",
+    suggestedValue: "Marine debris", confidence: null, status: "unresolved", conflict: false, observerValue: null }];
+  render(<ReportReview />);
+  fireEvent.click(await screen.findByRole("button", { name: action }));
+  expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({ threatCategoryCode: "marine_debris", threatCategorySource: "observer" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
 });

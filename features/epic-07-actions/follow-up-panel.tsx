@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ChevronDown } from "lucide-react";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
 import { getConservationActionTypes, getCoordinatorEvidence } from "@/lib/api/coordinatorApi";
@@ -45,6 +46,26 @@ function EvidencePreview({ reportReference, evidenceId }: { reportReference: str
       : <span>Loading image…</span>;
 }
 
+function SelectedPhotoPreview({ file, previewUrl, disabled, onRemove }: {
+  file: File;
+  previewUrl: string;
+  disabled: boolean;
+  onRemove: () => void;
+}) {
+  const sizeLabel = file.size >= 1024 * 1024
+    ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.ceil(file.size / 1024)} KB`;
+  return <article className={styles.selectedPhoto} aria-label="Selected supporting photo">
+    {previewUrl && <Image className={styles.selectedPhotoImage} src={previewUrl} width={360} height={220}
+      unoptimized alt={`Selected evidence: ${file.name}`} />}
+    <div className={styles.selectedPhotoMeta}>
+      <strong title={file.name}>{file.name}</strong>
+      <span>{sizeLabel}</span>
+      <button className={styles.removePhoto} type="button" disabled={disabled} onClick={onRemove}>Remove photo</button>
+    </div>
+  </article>;
+}
+
 export function FollowUpPanel({
   reportReference, statusCode, responseType, onEvidenceIdsChange,
 }: {
@@ -81,8 +102,18 @@ export function FollowUpPanel({
   const [nextDate, setNextDate] = useState("");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
+  const photoPreviewRef = useRef("");
+  useEffect(() => () => {
+    if (photoPreviewRef.current) URL.revokeObjectURL(photoPreviewRef.current);
+  }, []);
   const [pendingPhoto, setPendingPhoto] = useState<{ caseActionId: number; file: File } | null>(null);
   const [correctionId, setCorrectionId] = useState<number | null>(null);
+  const [expandedPlans, setExpandedPlans] = useState<number[]>([]);
+  const updateHeadingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (correctionId != null) updateHeadingRef.current?.focus();
+  }, [correctionId]);
   const [correctionReason, setCorrectionReason] = useState("");
   const [correctedTeam, setCorrectedTeam] = useState("");
   const [correctedOutcome, setCorrectedOutcome] = useState("");
@@ -151,15 +182,23 @@ export function FollowUpPanel({
     onEvidenceIdsChange?.(records.flatMap((record) => record.evidence?.map((evidence) => evidence.evidenceId) ?? []));
   }, [records, onEvidenceIdsChange]);
 
+  function updatePhoto(file: File | null) {
+    if (photoPreviewRef.current) URL.revokeObjectURL(photoPreviewRef.current);
+    const url = file ? URL.createObjectURL(file) : "";
+    photoPreviewRef.current = url;
+    setPhotoPreviewUrl(url);
+    setPhoto(file);
+  }
+
   function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     event.target.value = "";
     setError("");
     if (file && (!allowedImageTypes.includes(file.type) || file.size === 0 || file.size > maxImageSize)) {
       setError("Choose a JPG, PNG or WebP image that is no larger than 10 MB.");
-      setPhoto(null); return;
+      updatePhoto(null); return;
     }
-    setPhoto(file);
+    updatePhoto(file);
   }
 
   async function attachPhoto(caseActionId: number, file: File) {
@@ -230,7 +269,7 @@ export function FollowUpPanel({
       setRecords((items) => [...items.filter((item) => item.caseActionId !== saved.caseActionId), saved]);
       setNotice(mode === "action" && actionState === "action_planned"
         ? "The planned action was recorded. It has not been completed."
-        : mode === "sourced_outcome" ? "The sourced outcome was recorded."
+        : mode === "sourced_outcome" ? "The external update was recorded."
           : mode === "monitoring" ? "The monitoring visit was recorded." : "The completed action was recorded.");
       if (photo) {
         try { await attachPhoto(saved.caseActionId, photo); }
@@ -243,7 +282,7 @@ export function FollowUpPanel({
         try { await reload(); }
         catch { setError("The follow-up was saved, but the latest history could not be loaded. Refresh the case to check it."); }
       }
-      setDate(""); setTeam(""); setOutcome(""); setSource(""); setObservations(""); setNotes(""); setPhoto(null); setNextDate(""); setNextRequired(false);
+      setDate(""); setTeam(""); setOutcome(""); setSource(""); setObservations(""); setNotes(""); updatePhoto(null); setNextDate(""); setNextRequired(false);
     } catch (requestError) { setError(userFacingError(requestError, "The follow-up could not be saved.")); }
     finally { setSaving(false); }
   }
@@ -251,7 +290,7 @@ export function FollowUpPanel({
   async function saveCorrection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving || publicationBusy.current || pendingPhoto) return;
-    if (correctionId == null || !correctionReason.trim()) { setError("Explain the correction before saving."); return; }
+    if (correctionId == null || !correctionReason.trim()) { setError("Explain the update before saving."); return; }
     const original = records.find((record) => record.caseActionId === correctionId);
     if (!original) return;
     if (correctedDate && !isValidDisplayDate(correctedDate)) { setError("Enter a valid date in dd/mm/yyyy format."); return; }
@@ -269,8 +308,8 @@ export function FollowUpPanel({
     setSaving(true); setError(""); setPublicationNotice("");
     try {
       await correctFollowUp(reportReference, correctionId, changes);
-      await reload(); setCorrectionId(null); setCorrectionReason(""); setNotice("The correction was recorded; the original remains in the audit history. The corrected version is private until published again.");
-    } catch (requestError) { setError(userFacingError(requestError, "The correction could not be saved.")); }
+      await reload(); setCorrectionId(null); setCorrectionReason(""); setNotice("The update was saved. The original remains in history. The updated version is private until published again.");
+    } catch (requestError) { setError(userFacingError(requestError, "The update could not be saved.")); }
     finally { setSaving(false); }
   }
 
@@ -278,9 +317,28 @@ export function FollowUpPanel({
   const actionAllowed = responseType === "intervention_required" || ["response_recommended", "response_planned", "response_complete"].includes(statusCode);
   const canRecordTaken = ["response_planned", "response_complete"].includes(statusCode)
     || records.some((record) => record.followUpType === "action" && record.followUpState === "action_planned");
+  const updatingRecord = records.find((record) => record.caseActionId === correctionId);
+  const updateForm = updatingRecord && <form className={`${styles.form} ${styles.updateForm}`} onSubmit={saveCorrection} aria-labelledby="follow-up-update-heading">
+    <div className={styles.formHeading}><p className={styles.eyebrow}>Existing follow-up</p>
+      <h3 id="follow-up-update-heading" ref={updateHeadingRef} tabIndex={-1}>{updatingRecord.followUpType === "action" && updatingRecord.followUpState === "action_planned" ? "Update planned action" : "Update follow-up"}</h3>
+      <p>{updatingRecord.actionTypeLabel || (updatingRecord.followUpType === "sourced_outcome" ? "External update" : "Conservation action")} · {dateLabel(updatingRecord.actionDate)}</p></div>
+    <p>Changes keep the original in history. An updated outcome must be published again to appear in public activity.</p>
+    {updatingRecord.followUpType === "action" && <label>Action stage
+      <select value={correctedState} onChange={(event) => setCorrectedState(event.target.value as typeof correctedState)}>
+        <option value="action_planned">Planned — not completed</option><option value="action_taken">Taken</option>
+      </select></label>}
+    <label>Follow-up date<DisplayDateInput label="Updated follow-up date" value={correctedDate} onChange={setCorrectedDate} allowFuture={correctedState === "action_planned"} /></label>
+    <label>Responsible team<input value={correctedTeam} onChange={(event) => setCorrectedTeam(event.target.value)} /></label>
+    <label>Recorded outcome<textarea value={correctedOutcome} onChange={(event) => setCorrectedOutcome(event.target.value)} /></label>
+    <label>Notes<textarea value={correctedNotes} onChange={(event) => setCorrectedNotes(event.target.value)} /></label>
+    <label>Reason for update *<textarea required value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} /></label>
+    {error && <p className={styles.error} role="alert">{error}</p>}
+    <div className={styles.buttons}><button type="button" disabled={saving} onClick={() => { setCorrectionId(null); setError(""); }}>Cancel update</button><button className={styles.save} type="submit" disabled={saving}>{saving ? "Saving update…" : "Save update"}</button></div>
+  </form>;
+
   return <section className={styles.panel} aria-labelledby="follow-up-heading">
     <header><p className={styles.eyebrow}>Conservation record</p><h2 id="follow-up-heading">Follow-up and monitoring</h2>
-      <p>Record only work that is planned or has happened. A referral remains a referral until a sourced outcome is recorded.</p></header>
+      <p>Record planned work, completed work or monitoring visits. A referral alone does not mean work was completed.</p></header>
     {loading && <p role="status">Loading follow-up records…</p>}
     {loadError && <div role="alert"><p>{loadError}</p><button type="button" onClick={() => { setLoading(true); setLoadError(""); reload().catch((requestError) => setLoadError(userFacingError(requestError, "Follow-up records could not be loaded."))).finally(() => setLoading(false)); }}>Try again</button></div>}
     {!loading && !loadError && <>
@@ -288,49 +346,71 @@ export function FollowUpPanel({
       {publicationError && <p className={styles.error} role="alert">{publicationError}</p>}
       {publicationNotice && <p className={styles.success} role="status">{publicationNotice}</p>}
       {records.length === 0 ? <p role="status">{emptyMessage || "No follow-up has been recorded for this case."}</p> : <ol className={styles.history}>
-        {records.map((record) => <li key={record.caseActionId}>
-          <div className={styles.historyHead}><strong>{record.followUpType === "monitoring" ? "Monitoring visit"
-            : record.followUpType === "sourced_outcome" ? "Sourced outcome"
-              : record.followUpState === "action_planned" ? "Action planned" : "Action taken"}</strong>
-            <span>{dateLabel(record.actionDate)} · Recorded {new Date(record.createdAt).toLocaleString("en-MY")}</span></div>
-          <p>{record.followUpType === "monitoring" ? `Human-reviewed condition: ${record.conditionLabel ?? readable(record.conditionCode ?? "needs_review")}`
-            : record.actionTypeLabel || (record.followUpType === "sourced_outcome" ? "External outcome" : "Conservation action")}</p>
-          {record.observations && <p><strong>Observations:</strong> {record.observations}</p>}
-          {record.recordedOutcome && <p><strong>Recorded outcome:</strong> {record.recordedOutcome}</p>}
-          {record.responsibleTeam && <p><strong>Responsible team:</strong> {record.responsibleTeam}</p>}
-          {record.sourceReference && <p><strong>Source:</strong> {record.sourceReference}</p>}
-          {record.notes && <p><strong>Notes:</strong> {record.notes}</p>}
-          {record.followUpType === "monitoring" && <p>{record.nextFollowUpRequired
-            ? `Next follow-up required${record.nextFollowUpDate ? ` by ${dateLabel(record.nextFollowUpDate)}` : ""}.`
-            : "No follow-up currently scheduled."}</p>}
-          {record.followUpState === "action_planned" && <p className={styles.notice}>This action is planned; completion has not been recorded.</p>}
-          <small>Recorded by {record.createdByName || "Coordinator"} · {readable(record.recordingLevel || "coordinator_summary")}</small>
-          <div className={styles.publication}>
-            <strong>{record.isDemonstration ? "Demonstration record — stays private" : record.isPublishable === true ? "Published in public site activity"
-              : record.isPublishable === false ? "Private — not published"
-                : "Publication status unavailable"}</strong>
-            {(record.followUpType === "monitoring" || record.followUpState === "action_planned")
-              ? <p>Planned actions and monitoring visits stay private.</p>
-              : !record.recordedOutcome?.trim() && <p>Add a recorded outcome before publishing this follow-up.</p>}
-            {(typeof record.isPublishable !== "boolean" || typeof record.isDemonstration !== "boolean") && <p>Refresh this case once publication status is available.</p>}
-            {record.isDemonstration === false && !record.supersededByCaseActionId && typeof record.isPublishable === "boolean"
-              && (record.isPublishable || publicationEligible(record)) && <button type="button" className={styles.textButton}
-                disabled={saving || correctionId != null || pendingPhoto != null} onClick={() => {
-                  setPublicationTarget({ id: record.caseActionId, publish: !record.isPublishable });
-                  setPublicationError(""); setPublicationNotice("");
-                }}>{record.isPublishable ? "Withdraw from public activity" : "Publish to public activity"}</button>}
-          </div>
-          {(record.evidence?.length ?? 0) > 0 && <div className={styles.photos}>{record.evidence.map((evidence) =>
-            <EvidencePreview key={evidence.evidenceId} reportReference={reportReference} evidenceId={evidence.evidenceId} />)}</div>}
-          {record.followUpType !== "monitoring" && !record.supersededByCaseActionId && <button className={styles.textButton} type="button" disabled={saving || publicationTarget != null || pendingPhoto != null} onClick={() => {
-            setCorrectionId(record.caseActionId); setCorrectedTeam(record.responsibleTeam ?? "");
-            setCorrectedOutcome(record.recordedOutcome ?? "");
-            setCorrectedNotes(record.notes ?? "");
-            setCorrectedDate(record.actionDate ? dateLabel(record.actionDate) : "");
-            setCorrectedState(record.followUpState as typeof correctedState);
-            setCorrectionReason(""); setError("");
-          }}>Correct this record</button>}
-        </li>)}
+        {records.map((record) => {
+          const planned = record.followUpType === "action" && record.followUpState === "action_planned";
+          const expanded = expandedPlans.includes(record.caseActionId);
+          const editing = correctionId === record.caseActionId;
+          const body = <>
+            <p>{record.followUpType === "monitoring" ? `Human-reviewed condition: ${record.conditionLabel ?? readable(record.conditionCode ?? "needs_review")}`
+              : record.actionTypeLabel || (record.followUpType === "sourced_outcome" ? "External outcome" : "Conservation action")}</p>
+            {record.observations && <p><strong>Observations:</strong> {record.observations}</p>}
+            {record.recordedOutcome && <p><strong>Recorded outcome:</strong> {record.recordedOutcome}</p>}
+            {record.responsibleTeam && <p><strong>Responsible team:</strong> {record.responsibleTeam}</p>}
+            {record.sourceReference && <p><strong>Source:</strong> {record.sourceReference}</p>}
+            {record.notes && <p><strong>Notes:</strong> {record.notes}</p>}
+            {record.followUpType === "monitoring" && <p>{record.nextFollowUpRequired
+              ? `Next follow-up required${record.nextFollowUpDate ? ` by ${dateLabel(record.nextFollowUpDate)}` : ""}.`
+              : "No follow-up currently scheduled."}</p>}
+            {record.followUpState === "action_planned" && <p className={styles.notice}>This action is planned; completion has not been recorded.</p>}
+            <small>Recorded by {record.createdByName || "Coordinator"} · {readable(record.recordingLevel || "coordinator_summary")}</small>
+            <div className={styles.publication}>
+              <strong>{record.isDemonstration ? "Demonstration record — stays private" : record.isPublishable === true ? "Published in public site activity"
+                : record.isPublishable === false ? "Private — not published"
+                  : "Publication status unavailable"}</strong>
+              {(record.followUpType === "monitoring" || record.followUpState === "action_planned")
+                ? <p>Planned actions and monitoring visits stay private.</p>
+                : !record.recordedOutcome?.trim() && <p>Add a recorded outcome before publishing this follow-up.</p>}
+              {(typeof record.isPublishable !== "boolean" || typeof record.isDemonstration !== "boolean") && <p>Refresh this case once publication status is available.</p>}
+              {record.isDemonstration === false && !record.supersededByCaseActionId && typeof record.isPublishable === "boolean"
+                && (record.isPublishable || publicationEligible(record)) && <button type="button" className={styles.textButton}
+                  disabled={saving || correctionId != null || pendingPhoto != null} onClick={() => {
+                    setPublicationTarget({ id: record.caseActionId, publish: !record.isPublishable });
+                    setPublicationError(""); setPublicationNotice("");
+                  }}>{record.isPublishable ? "Withdraw from public activity" : "Publish to public activity"}</button>}
+            </div>
+            {(record.evidence?.length ?? 0) > 0 && <div className={styles.photos}>{record.evidence.map((evidence) =>
+              <EvidencePreview key={evidence.evidenceId} reportReference={reportReference} evidenceId={evidence.evidenceId} />)}</div>}
+            {record.followUpType !== "monitoring" && !record.supersededByCaseActionId && correctionId !== record.caseActionId && <button className={styles.textButton} type="button" disabled={saving || correctionId != null || publicationTarget != null || pendingPhoto != null} onClick={() => {
+              setCorrectionId(record.caseActionId); setCorrectedTeam(record.responsibleTeam ?? "");
+              setCorrectedOutcome(record.recordedOutcome ?? "");
+              setCorrectedNotes(record.notes ?? "");
+              setCorrectedDate(record.actionDate ? dateLabel(record.actionDate) : "");
+              setCorrectedState(record.followUpState as typeof correctedState);
+              setCorrectionReason(""); setError(""); setNotice("");
+            }}>Update</button>}
+            {correctionId === record.caseActionId && updateForm}
+          </>;
+          return <li key={record.caseActionId} className={editing ? styles.editingRecord : undefined}>
+            {planned ? <>
+              <button type="button" className={styles.planSummary} aria-expanded={expanded} aria-controls={`follow-up-plan-${record.caseActionId}`}
+                disabled={editing} onClick={() => setExpandedPlans((ids) => expanded ? ids.filter((id) => id !== record.caseActionId) : [...ids, record.caseActionId])}>
+                <span className={styles.summaryMain}><span className={styles.summaryLabels}><span className={styles.planBadge}>Action planned</span>{editing && <span className={styles.editingBadge}>Updating</span>}</span>
+                  <strong>{record.actionTypeLabel || "Conservation action"}</strong></span>
+                <span className={styles.summaryAside}><span>{dateLabel(record.actionDate)}</span><ChevronDown size={20} aria-hidden="true" className={expanded ? styles.expandedChevron : undefined} /></span>
+              </button>
+              <div id={`follow-up-plan-${record.caseActionId}`} hidden={!expanded} className={styles.recordBody}>
+                {expanded && <><small>Recorded {new Date(record.createdAt).toLocaleString("en-MY")}</small>{body}</>}
+              </div>
+            </> : <>
+              <div className={styles.historyHead}><strong>{record.followUpType === "monitoring" ? "Monitoring visit"
+                : record.followUpType === "sourced_outcome" ? "External update"
+                  : record.followUpState === "action_planned" ? "Action planned" : "Action taken"}</strong>
+                <span>{dateLabel(record.actionDate)} · Recorded {new Date(record.createdAt).toLocaleString("en-MY")}</span></div>
+              {editing && <span className={styles.editingBadge}>Updating</span>}
+              {body}
+            </>}
+          </li>;
+        })}
       </ol>}
       {publicationTarget && <section className={styles.publicationConfirmation} aria-labelledby="publication-confirm-heading">
         <h3 id="publication-confirm-heading">{publicationTarget.publish ? "Publish this follow-up?" : "Withdraw this follow-up?"}</h3>
@@ -344,27 +424,18 @@ export function FollowUpPanel({
           <button type="button" disabled={saving} onClick={savePublication}>{saving ? "Saving publication…" : publicationTarget.publish ? "Confirm publication" : "Confirm withdrawal"}</button>
         </div>
       </section>}
-      {correctionId != null && <form className={styles.form} onSubmit={saveCorrection}>
-        <h3>Correct recorded details</h3><p>The original record remains in the audit history. A corrected version must be published again before it appears in public activity.</p>
-        {records.find((record) => record.caseActionId === correctionId)?.followUpType === "action" && <label>Action stage
-          <select value={correctedState} onChange={(event) => setCorrectedState(event.target.value as typeof correctedState)}>
-            <option value="action_planned">Planned — not completed</option><option value="action_taken">Taken</option>
-          </select></label>}
-        <label>Follow-up date<DisplayDateInput label="Corrected follow-up date" value={correctedDate} onChange={setCorrectedDate} allowFuture={correctedState === "action_planned"} /></label>
-        <label>Responsible team<input value={correctedTeam} onChange={(event) => setCorrectedTeam(event.target.value)} /></label>
-        <label>Recorded outcome<textarea value={correctedOutcome} onChange={(event) => setCorrectedOutcome(event.target.value)} /></label>
-        <label>Notes<textarea value={correctedNotes} onChange={(event) => setCorrectedNotes(event.target.value)} /></label>
-        <label>Reason for correction *<textarea required value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} /></label>
-        <div className={styles.buttons}><button type="button" onClick={() => setCorrectionId(null)}>Cancel</button><button type="submit" disabled={saving}>Save correction</button></div>
-      </form>}
-      {assessed && <form className={styles.form} onSubmit={save}>
-        <h3>Add a follow-up</h3>
+      {assessed && correctionId != null && <section className={styles.addPaused} aria-labelledby="add-follow-up-heading">
+        <h3 id="add-follow-up-heading">Add a new follow-up</h3><p>Save or cancel your update before adding another follow-up.</p>
+      </section>}
+      {assessed && correctionId == null && <form className={`${styles.form} ${styles.createForm}`} onSubmit={save} aria-labelledby="add-follow-up-heading">
+        <div className={styles.formHeading}><p className={styles.eyebrow}>New record</p><h3 id="add-follow-up-heading">Add a new follow-up</h3></div>
         {referenceError && <p role="alert" className={styles.error}>{referenceError}</p>}
         <div className={styles.tabs} role="group" aria-label="Follow-up type">
           {(["action", "monitoring", "sourced_outcome"] as Mode[]).map((type) =>
             <button key={type} type="button" aria-pressed={mode === type} onClick={() => { setMode(type); setError(""); }}
-              disabled={type === "action" && !actionAllowed}>{type === "sourced_outcome" ? "Sourced outcome" : readable(type)}</button>)}
+              disabled={type === "action" && !actionAllowed}>{type === "sourced_outcome" ? "External update" : readable(type)}</button>)}
         </div>
+        {mode === "sourced_outcome" && <p className={styles.notice}>Record what an outside team reports happened. Add the date and source.</p>}
         {mode === "action" && <>
           <label>Action stage<select value={actionState} onChange={(event) => setActionState(event.target.value as "action_planned" | "action_taken")}>
             <option value="action_planned">Planned — not completed</option><option value="action_taken" disabled={!canRecordTaken}>Taken</option></select></label>
@@ -375,8 +446,8 @@ export function FollowUpPanel({
         </>}
         <label>{mode === "action" && actionState === "action_planned" ? "Planned date (optional)" : "Date *"}
           <DisplayDateInput label="Follow-up date" value={date} onChange={setDate} required={mode !== "action" || actionState === "action_taken"} allowFuture={mode === "action" && actionState === "action_planned"} /></label>
-        {mode !== "monitoring" && <label>Responsible team or organisation<input value={team} onChange={(event) => setTeam(event.target.value)} maxLength={255} /></label>}
-        {mode === "sourced_outcome" && <label>Source reference *<input required value={source} onChange={(event) => setSource(event.target.value)} /></label>}
+        {mode !== "monitoring" && <label>{mode === "sourced_outcome" ? "Team or organisation" : "Responsible team or organisation"}<input value={team} onChange={(event) => setTeam(event.target.value)} maxLength={255} /></label>}
+        {mode === "sourced_outcome" && <label>Source *<input required value={source} onChange={(event) => setSource(event.target.value)} placeholder="e.g. Dive centre email or report" /></label>}
         {mode === "monitoring" && <>
           <label>Human-reviewed condition *<select value={conditionCode} onChange={(event) => setConditionCode(event.target.value)}>
             {conditions.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}</select></label>
@@ -385,10 +456,11 @@ export function FollowUpPanel({
           {nextRequired ? <label>Next follow-up date *<DisplayDateInput label="Next follow-up date" value={nextDate} onChange={setNextDate} required allowFuture /></label>
             : <p className={styles.notice}>No follow-up currently scheduled.</p>}
         </>}
-        {mode !== "monitoring" && <label>Recorded outcome{mode === "sourced_outcome" ? " *" : ""}
+        {mode !== "monitoring" && <label>{mode === "sourced_outcome" ? "What was reported *" : "Recorded outcome"}
           <textarea required={mode === "sourced_outcome"} value={outcome} onChange={(event) => setOutcome(event.target.value)} /></label>}
         <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-        <label>Supporting photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} disabled={saving || pendingPhoto != null} />{photo && <small>{photo.name}</small>}</label>
+        <label>Supporting photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} disabled={saving || pendingPhoto != null} /></label>
+        {photo && <SelectedPhotoPreview file={photo} previewUrl={photoPreviewUrl} disabled={saving || pendingPhoto != null} onRemove={() => updatePhoto(null)} />}
         {error && <p className={styles.error} role="alert">{error}</p>}
         {notice && <p className={styles.success} role="status">{notice}</p>}
         {pendingPhoto && <aside className={styles.notice}><p>The follow-up is already saved. Retry {pendingPhoto.file.name} without creating another record.</p><button type="button" disabled={saving} onClick={retryPhoto}>Retry photo upload</button></aside>}

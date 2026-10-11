@@ -5,6 +5,33 @@
   overflow-x: clip;
 }
 
+.followUpTarget {
+  scroll-margin-top: calc(var(--header-height, 88px) + 20px);
+}
+
+.mobileFollowUpShortcut { display: none; }
+
+@media (max-width: 900px) {
+  .mobileFollowUpShortcut { display: block; margin: 16px 0; }
+}
+
+.followUpHighlighted > section {
+  animation: followUpArrival 1.8s ease-out;
+}
+
+@keyframes followUpArrival {
+  0%, 30% { box-shadow: 0 0 0 4px rgba(25, 125, 119, 0.4); }
+  100% { box-shadow: 0 0 0 4px transparent; }
+}
+
+@media (max-width: 640px) {
+  .followUpTarget { scroll-margin-top: calc(var(--header-height, 88px) + 70px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .followUpHighlighted > section { animation: none; outline: 3px solid #297d79; outline-offset: 3px; }
+}
+
 .heading {
   max-width: 820px;
   margin-bottom: 28px;

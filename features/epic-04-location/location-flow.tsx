@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Info } from "lucide-react";
+import { Info, MapPin as MapPinIcon, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +25,53 @@ function SurfaceContextHelp({ kind }: { kind: "entry" | "exit" }) {
     <summary aria-label={`About ${kind} notes`}><Info size={18} aria-hidden="true" /></summary>
     <p>Optional surface notes help the coordinator understand your dive. They are not the exact underwater observation location.</p>
   </details>;
+}
+
+function LocationWarningDialog({ coordinates, onDecision }: { coordinates: string | null; onDecision: (confirmed: boolean) => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const changeLocationRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog?.showModal();
+    changeLocationRef.current?.focus({ preventScroll: true });
+    return () => {
+      dialog?.close();
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
+
+  return <dialog
+    ref={dialogRef}
+    className={styles.locationDialog}
+    role="alertdialog"
+    aria-labelledby="location-warning-title"
+    aria-describedby="location-warning-description"
+    onCancel={(event) => { event.preventDefault(); onDecision(false); }}
+    onKeyDown={(event) => {
+      if (event.key !== "Tab") return;
+      const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not([disabled])");
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first?.focus();
+      }
+    }}
+  >
+    <div className={styles.locationDialogHeader}>
+      <span className={styles.locationDialogIcon}><MapPinIcon size={24} aria-hidden="true" /></span>
+      <h2 id="location-warning-title">Check this location</h2>
+      <button className={styles.locationDialogClose} type="button" aria-label="Close location warning" onClick={() => onDecision(false)}><X size={20} aria-hidden="true" /></button>
+    </div>
+    <p id="location-warning-description">This location is outside the dive-site area, but still within the island area. Would you like to use it?</p>
+    {coordinates && <div className={styles.locationDialogPoint}><span>Selected coordinates</span><strong>{coordinates}</strong></div>}
+    <div className={styles.locationDialogActions}>
+      <button ref={changeLocationRef} className={styles.secondaryButton} type="button" onClick={() => onDecision(false)}>Change location</button>
+      <button className={styles.primaryButton} type="button" onClick={() => onDecision(true)}>Use this location</button>
+    </div>
+  </dialog>;
 }
 
 const confidenceOptions: Array<{ value: LocationConfidenceCode; label: string }> = [
@@ -129,6 +176,8 @@ export function LocationFlow() {
   const [mapPinError, setMapPinError] = useState("");
   const [locationCheckError, setLocationCheckError] = useState("");
   const [checkingLocation, setCheckingLocation] = useState(false);
+  const [locationWarningPoint, setLocationWarningPoint] = useState<MapPin | null>(null);
+  const locationWarningResolver = useRef<((confirmed: boolean) => void) | null>(null);
   const initiallySelectedSessionId = useRef(selectedSessionId);
   const initialForm = useRef(form);
   const session = useMemo(() => sessions.find((item) => item.id === selectedSessionId) ?? sessions[0], [selectedSessionId, sessions]);
@@ -246,6 +295,24 @@ export function LocationFlow() {
     window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
   }, [step]);
 
+  useEffect(() => () => {
+    // Leaving the page cancels any location check waiting for a decision.
+    locationWarningResolver.current?.(false);
+    locationWarningResolver.current = null;
+  }, []);
+
+  const requestLocationConfirmation = (nextPin: MapPin) => new Promise<boolean>((resolve) => {
+    if (locationWarningResolver.current) { resolve(false); return; }
+    locationWarningResolver.current = resolve;
+    setLocationWarningPoint(nextPin);
+  });
+  const resolveLocationConfirmation = (confirmed: boolean) => {
+    const resolve = locationWarningResolver.current;
+    locationWarningResolver.current = null;
+    setLocationWarningPoint(null);
+    resolve?.(confirmed);
+  };
+
   const createSession = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.site.trim()) { setSessionError("Enter or select a named dive site."); return; }
@@ -291,7 +358,7 @@ export function LocationFlow() {
         return false;
       }
       if (diveSiteRadiusMetres && distance > diveSiteRadiusMetres) {
-        const confirmed = window.confirm("The supplied location appears beyond the dive site, but within the island area. Do you want to proceed with this location?");
+        const confirmed = await requestLocationConfirmation(nextPin);
         if (!confirmed) {
           const radiusLabel = diveSiteRadiusMetres >= 1000
             ? `${diveSiteRadiusMetres / 1000} km`
@@ -417,6 +484,7 @@ export function LocationFlow() {
     <div className={`${styles.choiceGrid} ${styles.locationChoices}`}><section className={`${styles.card} ${styles.selectedCard}`}><h2>Use the dive site</h2><div className={styles.readOnlyLabel}>Dive site<p className={styles.readOnlyValue}>{session.site}</p></div><p className={styles.supporting}>Most reports use this. Precise coordinates are optional.</p><button className={styles.primaryButton} type="button" onClick={() => continueFromLocation("dive_site")}>Use dive-site location</button><button className={styles.textRetry} type="button" onClick={continueWithUnknownLocation}>I don&apos;t know the exact location</button></section>
       <section className={styles.card}><h2>Point on the map</h2><p className={styles.supporting}>Select the approximate spot where you saw it.</p><MapPreview pin={pin} siteCentre={siteCentre} siteName={siteReference?.name ?? null} diveSiteRadiusMetres={diveSiteRadiusMetres} interactive onSetPin={(nextPin) => { updateLocationDraft({ pin: nextPin }); setMapPinError(""); }} />{coordinates && <p className={styles.coordinateReadout}>Selected coordinates: {coordinates}</p>}{mapPinError && <p className={styles.errorText} role="alert">{mapPinError}</p>}<button className={styles.secondaryButton} type="button" disabled={!pin || checkingLocation} onClick={() => continueFromLocation("map_pin")}>{checkingLocation ? "Checking location…" : "Confirm map pin"}</button></section>
       <section className={styles.card}><h2>Enter coordinates</h2><p className={styles.supporting}>From a dive computer, GPS or another trusted source.</p><div className={styles.coordinateFields}><label className={styles.field}>Latitude<input type="number" min={malaysiaBounds.south} max={malaysiaBounds.north} step="any" value={manualLatitude} onChange={(event) => { setManualLatitude(event.target.value); setCoordinateError(""); }} placeholder="3.15021" /></label><label className={styles.field}>Longitude<input type="number" min={malaysiaBounds.west} max={malaysiaBounds.east} step="any" value={manualLongitude} onChange={(event) => { setManualLongitude(event.target.value); setCoordinateError(""); }} placeholder="104.21864" /></label></div>{coordinateError && <p className={styles.errorText} role="alert">{coordinateError}</p>}<button className={styles.secondaryButton} type="button" disabled={checkingLocation} onClick={continueWithManualCoordinates}>{checkingLocation ? "Checking location…" : "Use these coordinates"}</button></section></div>
+    {locationWarningPoint && <LocationWarningDialog coordinates={mapCoordinates(locationWarningPoint)} onDecision={resolveLocationConfirmation} />}
     <aside className={styles.privacyStrip}><strong>Your exact location stays protected</strong><p>Only you and the coordinator handling your report see a map point or coordinates. Everyone else sees the general site.</p></aside><button className={`${styles.secondaryButton} ${styles.backOutside}`} type="button" onClick={() => setStep("session")}>Back</button>
   </section>;
 
@@ -479,5 +547,5 @@ export function ReviewLocationSummary() {
   const confidenceLabel = confidenceOptions.find((item) => item.value === locationDraft.confidence)?.label;
   const coordinates = mapCoordinates(locationDraft.pin);
   const aiSiteReference = reportDraft?.aiSuggestions?.find((suggestion) => suggestion.field === "site_reference" && suggestion.status !== "removed")?.suggestedValue;
-  return <section className={styles.card} aria-labelledby="review-location-heading"><h2 id="review-location-heading">Dive and location</h2><dl className={styles.detailList}><div><dt>Dive site</dt><dd>{session?.site ?? "Not yet selected"}</dd></div>{aiSiteReference && <div><dt>Description location note</dt><dd className={styles.contextValue}><span>{aiSiteReference}</span><span className={styles.contextBadge} title="AI-suggested context; not an exact location">AI context</span></dd></div>}<div><dt>Location source</dt><dd>{locationDraft.locationSource === "manual_coordinates" ? "Entered coordinates" : locationDraft.locationSource === "map_pin" ? "Optional map pin" : locationDraft.confidence === "unsure" ? "Exact location unknown" : "Named dive site"}</dd></div><div><dt>Location confidence</dt><dd>{confidenceLabel ?? "Not yet selected"}</dd></div>{coordinates && <div><dt>Selected coordinates</dt><dd>{coordinates}</dd></div>}{locationDraft.surfaceEntryContext.trim() && <div><dt>Surface entry context</dt><dd className={styles.contextValue}><span>{locationDraft.surfaceEntryContext.trim()}</span><span className={styles.contextBadge} title="Surface context; not an exact underwater location">Context</span></dd></div>}{locationDraft.surfaceExitContext.trim() && <div><dt>Surface exit context</dt><dd className={styles.contextValue}><span>{locationDraft.surfaceExitContext.trim()}</span><span className={styles.contextBadge} title="Surface context; not an exact underwater location">Context</span></dd></div>}</dl><Link className={styles.secondaryButton} href="/report-a-reef/location">Edit location</Link></section>;
+  return <section className={styles.card} aria-labelledby="review-location-heading"><h2 id="review-location-heading">Dive and location</h2><dl className={styles.detailList}><div><dt>Dive site</dt><dd>{session?.site ?? "Not yet selected"}</dd></div>{aiSiteReference && <div><dt className={styles.contextHeading}><span>Description location note</span><span className={styles.contextBadge} title="AI-suggested context; not an exact location">AI context</span></dt><dd>{aiSiteReference}</dd></div>}<div><dt>Location source</dt><dd>{locationDraft.locationSource === "manual_coordinates" ? "Entered coordinates" : locationDraft.locationSource === "map_pin" ? "Optional map pin" : locationDraft.confidence === "unsure" ? "Exact location unknown" : "Named dive site"}</dd></div><div><dt>Location confidence</dt><dd>{confidenceLabel ?? "Not yet selected"}</dd></div>{coordinates && <div><dt>Selected coordinates</dt><dd>{coordinates}</dd></div>}{locationDraft.surfaceEntryContext.trim() && <div><dt className={styles.contextHeading}><span>Surface entry</span><span className={styles.contextBadge} title="Surface context; not an exact underwater location">Context</span></dt><dd>{locationDraft.surfaceEntryContext.trim()}</dd></div>}{locationDraft.surfaceExitContext.trim() && <div><dt className={styles.contextHeading}><span>Surface exit</span><span className={styles.contextBadge} title="Surface context; not an exact underwater location">Context</span></dt><dd>{locationDraft.surfaceExitContext.trim()}</dd></div>}</dl><Link className={styles.secondaryButton} href="/report-a-reef/location">Edit location</Link></section>;
 }

@@ -145,7 +145,10 @@ export function ReportReview() {
             threatCategoryId: categoryReferences.find((category) => category.code === "unsure")?.threatCategoryId ?? 5,
           }
         : {};
-    updateReportDraft({ ...fieldChanges, aiSuggestions: nextSuggestions });
+    updateReportDraft({ ...fieldChanges, aiSuggestions: nextSuggestions,
+      ...(suggestion.field === "estimated_depth_metres" ? { estimatedDepthSource: "observer" as const } : {}),
+      ...(suggestion.field === "possible_threat" ? { threatCategorySource: "observer" as const } : {}),
+    });
   }
 
   function acceptAllNonConflicting() {
@@ -153,6 +156,8 @@ export function ReportReview() {
     nextReport.aiSuggestions.forEach((suggestion, index) => {
       if (suggestion.status !== "unresolved" || suggestion.conflict) return;
       nextReport = { ...nextReport, ...applySuggestionValue(nextReport, suggestion, categoryReferences) };
+      if (suggestion.field === "estimated_depth_metres") nextReport.estimatedDepthSource = "observer";
+      if (suggestion.field === "possible_threat") nextReport.threatCategorySource = "observer";
       nextReport.aiSuggestions[index] = { ...suggestion, status: "confirmed", conflict: false };
     });
     updateReportDraft(nextReport);
@@ -174,9 +179,13 @@ export function ReportReview() {
       status: value ? "corrected" as const : "removed" as const,
       conflict: false,
     };
-    const fieldChanges = value ? applySuggestionValue(reportDraft, updatedSuggestion, categoryReferences) : {};
+    const fieldChanges = value
+      ? applySuggestionValue(reportDraft, updatedSuggestion, categoryReferences)
+      : suggestion.field === "estimated_depth_metres" ? { estimatedDepthMetres: "" } : {};
     updateReportDraft({
       ...fieldChanges,
+      ...(suggestion.field === "estimated_depth_metres" ? { estimatedDepthSource: "observer" as const } : {}),
+      ...(suggestion.field === "possible_threat" ? { threatCategorySource: "observer" as const } : {}),
       aiSuggestions: reportDraft.aiSuggestions.map((item, itemIndex) => itemIndex === index ? updatedSuggestion : item),
     });
     setEditingSuggestion(null);
@@ -293,7 +302,6 @@ export function ReportReview() {
           <section className={styles.privacySummary} aria-labelledby="review-privacy-heading">
             <h3 id="review-privacy-heading">Your location stays protected</h3>
             <p>You and the Case Coordinator who claims this report can see the location and accuracy you provided. Other coordinators and administrators see only the general site; visitors cannot view your report location.</p>
-            <p>Optional surface entry and exit notes are supporting context, not the underwater observation location.</p>
           </section>
         </div>
       </div>
