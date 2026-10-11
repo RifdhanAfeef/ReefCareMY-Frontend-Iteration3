@@ -40,7 +40,7 @@ beforeEach(() => {
   getContext.mockReset();
   getContext.mockResolvedValue({
     diveSiteId: 3, siteName: "Renggis Island", publicAreaLabel: "Tioman Island",
-    state: "no_public_context", message: "No public context is currently available.",
+    state: "no_public_context", message: "No public observations or updates yet.",
     assessmentSummary: { acceptedObservations: 0, observationsUnderReview: 0 },
     threats: [], activity: [],
     interpretationNote: "This is not evidence that a site is safe or free of reef threats.",
@@ -64,6 +64,65 @@ beforeEach(() => {
 });
 
 describe("Epic 2 Reef Explorer", () => {
+  it("starts with three areas and shows only the chosen area's dive sites", async () => {
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+    for (const [area, count] of [["Perhentian", 8], ["Redang", 4], ["Tioman", 11]]) {
+      expect(screen.getByRole("button", { name: new RegExp(`${area} ${count} dive sites`) })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: /D'Lagoon/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Redang 4 dive sites/ }));
+    expect(screen.getByRole("heading", { name: "Redang", level: 2 })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /Mini Mount/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /D'Lagoon|Renggis Island/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "All areas" }));
+    expect(screen.getByRole("heading", { name: "Where would you like to explore?" })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: /Mini Mount/ })).not.toBeInTheDocument();
+  });
+
+  it("searches all areas and restores the search after viewing a site", async () => {
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+    await user.type(screen.getByRole("searchbox", { name: "Search across all areas" }), "renggis");
+    await user.click(screen.getByRole("button", { name: /Renggis Island/ }));
+    expect(await screen.findByRole("heading", { name: "Renggis Island", level: 2 })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search results" }));
+    expect(screen.getByRole("searchbox", { name: "Search across all areas" })).toHaveValue("renggis");
+    expect(screen.getByRole("heading", { name: "Search results" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /Renggis Island/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Tiger Reef/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps area search scoped and restores it from site details", async () => {
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/ }));
+    await user.type(screen.getByRole("searchbox", { name: "Search Perhentian dive sites" }), "lagoon");
+    await user.click(screen.getByRole("button", { name: /D'Lagoon/ }));
+    await user.click(screen.getByRole("button", { name: "Perhentian dive sites" }));
+    expect(screen.getByRole("searchbox", { name: "Search Perhentian dive sites" })).toHaveValue("lagoon");
+    await user.clear(screen.getByRole("searchbox", { name: "Search Perhentian dive sites" }));
+    await user.type(screen.getByRole("searchbox", { name: "Search Perhentian dive sites" }), "renggis");
+    expect(screen.getByText("No matching dive sites")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Renggis Island/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps map selection available across areas and toggles the mobile map", async () => {
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+    const toggle = screen.getByRole("button", { name: "Show map" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide map" })).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByRole("button", { name: /Redang 4 dive sites/ }));
+    await user.click(screen.getByRole("button", { name: "Map marker Tiger Reef" }));
+    expect(screen.getByRole("heading", { name: "Tiger Reef", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Plan a dive" })).toHaveAttribute("href", "/plan-a-dive?area=Tioman&site=tioman-tiger-reef");
+    await user.click(screen.getByRole("button", { name: "Tioman dive sites" }));
+    expect(screen.getByRole("heading", { name: "Tioman", level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Renggis Island/ })).toBeInTheDocument();
+  });
+
   it("provides a sourced two-image profile for every backend dive site", () => {
     expect(reefSites).toHaveLength(23);
     expect(reefSites.map((site) => site.backendDiveSiteId).sort((a, b) => a - b)).toEqual(
@@ -105,11 +164,12 @@ describe("Epic 2 Reef Explorer", () => {
     render(<ReefExplorer />);
 
     expect(screen.getByRole("heading", { name: "Explore Malaysia's reef areas" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Choose an island or dive site" })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Search dive sites")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Temple of the Sea/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Where would you like to explore?" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search across all areas")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Temple of the Sea/i })).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/named dive sites/i)).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
 
     expect(screen.getByRole("heading", { name: "D'Lagoon" })).toBeInTheDocument();
@@ -141,6 +201,7 @@ describe("Epic 2 Reef Explorer", () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
     await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
 
@@ -156,6 +217,7 @@ describe("Epic 2 Reef Explorer", () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
     await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
 
@@ -172,6 +234,7 @@ describe("Epic 2 Reef Explorer", () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
     await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
 
@@ -189,10 +252,11 @@ describe("Epic 2 Reef Explorer", () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
+    await user.click(screen.getByRole("button", { name: /Tioman 11 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /Renggis Island/i }));
 
-    expect(await screen.findByText("No public context is currently available.")).toBeInTheDocument();
-    expect(screen.getByText(/Only approved, privacy-safe updates appear here/i)).toBeInTheDocument();
+    expect(await screen.findByText("No public observations or updates yet.")).toBeInTheDocument();
+    expect(screen.getByText(/Only reviewed observations and approved updates appear here/i)).toBeInTheDocument();
     expect(getPublicSiteContext).toHaveBeenCalledWith(3, expect.any(AbortSignal));
   });
 
@@ -218,6 +282,7 @@ describe("Epic 2 Reef Explorer", () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
 
     expect(await screen.findByText("ReefCare observation reviewed")).toBeInTheDocument();
@@ -230,10 +295,11 @@ describe("Epic 2 Reef Explorer", () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
 
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Public context is temporarily unavailable");
-    expect(screen.queryByText("No public context is currently available.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No public observations or updates yet.")).not.toBeInTheDocument();
   });
 
   it("uses one stable guidance panel instead of expanding cards in the grid", async () => {
@@ -267,11 +333,12 @@ describe("Public site context", () => {
     });
     const user = userEvent.setup();
     render(<ReefExplorer />);
+    await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
     expect(await screen.findByText(/10 accepted observations/)).toBeInTheDocument();
     expect(screen.getByText(/2 observations under review/)).toBeInTheDocument();
     expect(screen.getByText("2026-10").closest("small")).toHaveTextContent("Most recent: 2026-10");
-    expect(screen.getByText(/not evidence that a site is safe/)).toBeInTheDocument();
+    expect(screen.getByText(/not a reef survey or proof that the site is safe/)).toBeInTheDocument();
     expect(screen.queryByText(/No public context is currently available./)).not.toBeInTheDocument();
     expect(screen.queryByText(/RC-PRIVATE|private@example.com/)).not.toBeInTheDocument();
   });
@@ -287,7 +354,8 @@ it("keeps pending observation counts visible when no category is eligible for pu
   });
   const user = userEvent.setup();
   render(<ReefExplorer />);
-  await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
+  await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
+    await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
   expect(await screen.findByText(/3 observations under review/)).toBeInTheDocument();
-  expect(screen.getByText("No reviewed category or activity is available.")).toBeInTheDocument();
+  expect(screen.getByText("No public observations or updates yet.")).toBeInTheDocument();
 });

@@ -33,11 +33,12 @@ export function ExternalContextPanel({ siteId }: { siteId: number }) {
   return <section className={styles.section} aria-labelledby="external-context-heading">
     <div className={styles.heading}><p className={styles.eyebrow}>Regional satellite context</p>
       <h3 id="external-context-heading">Coral bleaching heat stress</h3></div>
+    <p>Heat stress builds when seawater stays unusually warm, increasing the risk of coral bleaching.</p>
     {loading && <p role="status">Loading satellite measurements…</p>}
     {error && <div role="status"><p>Satellite context is unavailable right now.</p>
       <button type="button" onClick={() => { setError(false); setLoading(true); setRetryKey((key) => key + 1); }}>Try again</button></div>}
     {context && <>
-      {context.state === "unavailable" && <p>{context.message}</p>}
+      {context.state === "unavailable" && <p>Satellite heat-stress data is unavailable right now.</p>}
       {context.state === "available" && <>
         {context.showingLastStoredValues && <p className={styles.caveat}>The latest update could not be fetched; these are the last stored values.</p>}
         <dl className={styles.measurements}>{context.items.map((item) => <div key={item.contextType}>
@@ -48,7 +49,7 @@ export function ExternalContextPanel({ siteId }: { siteId: number }) {
           ? <a href={context.sourceUrl} target="_blank" rel="noreferrer">{context.sourceName}</a>
           : context.sourceName}. {context.attribution}</p>}
       </>}
-      <p className={styles.caveat}>{context.interpretationNote}</p>
+      <p className={styles.caveat}>Regional satellite measurements, not a local reef assessment or forecast. They do not confirm or rule out reported threats.</p>
     </>}
   </section>;
 }

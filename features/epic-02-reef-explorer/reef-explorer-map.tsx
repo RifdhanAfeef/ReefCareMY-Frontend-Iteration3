@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { ReefSite } from "./types";
 import styles from "./reef-explorer.module.css";
@@ -10,17 +10,18 @@ const malaysiaBounds: [[number, number], [number, number]] = [
   [7.7, 119.6],
 ];
 
-function FocusMap({ selectedSite }: { selectedSite: ReefSite | null }) {
+function FocusMap({ selectedSite, areaSites, mapOpen }: { selectedSite: ReefSite | null; areaSites: ReefSite[]; mapOpen: boolean }) {
   const map = useMap();
 
   useEffect(() => {
     map.invalidateSize();
+    const animate = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (selectedSite) {
-      map.flyTo(selectedSite.position, 12, { animate: true, duration: 0.6 });
+      map.flyTo(selectedSite.position, 12, { animate, duration: 0.6 });
       return;
     }
-    map.fitBounds(malaysiaBounds, { padding: [28, 28], animate: true });
-  }, [map, selectedSite]);
+    map.fitBounds(areaSites.length ? areaSites.map((site) => site.position) : malaysiaBounds, { padding: [38, 38], maxZoom: 11, animate });
+  }, [map, selectedSite, areaSites, mapOpen]);
 
   return null;
 }
@@ -28,14 +29,19 @@ function FocusMap({ selectedSite }: { selectedSite: ReefSite | null }) {
 export function ReefExplorerMap({
   sites,
   selectedSiteId,
+  selectedArea,
+  mapOpen,
   onSelectSite,
 }: {
   sites: ReefSite[];
   selectedSiteId: string | null;
+  selectedArea: string | null;
+  mapOpen: boolean;
   onSelectSite: (siteId: string) => void;
 }) {
   const [tilesUnavailable, setTilesUnavailable] = useState(false);
   const selectedSite = sites.find((site) => site.id === selectedSiteId) ?? null;
+  const areaSites = useMemo(() => selectedArea ? sites.filter((site) => site.island === selectedArea) : [], [sites, selectedArea]);
 
   return (
     <div className={styles.mapFrame} aria-label="Interactive map of selected Malaysian reef areas">
@@ -53,7 +59,7 @@ export function ReefExplorerMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           eventHandlers={{ tileerror: () => setTilesUnavailable(true) }}
         />
-        <FocusMap selectedSite={selectedSite} />
+        <FocusMap selectedSite={selectedSite} areaSites={areaSites} mapOpen={mapOpen} />
         {sites.map((site) => {
           const selected = site.id === selectedSiteId;
           return (

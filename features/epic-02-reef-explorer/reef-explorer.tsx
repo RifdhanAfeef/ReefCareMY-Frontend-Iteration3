@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight, Map, Search } from "lucide-react";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { threatCategories } from "@/features/epic-02-reporting/threat-data";
 import { getPublicReportHandoff, getPublicSiteContext } from "@/lib/api/publicApi";
@@ -15,6 +16,7 @@ import { reefIslands, reefSites } from "./reef-sites";
 import { storeSelectedReefSite } from "./selected-site-storage";
 import type { ReefSite, ReefSiteReference } from "./types";
 import { PhotoCreditLine } from "@/features/shared/photo-credit-line";
+import { surfaceImages } from "@/features/epic-09-planning/surface-images";
 import styles from "./reef-explorer.module.css";
 
 const ReefExplorerMap = dynamic(
@@ -56,10 +58,12 @@ function SiteList({
   sites,
   selectedSiteId,
   onSelect,
+  showGroups = true,
 }: {
   sites: ReefSiteReference[];
   selectedSiteId: string | null;
   onSelect: (siteId: string) => void;
+  showGroups?: boolean;
 }) {
   return (
     <div className={styles.siteList}>
@@ -68,7 +72,7 @@ function SiteList({
         if (islandSites.length === 0) return null;
         return (
           <section className={styles.islandGroup} key={island} aria-labelledby={`island-${island}`}>
-            <div className={styles.islandHeading}>
+            <div className={showGroups ? styles.islandHeading : "sr-only"}>
               <h3 id={`island-${island}`}>{island}</h3>
               <span>{islandSites.length} dive {islandSites.length === 1 ? "site" : "sites"}</span>
             </div>
@@ -95,21 +99,23 @@ function SiteList({
 function BasicSiteDetail({
   site,
   onBack,
+  backLabel,
   onReport,
   reportPending,
 }: {
   site: ReefSiteReference;
   onBack: () => void;
+  backLabel: string;
   onReport: () => void;
   reportPending: boolean;
 }) {
   return (
     <article className={styles.siteDetail} aria-labelledby="selected-site-heading">
       <button className={styles.backToSites} type="button" onClick={onBack}>
-        <span aria-hidden="true">←</span> All reef areas
+        <span aria-hidden="true">←</span> {backLabel}
       </button>
       <p className={styles.siteArea}>{site.publicAreaLabel}</p>
-      <h2 id="selected-site-heading">{site.name}</h2>
+      <h2 id="selected-site-heading" tabIndex={-1}>{site.name}</h2>
       <p className={styles.siteIntroduction}>
         Explore this recognised {site.publicAreaLabel} dive site or use it as the starting point for a reef-threat report.
       </p>
@@ -217,11 +223,10 @@ function ActivityPanel({ siteId }: { siteId: number }) {
         </>
       ) : (
         <div className={styles.emptyActivity} role="status">
-          <strong>{context?.message ?? "No public ReefCare context is currently available"}</strong>
-          <p>Only approved, privacy-safe updates appear here.</p>
+          <strong>No public observations or updates yet.</strong>
         </div>
       )}
-      {state === "loaded" && context && <p className={styles.sourceNote}>{context.interpretationNote}</p>}
+      {state === "loaded" && context && <p className={styles.sourceNote}>Only reviewed observations and approved updates appear here. This is not a reef survey or proof that the site is safe or free of threats.</p>}
     </section>
   );
 }
@@ -279,12 +284,14 @@ function SiteGallery({
 function SiteDetail({
   site,
   onBack,
+  backLabel,
   onReport,
   onEnlargeImage,
   reportPending,
 }: {
   site: ReefSite;
   onBack: () => void;
+  backLabel: string;
   onReport: () => void;
   onEnlargeImage: (imageIndex: number) => void;
   reportPending: boolean;
@@ -292,10 +299,10 @@ function SiteDetail({
   return (
     <article className={styles.siteDetail} aria-labelledby="selected-site-heading">
       <button className={styles.backToSites} type="button" onClick={onBack}>
-        <span aria-hidden="true">←</span> All reef areas
+        <span aria-hidden="true">←</span> {backLabel}
       </button>
       <p className={styles.siteArea}>{site.publicAreaLabel}</p>
-      <h2 id="selected-site-heading">{site.name}</h2>
+      <h2 id="selected-site-heading" tabIndex={-1}>{site.name}</h2>
       <SiteGallery key={site.id} site={site} onEnlargeImage={onEnlargeImage} />
       <p className={styles.siteIntroduction}>{site.introduction}</p>
 
@@ -416,12 +423,17 @@ export function ReefExplorer() {
   const { status, user } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [selectedArea, setSelectedArea] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [showAuthentication, setShowAuthentication] = useState(false);
   const [validatedReportingPath, setValidatedReportingPath] = useState("/report-a-reef?source=explore");
   const [reportHandoffState, setReportHandoffState] = useState<"idle" | "loading" | "error">("idle");
   const [enlargedImageIndex, setEnlargedImageIndex] = useState<number | null>(null);
   const sidePanelRef = useRef<HTMLElement>(null);
+  const browseHeadingRef = useRef<HTMLHeadingElement>(null);
+  const areaHeadingRef = useRef<HTMLHeadingElement>(null);
+  const pendingBrowseFocus = useRef(false);
   const guidanceCategories = useMemo(
     () => threatCategories.filter((category) => category.guidanceAvailable),
     [],
@@ -437,16 +449,47 @@ export function ReefExplorer() {
   const selectedProfile = reefSites.find((site) => site.id === selectedSiteId && site.backendDiveSiteId > 0) ?? null;
   const filteredSites = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return diveSiteCatalog;
     return diveSiteCatalog.filter((site) =>
-      `${site.name} ${site.island} ${site.publicAreaLabel}`.toLowerCase().includes(query),
+      (!selectedArea || site.island === selectedArea)
+      && `${site.name} ${site.island} ${site.publicAreaLabel}`.toLowerCase().includes(query),
     );
-  }, [search]);
+  }, [search, selectedArea]);
+  const showSiteList = Boolean(selectedArea || search.trim());
+  const backLabel = selectedArea ? `${selectedArea} dive sites` : "Search results";
 
-  // In the stacked mobile layout the map sits above the list, so bring the
-  // chosen site's details into view instead of leaving them off-screen.
+  function chooseArea(area: string | null) {
+    pendingBrowseFocus.current = true;
+    setSelectedArea(area);
+    setSelectedSiteId(null);
+    setSearch("");
+  }
+
+  function returnToSites() {
+    pendingBrowseFocus.current = true;
+    setSelectedSiteId(null);
+  }
+
+  function selectMapSite(siteId: string) {
+    const site = diveSiteCatalog.find((item) => item.id === siteId);
+    if (site) {
+      setSelectedArea(site.island);
+      setSearch("");
+      setSelectedSiteId(siteId);
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingBrowseFocus.current || selectedSiteId) return;
+    pendingBrowseFocus.current = false;
+    const heading = selectedArea || search.trim() ? browseHeadingRef.current : areaHeadingRef.current;
+    heading?.focus({ preventScroll: true });
+    heading?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedArea, selectedSiteId, search]);
+
+  // A map marker can open details outside the current mobile viewport.
   useEffect(() => {
     if (!selectedSiteId || typeof window.matchMedia !== "function") return;
+    document.getElementById("selected-site-heading")?.focus({ preventScroll: true });
     if (!window.matchMedia("(max-width: 1120px)").matches) return;
     sidePanelRef.current?.scrollIntoView?.({ block: "start" });
   }, [selectedSiteId]);
@@ -482,17 +525,53 @@ export function ReefExplorer() {
       <header className={styles.hero}>
         <h1>Explore Malaysia&apos;s reef areas</h1>
         <p>
-          Discover selected islands and dive sites, learn what to observe responsibly and see privacy-safe ReefCare activity without logging in.
+          Choose an area, discover its dive sites and learn what to observe. Explore without logging in.
         </p>
       </header>
 
-      <section className={`${styles.explorer} ${selectedSite ? styles.explorerSelected : ""}`} aria-labelledby="explorer-heading">
-        <aside className={styles.sidePanel} ref={sidePanelRef}>
+      {!selectedSite && !selectedArea && <section className={styles.areaSelection} aria-labelledby="areas-heading">
+        <div className={styles.areaHeadingRow}>
+          <h2 id="areas-heading" ref={areaHeadingRef} tabIndex={-1}>Where would you like to explore?</h2>
+          <label className={styles.areaSearch}>
+            <Search size={19} aria-hidden="true" />
+            <span className="sr-only">Search across all areas</span>
+            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search across all areas" />
+          </label>
+        </div>
+        <div className={styles.areaCards}>
+          {reefIslands.map((island) => {
+            const photo = surfaceImages[island];
+            return <div className={styles.areaCardGroup} key={island}>
+              <button type="button" className={styles.areaCard} onClick={() => chooseArea(island)}>
+                <span className={styles.areaPhoto}>
+                  <Image src={photo.src} alt="" fill sizes="(max-width: 760px) 104px, (max-width: 1440px) 30vw, 440px" />
+                </span>
+                <strong>{island}</strong>
+                <span>{diveSiteCatalog.filter((site) => site.island === island).length} dive sites</span>
+                <span className={styles.areaCardAction}>Explore dive sites <ArrowRight size={19} aria-hidden="true" /></span>
+              </button>
+              <p className={styles.areaPhotoCredit}>
+                Photo: <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.credit}</a>
+                {" ("}<a href={photo.licenseUrl} target="_blank" rel="noreferrer">{photo.license === "Copyrighted free use" ? "Free use" : photo.license}</a>{")"}
+                {" · Resized and cropped."}
+              </p>
+            </div>;
+          })}
+        </div>
+      </section>}
+
+      <button type="button" className={styles.mobileMapToggle} aria-expanded={mapOpen} aria-controls="explore-map" onClick={() => setMapOpen((open) => !open)}>
+        <Map size={18} aria-hidden="true" />{mapOpen ? "Hide map" : "Show map"}
+      </button>
+
+      <section className={`${styles.explorer} ${selectedSite ? styles.explorerSelected : ""} ${!selectedSite && !showSiteList ? styles.explorerStart : ""}`} aria-label="Dive-site explorer">
+        <aside className={styles.sidePanel} ref={sidePanelRef} key={selectedSiteId ?? selectedArea ?? "all-areas"}>
           {selectedSite ? (
             selectedProfile ? (
               <SiteDetail
                 site={selectedProfile}
-                onBack={() => setSelectedSiteId(null)}
+                onBack={returnToSites}
+                backLabel={backLabel}
                 onReport={startReport}
                 onEnlargeImage={setEnlargedImageIndex}
                 reportPending={reportHandoffState === "loading"}
@@ -500,36 +579,41 @@ export function ReefExplorer() {
             ) : (
               <BasicSiteDetail
                 site={selectedSite}
-                onBack={() => setSelectedSiteId(null)}
+                onBack={returnToSites}
+                backLabel={backLabel}
                 onReport={startReport}
                 reportPending={reportHandoffState === "loading"}
               />
             )
           ) : (
             <>
-              <h2 id="explorer-heading">Choose an island or dive site</h2>
-              <label className={styles.searchField}>
-                <span className="sr-only">Search reef areas</span>
+              {selectedArea && <button className={styles.backToSites} type="button" onClick={() => chooseArea(null)}><span aria-hidden="true">←</span> All areas</button>}
+              <h2 id="explorer-heading" ref={browseHeadingRef} tabIndex={-1}>{selectedArea ?? (showSiteList ? "Search results" : "Start with an area")}</h2>
+              {selectedArea && <p className={styles.areaCount}>{diveSiteCatalog.filter((site) => site.island === selectedArea).length} dive sites</p>}
+              {selectedArea && <label className={styles.searchField}>
+                <span className="sr-only">Search {selectedArea} dive sites</span>
                 <input
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search dive sites"
+                  placeholder={`Search ${selectedArea}`}
                 />
-              </label>
-              {filteredSites.length > 0 ? (
-                <SiteList sites={filteredSites} selectedSiteId={selectedSiteId} onSelect={setSelectedSiteId} />
+              </label>}
+              {!showSiteList ? <p className={styles.startHint}>Choose Perhentian, Redang or Tioman to see its dive sites. Already know the site name? Search across all areas above.</p> : filteredSites.length > 0 ? (
+                <SiteList sites={filteredSites} selectedSiteId={selectedSiteId} onSelect={setSelectedSiteId} showGroups={!selectedArea} />
               ) : (
                 <div className={styles.noResults} role="status">
-                  <strong>No matching reef areas</strong>
-                  <p>Try a site, island or general-area name.</p>
+                  <strong>No matching dive sites</strong>
+                  <p>{selectedArea ? "Try another site name, or choose All areas to search elsewhere." : "Try a site, island or general-area name."}</p>
                 </div>
               )}
             </>
           )}
         </aside>
 
-        <ReefExplorerMap sites={mappedProfiles} selectedSiteId={selectedSiteId} onSelectSite={setSelectedSiteId} />
+        <div id="explore-map" className={styles.mapRegion} data-open={mapOpen}>
+          <ReefExplorerMap sites={mappedProfiles} selectedSiteId={selectedSiteId} selectedArea={selectedArea} mapOpen={mapOpen} onSelectSite={selectMapSite} />
+        </div>
       </section>
 
       {reportHandoffState === "loading" && (

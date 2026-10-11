@@ -3,14 +3,43 @@
 .eyebrow { margin: 0 0 8px; color: var(--color-primary); font-size: 13px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
 .hero h1 { margin: 0; font-size: clamp(42px, 5vw, 68px); line-height: 1.04; letter-spacing: -.04em; }
 .hero > p:last-child { max-width: 850px; margin: 20px 0 0; color: var(--color-muted); font-size: 18px; line-height: 1.7; }
-.explorer { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 2fr); gap: 28px; align-items: start; margin-top: 42px; }
+.areaSelection { margin-top: 34px; }
+.areaHeadingRow { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
+.areaHeadingRow h2 { margin: 0; font-size: 27px; line-height: 1.2; }
+.areaSearch { display: flex; align-items: center; gap: 10px; width: min(100%, 390px); padding: 0 15px; color: var(--color-primary-hover); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-field); }
+.areaSearch input { width: 100%; min-width: 0; min-height: 48px; padding: 0; color: var(--color-ink); background: transparent; border: 0; font: inherit; }
+.areaSearch:focus-within { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.areaSearch input:focus-visible { outline: none; }
+.areaCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
+.areaCardGroup { min-width: 0; }
+.areaCard { width: 100%; display: grid; gap: 5px; padding: 17px; color: var(--color-ink); background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-card); cursor: pointer; text-align: left; transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.areaCard:hover { border-color: var(--color-primary); box-shadow: 0 8px 20px rgba(20,54,66,.08); transform: translateY(-2px); }
+.areaPhoto { position: relative; display: block; height: 174px; margin-bottom: 8px; overflow: hidden; background: #dff2ef; border-radius: 11px; }
+.areaPhoto img { object-fit: cover; object-position: center 65%; }
+.areaPhotoCredit { margin: 9px 6px 0; color: var(--color-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.areaPhotoCredit a { color: var(--color-primary-hover); text-decoration: underline; text-underline-offset: 2px; }
+.areaCard > strong { font-size: 24px; }
+.areaCard > span:not(.areaPhoto):not(.areaCardAction) { color: var(--color-muted); font-size: 14px; }
+.areaCardAction { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; color: var(--color-primary-hover); font-weight: 800; font-size: 14px; }
+.areaCount { display: inline-block; margin: 12px 0 0; padding: 5px 10px; color: var(--color-primary-hover); background: var(--color-info); border-radius: 999px; font-size: 13px; font-weight: 750; }
+.startHint { margin: 18px 0 0; color: var(--color-muted); line-height: 1.7; }
+.mobileMapToggle { display: none; }
+.explorer { display: grid; grid-template-columns: minmax(330px, .72fr) minmax(0, 2fr); gap: 28px; align-items: start; margin-top: 28px; }
+.explorerStart { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); }
+.explorerStart .sidePanel { grid-column: 2; grid-row: 1; }
+.explorerStart .mapRegion { grid-column: 1; grid-row: 1; }
+.mapRegion { position: sticky; top: calc(var(--header-height) + 18px); min-width: 0; }
+.explorerStart .mapFrame, .explorerStart .mapLoading { height: 360px; min-height: 360px; }
+.explorerStart .mapCanvas { min-height: 360px; }
 .explorerSelected { grid-template-columns: minmax(520px, 1.5fr) minmax(0, .9fr); }
 .explorerSelected .mapFrame, .explorerSelected .mapLoading { height: min(500px, calc(100vh - var(--header-height) - 36px)); min-height: 420px; }
-.sidePanel { padding: 30px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 18px 40px rgba(20,54,66,.07); }
+.explorerSelected .mapCanvas { min-height: 0; }
+.sidePanel { min-width: 0; padding: 30px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 18px 40px rgba(20,54,66,.07); animation: panelEnter 180ms ease-out; }
+@keyframes panelEnter { from { opacity: .5; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .sidePanel h2 { margin: 0; font-size: 27px; line-height: 1.18; }
 .searchField { display: block; margin-top: 24px; }
 .searchField input { width: 100%; min-height: 50px; padding: 0 15px; color: var(--color-ink); background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-field); }
-.siteList { display: grid; gap: 20px; margin-top: 24px; }
+.siteList { display: grid; gap: 20px; max-height: 480px; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior-y: contain; margin-top: 24px; padding: 3px 5px 5px 3px; }
 .islandGroup { display: grid; gap: 9px; }
 .islandHeading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .islandHeading h3 { margin: 0; font-size: 16px; }
@@ -21,7 +50,7 @@
 .siteButton span:last-child { font-size: 24px; line-height: 1; }
 .noResults { margin-top: 24px; padding: 22px; color: var(--color-muted); background: var(--color-surface-muted); border-radius: 12px; }
 .noResults p { margin: 4px 0 0; }
-.mapFrame, .mapLoading { position: sticky; top: calc(var(--header-height) + 18px); height: min(720px, calc(100vh - var(--header-height) - 36px)); min-height: 560px; overflow: hidden; background: #dceeed; border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 18px 40px rgba(20,54,66,.07); }
+.mapFrame, .mapLoading { position: relative; height: min(720px, calc(100vh - var(--header-height) - 36px)); min-height: 560px; overflow: hidden; background: #dceeed; border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: 0 18px 40px rgba(20,54,66,.07); }
 .mapCanvas { width: 100%; height: 100%; min-height: 560px; }
 .mapLoading { display: grid; place-items: center; color: var(--color-muted); font-weight: 750; }
 .mapPrivacy { position: absolute; right: 18px; bottom: 18px; z-index: 500; max-width: calc(100% - 36px); margin: 0; padding: 9px 13px; color: var(--color-ink); background: rgba(255,255,255,.94); border-radius: 10px; box-shadow: 0 4px 12px rgba(20,54,66,.14); font-size: 13px; font-weight: 750; pointer-events: none; }
@@ -67,7 +96,7 @@
 .imageDialog p { margin: 12px 4px 0; color: var(--color-muted); font-size: 14px; }
 .imageDialog .dialogImageCredit { margin-top: 5px; font-size: 13px; }
 .activity { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--color-border); }
-.sectionTitleRow { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.sectionTitleRow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .sectionTitleRow h3 { margin: 0; font-size: 18px; }
 .generalisedBadge { padding: 5px 8px; color: var(--color-primary-hover); background: var(--color-info); border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .activityList { display: grid; gap: 16px; margin: 18px 0 0; padding: 0; list-style: none; }
@@ -128,5 +157,7 @@
 .handoffNotice, .handoffError { margin: 18px 0 0; padding: 14px 16px; border-radius: 12px; font-weight: 700; }
 .handoffNotice { color: var(--color-primary-hover); background: var(--color-info); }
 .handoffError { color: var(--color-danger-ink); background: var(--color-danger-soft); border: 1px solid #e5aaa5; }
-@media (max-width: 1120px) { .explorer, .explorerSelected { grid-template-columns: 1fr; } .sidePanel { order: 2; scroll-margin-top: calc(var(--header-height) + 72px); } .mapFrame, .mapLoading, .explorerSelected .mapFrame, .explorerSelected .mapLoading { order: 1; position: relative; top: auto; height: 420px; min-height: 360px; } .mapCanvas { min-height: 360px; } }
+@media (prefers-reduced-motion: reduce) { .sidePanel { animation: none; } .areaCard { transition: none; } .areaCard:hover { transform: none; } }
+@media (max-width: 1120px) { .explorer, .explorerSelected, .explorerStart { grid-template-columns: 1fr; } .explorerStart .sidePanel, .explorerStart .mapRegion { grid-column: auto; grid-row: auto; } .sidePanel { order: 1; scroll-margin-top: calc(var(--header-height) + 24px); } .sidePanel h2, .areaHeadingRow h2 { scroll-margin-top: calc(var(--header-height) + 24px); } .mapRegion { order: 2; position: relative; top: auto; } .mapRegion[data-open="false"] { display: none; } .mobileMapToggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 24px; padding: 10px 16px; color: var(--color-primary-hover); background: #fff; border: 1px solid var(--color-primary); border-radius: var(--radius-button); font: inherit; font-weight: 750; cursor: pointer; } .siteList { max-height: none; overflow: visible; scrollbar-gutter: auto; } .mapFrame, .mapLoading, .explorerSelected .mapFrame, .explorerSelected .mapLoading { height: 420px; min-height: 360px; } .mapCanvas { min-height: 360px; } }
 @media (max-width: 760px) { .page { width: min(calc(100% - 32px), var(--content-width)); padding: 38px 0 56px; } .hero h1 { font-size: clamp(40px, 12vw, 56px); } .hero > p:last-child { font-size: 16px; } .explorer { margin-top: 30px; } .sidePanel { padding: 22px; } .mapFrame, .mapLoading, .explorerSelected .mapFrame, .explorerSelected .mapLoading { height: 340px; min-height: 300px; } .mapCanvas { min-height: 300px; } .siteImage { aspect-ratio: 4 / 3; } .mapPrivacy { left: 12px; right: 12px; bottom: 12px; font-size: 12px; } .guidance { margin-top: 54px; } .guidanceHeading { align-items: flex-start; flex-direction: column; } .threatGrid { grid-template-columns: 1fr; } .threatCard { min-height: 112px; grid-template-columns: 72px 1fr; padding: 16px; } .threatCard > img { width: 72px; height: 58px; } .threatDetail { padding: 20px; } .threatDetailHeading { grid-template-columns: 72px 1fr; } .threatDetailHeading img { width: 72px; height: 58px; } .threatDetailBody { grid-template-columns: 1fr; } .dialog { padding: 30px 22px 24px; } }
+@media (max-width: 760px) { .areaHeadingRow { align-items: stretch; flex-direction: column; gap: 18px; } .areaHeadingRow h2 { font-size: 24px; } .areaSearch { width: 100%; } .areaCards { grid-template-columns: 1fr; gap: 20px; } .areaCard { grid-template-columns: 104px minmax(0, 1fr); column-gap: 14px; padding: 16px; } .areaPhoto { grid-row: 1 / 4; height: 100%; min-height: 112px; margin: 0; } .areaCard > strong { font-size: 22px; } .areaCardAction { margin-top: 6px; } .explorerStart .mapFrame, .explorerStart .mapLoading { height: 340px; min-height: 300px; } }
