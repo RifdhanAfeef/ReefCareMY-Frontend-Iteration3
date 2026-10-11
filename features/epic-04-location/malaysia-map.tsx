@@ -160,7 +160,9 @@ function InitialView({
       for (const eventName of ["pointerdown", "touchstart", "wheel", "keydown"]) {
         container.removeEventListener(eventName, cancelOnUserInput);
       }
-      map.stop();
+      // MapContainer removes the map before this cleanup runs on unmount;
+      // stopping a removed map throws and takes the whole page down.
+      if (map.getPane("mapPane")) map.stop();
     };
   }, [map, pin, siteCentre, diveSiteRadiusMetres, islandRadiusMetres, interactive, tileLayer]);
 

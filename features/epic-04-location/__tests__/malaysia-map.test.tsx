@@ -12,6 +12,7 @@ const map = vi.hoisted(() => ({
   getZoom: vi.fn(() => 10),
   getContainer: vi.fn(),
   stop: vi.fn(),
+  getPane: vi.fn(() => document.createElement("div") as HTMLElement | undefined),
 }));
 const tiles = vi.hoisted(() => ({
   isLoading: vi.fn(() => false),
@@ -45,8 +46,10 @@ const baseProps = {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  map.stop.mockReset();
   tiles.isLoading.mockReturnValue(false);
   map.getContainer.mockReturnValue(document.createElement("div"));
+  map.getPane.mockReturnValue(document.createElement("div"));
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
 });
 
@@ -101,6 +104,16 @@ describe("report location map", () => {
     act(() => { vi.advanceTimersByTime(2000); });
     expect(map.setView).toHaveBeenCalledTimes(1);
     expect(map.fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the page when the map has already been removed", () => {
+    const { unmount } = render(<MalaysiaMap {...baseProps} />);
+    // MapContainer removes the Leaflet map before child effects clean up;
+    // Leaflet then throws on stop() because its panes no longer exist.
+    map.getPane.mockReturnValue(undefined);
+    map.stop.mockImplementation(() => { throw new TypeError("Cannot read properties of undefined (reading '_leaflet_pos')"); });
+
+    expect(() => unmount()).not.toThrow();
   });
 
   it("waits for the next level's tiles before advancing", () => {
