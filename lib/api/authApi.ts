@@ -1,7 +1,7 @@
 import { apiRequest } from "./client";
 import type { AuthResult, AuthUser, RegisteredUser, RegisterPayload } from "./types";
 
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 6;
 export const MAX_PASSWORD_LENGTH = 128;
 export const MAX_DISPLAY_NAME_LENGTH = 100;
 export const MIN_DISTINCT_PASSWORD_CHARACTERS = 4;

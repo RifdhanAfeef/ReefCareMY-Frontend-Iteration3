@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api/client";
 
 vi.mock("@/lib/api/reportsApi");
 const mockedGetReportDetail = vi.mocked(reportsApi.getReportDetail);
+const mockedGetObserverEvidence = vi.mocked(reportsApi.getObserverEvidence);
 const mockedGetOpenInformationRequest = vi.mocked(reportsApi.getOpenInformationRequest);
 const mockedSubmitInformationResponse = vi.mocked(reportsApi.submitInformationResponseWithPhotos);
 
@@ -16,6 +17,8 @@ beforeEach(() => {
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => `blob:reply-photo-${++previewNumber}`) });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
   mockedGetReportDetail.mockReset();
+  mockedGetObserverEvidence.mockReset();
+  mockedGetObserverEvidence.mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" }));
   mockedGetOpenInformationRequest.mockReset();
   mockedGetOpenInformationRequest.mockResolvedValue(null);
   mockedSubmitInformationResponse.mockReset();
@@ -159,7 +162,7 @@ describe("US6.3 — information request reason is visible", () => {
       { responseText: "The net was approximately 3 metres wide." },
       [],
     ));
-    expect(await screen.findByText(/attached to this report/i)).toBeInTheDocument();
+    expect(await screen.findByText("Your additional information was submitted and attached to this report.")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Additional details/)).not.toBeInTheDocument();
   });
 
@@ -342,6 +345,30 @@ const acceptedPhotoReply = {
 };
 
 describe("Observer photo replies", () => {
+  it("adds successfully submitted reply photos to the existing saved gallery and restores them when reopened", async () => {
+    const original = baseReport({ status: "needs_more_info", statusLabel: "More information needed",
+      informationRequestReason: "Please add a wider photo.", evidenceCount: 1,
+      evidence: [{ evidenceId: 100, mediaType: "photo" }] });
+    mockedGetReportDetail.mockResolvedValueOnce(original);
+    mockedSubmitInformationResponse.mockResolvedValueOnce(acceptedPhotoReply);
+    const { unmount } = render(<ReportDetail reportReference="RC-0241" />);
+    await screen.findByRole("button", { name: "View submitted photo 1" });
+    const file = new File(["wide"], "wide.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText("Additional photos (optional)"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Additional details"), { target: { value: "Wider view attached." } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit additional information" }));
+    expect(await screen.findByRole("button", { name: "View submitted photo 2" })).toBeInTheDocument();
+    expect(mockedGetObserverEvidence).toHaveBeenCalledWith("RC-0241", 501, expect.any(AbortSignal));
+    expect(screen.getByRole("status")).toHaveTextContent("Your additional information was submitted");
+    unmount();
+    window.localStorage.clear();
+    mockedGetReportDetail.mockResolvedValueOnce({ ...original, status: "under_review", statusLabel: "Being reviewed",
+      informationRequestReason: null, evidenceCount: 2, evidence: [original.evidence![0], { evidenceId: 501, mediaType: "photo" }] });
+    render(<ReportDetail reportReference="RC-0241" />);
+    expect(await screen.findByRole("button", { name: "View submitted photo 2" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Additional photos (optional)")).not.toBeInTheDocument();
+  });
+
   it("previews photos, removes one and submits the remaining photo together with text", async () => {
     mockedSubmitInformationResponse.mockResolvedValueOnce(acceptedPhotoReply);
     const input = await openPhotoReply();

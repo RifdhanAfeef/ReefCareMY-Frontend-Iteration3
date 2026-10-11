@@ -42,6 +42,28 @@ async function completeCreateForm() {
 }
 
 describe("Administrator account creation", () => {
+  it("accepts a matching six-character temporary password and blocks shorter or repetitive ones", async () => {
+    mockedCreateAdminUser.mockResolvedValue({ ...observer, displayName: "Farah Aziz", email: "farah@example.org" });
+    render(<NewUserForm />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Display name"), "Farah Aziz");
+    await user.type(screen.getByLabelText("Email"), "farah@example.org");
+    const password = screen.getByLabelText("Temporary password");
+    const confirmation = screen.getByLabelText("Confirm temporary password");
+    const submit = screen.getByRole("button", { name: "Create user account" });
+    expect(password).toHaveAttribute("minlength", "6");
+    expect(confirmation).toHaveAttribute("minlength", "6");
+    expect(screen.getByText("Required: At least 6 characters")).toBeInTheDocument();
+    for (const value of ["reef1", "aaaaaa", "reef12"]) {
+      await user.clear(password); await user.clear(confirmation);
+      await user.type(password, value); await user.type(confirmation, value);
+      if (value !== "reef12") expect(submit).toBeDisabled();
+    }
+    expect(submit).toBeEnabled();
+    await user.click(submit);
+    expect(mockedCreateAdminUser).toHaveBeenCalledWith({ displayName: "Farah Aziz", email: "farah@example.org", password: "reef12", role: "observer" });
+  });
+
   it("creates only a Registered Observer account", async () => {
     mockedCreateAdminUser.mockResolvedValue({ ...observer, displayName: "Farah Aziz", email: "farah@example.org" });
     render(<NewUserForm />);

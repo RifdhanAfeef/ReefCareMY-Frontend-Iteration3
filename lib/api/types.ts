@@ -170,6 +170,12 @@ export type ReportClosureSummary = {
   publicNote: string | null;
 };
 
+// Observer-safe metadata; private images are fetched with the signed-in session.
+export type ObserverEvidenceSummary = {
+  evidenceId: number;
+  mediaType: string;
+};
+
 export type ReportDetail = {
   reportReference: string;
   threatCategory: string;
@@ -179,6 +185,8 @@ export type ReportDetail = {
   generalLocation: string;
   diveSite: string | null;
   preciseLocation: ReportPreciseLocation | null;
+  evidenceCount?: number;
+  evidence?: ObserverEvidenceSummary[];
   status: ReportStatusCode;
   statusLabel: string;
   outcome: string | null;

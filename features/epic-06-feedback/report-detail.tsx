@@ -19,6 +19,7 @@ import {
   type SubmittedStructuredDetails,
 } from "@/features/epic-02-reporting/submitted-structured-details";
 import styles from "./report-detail.module.css";
+import { ObserverEvidenceGallery } from "./observer-evidence-gallery";
 
 const allowedPhotoTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxPhotoSize = 10 * 1024 * 1024;
@@ -122,12 +123,21 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
         responseText: text,
       };
       const result = await submitInformationResponseWithPhotos(reportReference, payload, responsePhotos.map((photo) => photo.file));
-      setReport((current) => current ? {
-        ...current,
-        status: result.status,
-        statusLabel: "Being reviewed",
-        informationRequestReason: null,
-      } : current);
+      setReport((current) => {
+        if (!current) return current;
+        const evidence = new Map((current.evidence ?? []).map((item) => [item.evidenceId, item]));
+        for (const { evidenceId, mediaType } of result.evidence) {
+          evidence.set(evidenceId, { evidenceId, mediaType });
+        }
+        return {
+          ...current,
+          evidence: [...evidence.values()],
+          evidenceCount: evidence.size,
+          status: result.status,
+          statusLabel: "Being reviewed",
+          informationRequestReason: null,
+        };
+      });
       setInformationRequest(null);
       setResponseText("");
       clearPhotoSelection();
@@ -195,6 +205,9 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
         <h3 id="observation-description-heading">Your observation</h3>
         <p className={styles.description}>{report.description}</p>
       </section>
+
+      <ObserverEvidenceGallery reportReference={report.reportReference}
+        evidence={report.evidence} evidenceCount={report.evidenceCount} />
 
       {report.preciseLocation?.latitude != null && report.preciseLocation?.longitude != null && (
         <div className={styles.locationNote}>

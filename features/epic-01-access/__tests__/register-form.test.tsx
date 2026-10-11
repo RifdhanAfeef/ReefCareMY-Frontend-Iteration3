@@ -68,7 +68,7 @@ async function fillForm(
 }
 
 describe("Register — submission is disabled for invalid input", () => {
-  it("disables the submit button while the password is shorter than 12 characters", async () => {
+  it("disables the submit button while the password is shorter than 6 characters", async () => {
     renderForm();
     const user = userEvent.setup();
     await fillForm(user, { password: "short" });
@@ -108,18 +108,31 @@ describe("Register — submission is disabled for invalid input", () => {
     expect(screen.getByRole("button", { name: /create account/i })).toBeEnabled();
   });
 
+  it("registers and signs in with a six-character password", async () => {
+    mockedRegister.mockResolvedValue({ id: 1, email: "observer@example.org", displayName: "Sam Observer", role: "observer" });
+    mockedLogin.mockResolvedValue({ accessToken: "test-token", tokenType: "bearer", expiresIn: 3600,
+      user: { id: 1, displayName: "Sam Observer", role: "observer" } });
+    renderForm();
+    const user = userEvent.setup();
+    await fillForm(user, { password: "reef12" });
+    expect(screen.getByLabelText("Password")).toHaveAttribute("minlength", "6");
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+    expect(mockedRegister).toHaveBeenCalledWith({ displayName: "Sam Observer", email: "observer@example.org", password: "reef12" });
+    expect(mockedLogin).toHaveBeenCalledWith("observer@example.org", "reef12");
+  });
+
   it("shows live accessible requirements without displaying a maximum", async () => {
     renderForm();
     const user = userEvent.setup();
     const password = screen.getByLabelText("Password");
 
-    expect(screen.getByText("Required: At least 12 characters")).toBeInTheDocument();
+    expect(screen.getByText("Required: At least 6 characters")).toBeInTheDocument();
     expect(screen.getByText("Required: At least 4 different characters")).toBeInTheDocument();
     expect(screen.queryByText(/128|maximum/i)).not.toBeInTheDocument();
 
-    await user.type(password, "reefcare1234");
+    await user.type(password, "reef12");
 
-    expect(screen.getByText("Met: At least 12 characters")).toBeInTheDocument();
+    expect(screen.getByText("Met: At least 6 characters")).toBeInTheDocument();
     expect(screen.getByText("Met: At least 4 different characters")).toBeInTheDocument();
   });
 
@@ -239,7 +252,7 @@ describe("Register — success registers the account, then signs the observer in
 
 describe("Register — failed submission", () => {
   it("replaces validation details with a user-facing correction message", async () => {
-    mockedRegister.mockRejectedValue(new ApiError("String should have at least 12 characters", 422));
+    mockedRegister.mockRejectedValue(new ApiError("String should have at least 6 characters", 422));
 
     renderForm();
     const user = userEvent.setup();

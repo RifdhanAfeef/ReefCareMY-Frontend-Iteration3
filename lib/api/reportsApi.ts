@@ -1,4 +1,4 @@
-import { apiRequest } from "./client";
+import { apiBlobRequest, apiRequest } from "./client";
 import type {
   LocationCheckRequest,
   LocationCheckResponse,
@@ -86,6 +86,19 @@ export async function getMyReports(filters: MyReportsFilters = {}): Promise<MyRe
 export async function getReportDetail(reportReference: string): Promise<ReportDetail> {
   return apiRequest<ReportDetail>({
     path: `/api/v1/reports/${encodeURIComponent(reportReference)}`,
+  });
+}
+
+export async function getObserverEvidence(
+  reportReference: string,
+  evidenceId: number,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return apiBlobRequest({
+    path: `/api/v1/reports/${encodeURIComponent(reportReference)}/evidence/${encodeURIComponent(String(evidenceId))}`,
+    auth: true,
+    timeoutMs: 60_000,
+    ...(signal ? { signal } : {}),
   });
 }
 

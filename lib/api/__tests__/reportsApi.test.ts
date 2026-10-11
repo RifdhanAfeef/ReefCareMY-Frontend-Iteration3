@@ -3,6 +3,7 @@ import {
   getMyReports,
   getOpenInformationRequest,
   getReportDetail,
+  getObserverEvidence,
   getReportTimeline,
   submitInformationResponse,
   submitInformationResponseWithPhotos,
@@ -51,6 +52,19 @@ describe("getReportDetail", () => {
     await getReportDetail("RC-0241");
 
     expect(mockedApiRequest.mock.calls[0][0].path).toBe("/api/v1/reports/RC-0241");
+  });
+});
+
+describe("observer evidence", () => {
+  it("requests private image bytes from the authenticated Observer route and supports cancellation", async () => {
+    const blob = new Blob(["photo"], { type: "image/jpeg" });
+    vi.mocked(client.apiBlobRequest).mockResolvedValueOnce(blob);
+    const controller = new AbortController();
+    await expect(getObserverEvidence("RC/0241", 501, controller.signal)).resolves.toBe(blob);
+    expect(client.apiBlobRequest).toHaveBeenCalledWith({
+      path: "/api/v1/reports/RC%2F0241/evidence/501",
+      auth: true, timeoutMs: 60_000, signal: controller.signal,
+    });
   });
 });
 
