@@ -62,6 +62,22 @@ describe("recorded case history", () => {
     expect(screen.queryByText(/Latest response decision/)).not.toBeInTheDocument();
   });
 
+  it("keeps request text and attached reply evidence together in one chronological timeline", () => {
+    const evidence = { evidenceId: 501, mediaType: "image/jpeg", fileSizeBytes: 5, uploadedAt: "2026-10-02T09:00:00Z" };
+    render(<CaseHistoryPanel report={{ ...report, statusCode: "under_review", latestDecision: null, informationExchange: [
+      { eventType: "info_provided", occurredAt: "2026-10-02T09:00:00Z", message: "Photo attached.", evidence: [evidence] },
+      { eventType: "info_requested", occurredAt: "2026-10-01T11:00:00Z", message: "Please add a wider photo." },
+    ] }} renderEvidence={(items) => <span>Evidence {items[0].evidenceId}</span>} />);
+    const events = screen.getAllByRole("listitem");
+    expect(events.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Report submitted"), expect.stringContaining("Additional information requested"), expect.stringContaining("Observer response received"),
+    ]);
+    expect(events[2]).toHaveTextContent("Photo attached.");
+    expect(events[2]).toHaveTextContent("Evidence 501");
+    expect(screen.getAllByText("Please add a wider photo.")).toHaveLength(1);
+    expect(api.getCoordinatorCaseHistory).not.toHaveBeenCalled();
+  });
+
   it("stops loading further pages after the history view is closed", async () => {
     let resolve!: (value: Awaited<ReturnType<typeof api.getCoordinatorCaseHistory>>) => void;
     vi.mocked(api.getCoordinatorCaseHistory).mockReturnValue(new Promise((done) => { resolve = done; }));

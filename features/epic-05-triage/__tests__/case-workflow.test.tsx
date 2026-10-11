@@ -210,6 +210,26 @@ describe("Coordinator case workflow", () => {
     expect(relatedSummary?.parentElement).toHaveAttribute("open");
   });
 
+  it.each(["high", "medium", "low"])("shows %s priority inside evidence and keeps context sections in the requested order", async (priority) => {
+    mockedGetCoordinatorCase.mockResolvedValueOnce({ ...report, triageContext: {
+      priority, evidenceCompleteness: "complete", evidenceCount: 1, hoursInQueue: 7,
+      priorityReasons: ["Evidence is complete and ready to review"],
+    } });
+    render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
+    const heading = await screen.findByRole("heading", { name: "Submitted evidence" });
+    const evidencePanel = heading.closest("section")!;
+    expect(within(evidencePanel).getByText(priority[0].toUpperCase() + priority.slice(1))).toHaveAttribute("data-priority", priority);
+    expect(within(evidencePanel).getByText(/Complete evidence · 1 file · 7h waiting/)).toBeInTheDocument();
+    expect(within(evidencePanel).getByRole("button", { name: "Why this case priority?" })).toHaveAttribute("aria-describedby", "case-priority-explanation");
+    expect(within(evidencePanel).getByRole("tooltip")).toHaveTextContent("Evidence is complete and ready to review");
+    expect(within(evidencePanel).getByRole("tooltip")).not.toHaveTextContent("Review order only");
+    expect(screen.queryByText("Priority and triage cues")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Area reporting context|Potentially related reports|Case history/, { selector: "summary strong" }).map((node) => node.textContent)).toEqual([
+      "Area reporting context", "Potentially related reports", "Case history",
+    ]);
+    expect(await within(evidencePanel).findByRole("img", { name: "Submitted evidence 13" })).toBeInTheDocument();
+  });
+
   it("loads and displays protected evidence automatically with the case", async () => {
     render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
 
@@ -308,10 +328,13 @@ describe("Coordinator case workflow", () => {
 
     render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
 
-    expect(await screen.findByRole("heading", { name: "Information request and response" })).toBeInTheDocument();
-    expect(screen.getByText("Coordinator request")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Review reef observation" });
+    fireEvent.click(screen.getByText("Case history"));
+    expect(await screen.findByRole("heading", { name: "Case timeline" })).toBeInTheDocument();
+    expect(screen.queryByText("Information request history")).not.toBeInTheDocument();
+    expect(screen.getByText("Additional information requested")).toBeInTheDocument();
     expect(screen.getByText("Please describe the size of the net.")).toBeInTheDocument();
-    expect(screen.getByText("Observer response")).toBeInTheDocument();
+    expect(screen.getByText("Observer response received")).toBeInTheDocument();
     expect(screen.getByText("The net was approximately three metres wide.")).toBeInTheDocument();
     expect(screen.getByText(/Coordinator One/)).toBeInTheDocument();
     expect(screen.getByText(/Jamie Lee/)).toBeInTheDocument();
@@ -844,9 +867,9 @@ it.each([true, false])("shows reply photos in submitted evidence and reply histo
     ],
   });
   render(<CoordinatorCaseRoute reportReference={report.reportReference} />);
-  const replyPhotos = await screen.findByRole("region", { name: "Photos attached to this Observer reply", hidden: true });
-  const disclosure = replyPhotos.closest("details")!;
-  fireEvent.click(within(disclosure).getByText("Information request history"));
+  await screen.findByRole("heading", { name: "Review reef observation" });
+  fireEvent.click(screen.getByText("Case history"));
+  const replyPhotos = await screen.findByRole("region", { name: "Photos attached to this Observer reply" });
   expect(await within(replyPhotos).findByRole("img", { name: "Submitted evidence 501" })).toBeInTheDocument();
   expect(replyPhotos.parentElement).toHaveTextContent("Wider view attached.");
   const originalEvidence = screen.getByRole("heading", { name: "Submitted evidence" }).closest("section")!;

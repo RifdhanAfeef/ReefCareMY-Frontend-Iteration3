@@ -68,12 +68,40 @@ describe("Coordinator report queue", () => {
     ).toBeInTheDocument();
 
     expect(mockedGetCoordinatorQueue).toHaveBeenNthCalledWith(2, 2, 100);
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })).toHaveLength(10);
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("link", { name: "Review and claim RC-1011" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })).toHaveLength(10);
     await user.click(screen.getByRole("button", { name: "Next" }));
 
     expect(
       await screen.findByRole("link", { name: "Review and claim RC-1021" }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
     expect(mockedGetCoordinatorQueue).toHaveBeenCalledTimes(2);
+  });
+
+  it("searches case numbers across the loaded queue on Search or Enter and clears the search", async () => {
+    const user = userEvent.setup();
+    const items = Array.from({ length: 23 }, (_, index) => ({ ...report, reportReference: `RC-${1001 + index}` }));
+    mockedGetCoordinatorQueue.mockResolvedValue(resultOf(items, 1, 23, 100));
+    render(<ReportQueue />);
+    await screen.findByRole("link", { name: "Review and claim RC-1001" });
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    const input = screen.getByRole("searchbox", { name: "Search reports" });
+    await user.type(input, "rc-1023");
+    expect(screen.queryByRole("link", { name: "Review and claim RC-1023" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    expect(screen.getByRole("link", { name: "Review and claim RC-1023" })).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 1")).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, "missing{Enter}");
+    expect(screen.queryByRole("link", { name: "Review and claim RC-1023" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })).toHaveLength(10);
+    expect(mockedGetCoordinatorQueue).toHaveBeenCalledTimes(1);
   });
 
   it("shows the backend error and allows the request to be retried", async () => {
@@ -150,7 +178,7 @@ describe("Coordinator report queue", () => {
     mockedGetCoordinatorQueue.mockResolvedValue(resultOf(allReports, 1, 24, 100));
 
     render(<ReportQueue />);
-    expect(await screen.findByText("Showing 1–20 of 22 reports")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1–10 of 22 reports")).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Ownership"), "mine");
 
@@ -187,6 +215,7 @@ describe("Coordinator report queue", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Why this priority?");
     expect(screen.getByText("Reviewable evidence is available")).toBeInTheDocument();
     expect(screen.getByText(/guidance, not a verdict/i)).toBeInTheDocument();
+    expect(screen.queryByText(/The Case Coordinator still reviews/)).not.toBeInTheDocument();
   });
 
   it("shows unclaimed reports by default", async () => {
@@ -223,5 +252,39 @@ describe("Coordinator report queue", () => {
       "Review and claim RC-MIDDLE",
       "Review and claim RC-OLD",
     ]);
+  });
+});
+
+
+describe("Report intake column sorting", () => {
+  it("sorts the full queue before pagination, toggles directions and preserves search and filters", async () => {
+    const user = userEvent.setup();
+    const items = Array.from({ length: 23 }, (_, index) => ({ ...report, reportReference: `RC-${index + 1}`, priority: index === 22 ? "high" : "low", evidenceCount: index, hoursInQueue: index, area: index === 21 ? "Redang Island" : "Tioman Island" }));
+    mockedGetCoordinatorQueue.mockResolvedValue(resultOf(items, 1, 23, 100));
+    render(<ReportQueue />);
+    await screen.findByRole("cell", { name: "RC-1" });
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Sort by Priority" }));
+    expect(screen.getByRole("button", { name: "Sort by Priority" }).closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })[0]).toHaveTextContent("RC-23");
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })).toHaveLength(10);
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sort by Priority" }));
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })[0]).toHaveTextContent("RC-1");
+    await user.click(screen.getByRole("button", { name: "Sort by Report reference" }));
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })[1]).toHaveTextContent("RC-2");
+    await user.click(screen.getByRole("button", { name: "Sort by Report reference" }));
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })[0]).toHaveTextContent("RC-23");
+    await user.selectOptions(screen.getByLabelText("Site"), "Redang Island");
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })).toHaveLength(1);
+    expect(screen.getByRole("cell", { name: "RC-22" })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Site"), "all");
+    await user.type(screen.getByRole("searchbox", { name: "Search reports" }), "RC-2{Enter}");
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ }).map((link) => link.textContent?.trim())).toEqual(["Review and claim RC-23", "Review and claim RC-22", "Review and claim RC-21", "Review and claim RC-20", "Review and claim RC-2"]);
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("button", { name: "Reset sorting" }));
+    expect(screen.getAllByRole("link", { name: /Review and claim RC-/ })[0]).toHaveTextContent("RC-1");
+    expect(mockedGetCoordinatorQueue).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Sort by Action" })).not.toBeInTheDocument();
   });
 });

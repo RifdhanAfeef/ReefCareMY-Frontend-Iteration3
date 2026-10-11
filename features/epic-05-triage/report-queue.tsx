@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ResetSortingButton } from "@/components/tables/reset-sorting-button";
+import { SortableColumnHeader } from "@/components/tables/sortable-column-header";
+import { nextTableSort, prioritySortValue, sortTableRows, type TableSort } from "@/components/tables/table-sort";
 import { TableViewport } from "@/components/tables/table-viewport";
 import { getCoordinatorQueue } from "@/lib/api/coordinatorApi";
 import type { CoordinatorQueueItem } from "@/lib/api/types";
@@ -10,8 +13,23 @@ import { userFacingError } from "@/lib/api/user-facing-error";
 import { formatDateTime } from "@/lib/format/date";
 import styles from "./triage.module.css";
 
-const pageSize = 20;
+const pageSize = 10;
 const backendPageSize = 100;
+
+type QueueSortKey = "reference" | "threat" | "area" | "evidence" | "priority" | "status" | "age" | "owner";
+
+function queueSortValue(report: CoordinatorQueueItem, key: QueueSortKey) {
+  switch (key) {
+    case "reference": return report.reportReference;
+    case "threat": return report.threat;
+    case "area": return report.area;
+    case "evidence": return report.evidenceCount ?? 0;
+    case "priority": return prioritySortValue(report.priority);
+    case "status": return report.statusLabel;
+    case "age": return report.hoursInQueue;
+    case "owner": return report.owner?.displayName ?? "Unclaimed";
+  }
+}
 
 type LoadState = "loading" | "loaded" | "error";
 
@@ -80,8 +98,10 @@ export function ReportQueue() {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<TableSort<QueueSortKey> | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
   const [site, setSite] = useState("all");
   const [ownership, setOwnership] = useState("unclaimed");
   const currentUserId = readStoredAuth()?.user.id;
@@ -127,11 +147,17 @@ export function ReportQueue() {
     [currentUserId, items, ownership, search, site],
   );
 
-  const total = filteredReports.length;
+  const sortedReports = sortTableRows(filteredReports, sort, queueSortValue);
+  const total = sortedReports.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const firstItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastItem = Math.min(page * pageSize, total);
-  const reports = filteredReports.slice(firstItem ? firstItem - 1 : 0, lastItem);
+  const reports = sortedReports.slice(firstItem ? firstItem - 1 : 0, lastItem);
+
+  function sortBy(key: QueueSortKey) {
+    setSort((current) => nextTableSort(current, key, key === "priority" ? "descending" : "ascending"));
+    setPage(1);
+  }
 
   function updateSearch(value: string) {
     setSearch(value);
@@ -185,11 +211,15 @@ export function ReportQueue() {
 
         {state === "loaded" && (
           <>
-            <div className={styles.filters}>
-              <label>
-                Search reports
-                <input value={search} onChange={(event) => updateSearch(event.target.value)} placeholder="Report reference or threat" />
-              </label>
+            <form className={styles.filters} aria-label="Search and filter reports" onSubmit={(event) => { event.preventDefault(); updateSearch(searchDraft); }}>
+              <div className={styles.searchField}>
+                <label htmlFor="queue-case-search">Search reports</label>
+                <div className={styles.searchRow}>
+                  <input id="queue-case-search" type="search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Case number or threat, e.g. RC-0033" />
+                  <button type="submit" className={styles.primaryButton}>Search</button>
+                  {(search || searchDraft) && <button type="button" className={styles.secondaryButton} onClick={() => { setSearchDraft(""); updateSearch(""); }}>Clear</button>}
+                </div>
+              </div>
               <label>
                 Site
                 <select value={site} onChange={(event) => updateSite(event.target.value)}>
@@ -206,12 +236,14 @@ export function ReportQueue() {
                   <option value="mine">Claimed by me</option>
                 </select>
               </label>
-            </div>
+            </form>
+
+            {sort && <ResetSortingButton separateFromTable onReset={() => { setSort(null); setPage(1); }} />}
 
             {reports.length > 0 && (
               <TableViewport className={styles.tableWrap} label="Report intake table">
                 <table>
-                  <thead><tr><th>Report reference</th><th>Threat type</th><th>General site</th><th>Evidence</th><th>Priority</th><th>Status</th><th>Age</th><th>Owner</th><th>Action</th></tr></thead>
+                  <thead><tr><SortableColumnHeader label="Report reference" displayLabel="Report ref." direction={sort?.key === "reference" ? sort.direction : undefined} onSort={() => sortBy("reference")} /><SortableColumnHeader label="Threat type" direction={sort?.key === "threat" ? sort.direction : undefined} onSort={() => sortBy("threat")} /><SortableColumnHeader label="General site" direction={sort?.key === "area" ? sort.direction : undefined} onSort={() => sortBy("area")} /><SortableColumnHeader label="Evidence" direction={sort?.key === "evidence" ? sort.direction : undefined} onSort={() => sortBy("evidence")} detail="by number of files" /><SortableColumnHeader label="Priority" direction={sort?.key === "priority" ? sort.direction : undefined} onSort={() => sortBy("priority")} nextDirection="descending" /><SortableColumnHeader label="Status" direction={sort?.key === "status" ? sort.direction : undefined} onSort={() => sortBy("status")} /><SortableColumnHeader label="Age" direction={sort?.key === "age" ? sort.direction : undefined} onSort={() => sortBy("age")} /><SortableColumnHeader label="Owner" direction={sort?.key === "owner" ? sort.direction : undefined} onSort={() => sortBy("owner")} /><th scope="col">Action</th></tr></thead>
                   <tbody>
                     {reports.map((report) => (
                       <tr key={report.reportReference}>
@@ -260,7 +292,7 @@ export function ReportQueue() {
                 </div>
               </nav>
             )}
-            <aside className={styles.priorityNotice}><strong>Priority is guidance, not a verdict</strong><p>These cues come from stated rules such as evidence availability and queue age. The Case Coordinator still reviews the evidence and makes every decision.</p></aside>
+            <aside className={styles.priorityNotice}><strong>Priority is guidance, not a verdict</strong><p>These cues come from stated rules such as evidence availability and queue age.</p></aside>
           </>
         )}
       </section>

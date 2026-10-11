@@ -1,0 +1,6 @@
+.button { display:inline-flex; align-items:center; justify-content:inherit; gap:4px; max-width:100%; min-height:32px; padding:2px 0; border:0; border-radius:3px; background:transparent; color:inherit; font:inherit; font-weight:inherit; text-transform:inherit; letter-spacing:normal; text-align:inherit; cursor:pointer; }
+.button:hover { color:#08777b; }
+.button:focus-visible { outline:2px solid #08777b; outline-offset:3px; }
+.button > span:first-child { min-width:0; }
+.indicator { flex-shrink:0; font-size:1em; color:#527780; }
+th[aria-sort="ascending"] .indicator, th[aria-sort="descending"] .indicator { color:#08777b; font-weight:800; }

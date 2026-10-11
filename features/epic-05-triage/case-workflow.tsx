@@ -124,12 +124,6 @@ function displayDateTime(value?: string | null) {
   return Number.isNaN(parsed.getTime()) ? value : formatDateTime(parsed);
 }
 
-function informationExchangeLabel(eventType: string) {
-  if (eventType === "info_requested") return "Coordinator request";
-  if (eventType === "info_provided") return "Observer response";
-  return formatFieldName(eventType);
-}
-
 function formatFieldName(value: string) {
   return value.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/^./, (letter) => letter.toUpperCase());
 }
@@ -706,17 +700,32 @@ function CaseWorkflow({ report, refreshCase, claimConfirmation }: { report: Coor
     {showFollowUps && <div className={styles.mobileFollowUpShortcut}><button className={styles.secondaryButton} type="button" onClick={goToFollowUp} aria-controls="case-follow-up">Go to follow-up</button></div>}
     {claimConfirmation && <div className={styles.successBox} role="status"><strong>{claimConfirmation.statusLabel}: report assigned successfully</strong><p>Claimed at {displayDateTime(claimConfirmation.claimedAt)}. You can now begin reviewing its evidence.</p></div>}
     <div className={styles.caseContextStack} aria-label="Additional case context">
-      <details className={styles.caseDisclosure} open={historyOpen} onToggle={(event) => setHistoryOpen(event.currentTarget.open)}>
-        <summary><span><strong>Recorded case history</strong><small>Response, information requests, referral and closure records</small></span></summary>
-        {historyOpen && <CaseHistoryPanel report={report} />}
-      </details>
       <details className={styles.caseDisclosure}><summary><span><strong>Area reporting context</strong><small>Generalised activity near this observation</small></span></summary><HotspotCaseContext reportReference={report.reportReference} /></details>
       <details className={styles.caseDisclosure}><summary><span><strong>Potentially related reports</strong><small>Compare reports and record any relationship</small></span></summary><RelatedReportsPanel reportReference={report.reportReference} /></details>
-      {triage && <details className={styles.caseDisclosure}><summary><span><strong>Priority and triage cues</strong><small>{formatFieldName(triage.priority ?? "not set")} priority · {triage.evidenceCount ?? report.evidence.length} evidence file{(triage.evidenceCount ?? report.evidence.length) === 1 ? "" : "s"}</small></span></summary><section className={styles.triageContext} aria-labelledby="triage-context-heading"><div><p className={styles.eyebrow}>Transparent triage cues</p><h2 id="triage-context-heading">Priority: {formatFieldName(triage.priority ?? "not set")}</h2><p>{formatFieldName(triage.evidenceCompleteness ?? "not assessed")} evidence · {triage.evidenceCount ?? report.evidence.length} file{(triage.evidenceCount ?? report.evidence.length) === 1 ? "" : "s"} · {triage.hoursInQueue == null ? "Queue age unavailable" : `${Math.round(triage.hoursInQueue)} hours in queue`}</p></div>{priorityReasons.length > 0 && <div><strong>Rules that contributed</strong><ul>{priorityReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>}<p className={styles.triageDisclaimer}>Priority helps order review. It does not verify the report or make a conservation decision.</p></section></details>}
-      {informationExchange && informationExchange.length > 0 && <details className={styles.caseDisclosure}><summary><span><strong>Information request history</strong><small>{informationExchange.length} recorded update{informationExchange.length === 1 ? "" : "s"}</small></span></summary><section className={styles.informationExchange} aria-labelledby="information-exchange-heading"><h2 id="information-exchange-heading">Information request and response</h2>{informationExchange.map((entry, index) => <div key={entry.caseEventId ?? `${entry.eventType}-${entry.occurredAt}-${index}`}><strong>{informationExchangeLabel(entry.eventType)}</strong>{entry.message && <p>{entry.message}</p>}<small>{entry.actorDisplayName ? `${entry.actorDisplayName} · ` : ""}{displayDateTime(entry.occurredAt)}</small>{Boolean(entry.evidence?.length) && <section aria-label="Photos attached to this Observer reply"><h3>Reply photos</h3><EvidenceRecords reportReference={report.reportReference} evidence={entry.evidence ?? []} /></section>}</div>)}</section></details>}
+      <details className={styles.caseDisclosure} open={historyOpen} onToggle={(event) => setHistoryOpen(event.currentTarget.open)}>
+        <summary><span><strong>Case history</strong><small>Requests, replies, response decisions, referrals and closure records</small></span></summary>
+        {historyOpen && <CaseHistoryPanel report={report} renderEvidence={(evidence) => <EvidenceRecords reportReference={report.reportReference} evidence={evidence} />} />}
+      </details>
     </div>
     <div className={styles.reviewGrid}><section className={styles.card}>
-      <h2>Submitted evidence</h2><p className={styles.muted}>Photos uploaded with this report and in observer replies.</p><EvidenceRecords reportReference={report.reportReference} evidence={observerEvidence} />
+      <div className={styles.evidenceHeading}>
+        <h2>Submitted evidence</h2>
+        {triage && <div className={styles.evidencePriority} aria-label="Case priority">
+          <span>Priority</span><span className={styles.priorityChip} data-priority={(triage.priority ?? "not_set").toLowerCase()}>{formatFieldName(triage.priority ?? "not set")}</span>
+          <span className={styles.priorityInfo}>
+            <button className={styles.priorityInfoButton} type="button" aria-label="Why this case priority?" aria-describedby="case-priority-explanation">i</button>
+            <span className={styles.priorityTooltip} id="case-priority-explanation" role="tooltip">
+              <strong>Why this priority?</strong>
+              {priorityReasons.length > 0 && <ul>{priorityReasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+            </span>
+          </span>
+        </div>}
+      </div>
+      {triage && <p className={styles.evidenceSummary}>
+        {formatFieldName(triage.evidenceCompleteness ?? "not assessed")} evidence · {triage.evidenceCount ?? observerEvidence.length} file{(triage.evidenceCount ?? observerEvidence.length) === 1 ? "" : "s"}
+        {triage.hoursInQueue != null && ` · ${Math.round(triage.hoursInQueue)}h waiting`}
+      </p>}
+      <p className={styles.muted}>Photos uploaded with this report and in observer replies.</p><EvidenceRecords reportReference={report.reportReference} evidence={observerEvidence} />
       <dl className={styles.detailList}>
         <div><dt>Threat type</dt><dd>{report.threat}</dd></div>
         <div><dt>Observed</dt><dd>{observationDateMissing ? "Unavailable" : displayDateTime(report.observedAt)}</dd></div>

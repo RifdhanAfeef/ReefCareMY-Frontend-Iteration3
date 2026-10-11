@@ -918,7 +918,38 @@
 
 /* Keep the case lists tabular and their headings visible during scrolling. */
 .caseTableViewport { max-height: min(65vh, 680px); overflow: auto; overscroll-behavior: contain; }
-.responsiveCasesTable { min-width: 1250px; }
-.responsiveCasesTable th, .responsiveCasesTable td { padding: 14px 12px; }
+.responsiveCasesTable { position: relative; min-width: 1000px; table-layout: fixed; }
+.responsiveCasesTable th, .responsiveCasesTable td { padding: 14px 8px; overflow-wrap: anywhere; }
 .responsiveCasesTable th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px var(--color-border); }
 .responsiveCasesTable .priorityCell { flex-wrap: nowrap; }
+.activeCasesTable { min-width: 900px; }
+.activeCasesTable th:nth-child(1) { width: 9%; }
+.activeCasesTable th:nth-child(2) { width: 15%; }
+.activeCasesTable th:nth-child(3) { width: 18%; }
+.activeCasesTable th:nth-child(4) { width: 12%; }
+.activeCasesTable th:nth-child(5) { width: 20%; }
+.activeCasesTable th:nth-child(6) { width: 18%; }
+.activeCasesTable th:nth-child(7) { width: 8%; }
+.activeCasesTable .priorityChip { flex: 0 0 64px; width: 64px; padding-inline: 6px; flex-shrink: 0; }
+.activeCasesTable .pill { max-width: 100%; white-space: normal; }
+.pagination p { margin: 0 auto 0 0; color: var(--color-muted); }
+
+/* Limit empty column space on large displays and give both lists a clear footer. */
+.caseListCard { width:100%; max-width:1360px; }
+.casePagination { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; padding:16px 20px; border-top:1px solid var(--color-border); background:#f7fbfa; }
+.casePagination p { margin:0; color:var(--color-muted); font-size:.9rem; }
+.casePaginationControls { display:flex; align-items:center; justify-content:flex-end; gap:12px; }
+.casePaginationControls span { color:var(--color-muted); font-size:.9rem; font-weight:700; text-align:center; }
+.casePaginationControls .secondaryButton { min-width:100px; min-height:40px; padding:8px 16px; }
+@media (max-width:600px) {
+  .casePagination { padding:16px; gap:12px; }
+  .casePagination p { width:100%; text-align:center; }
+  .casePaginationControls { display:grid; grid-template-columns:1fr auto 1fr; width:100%; gap:8px; }
+  .casePaginationControls .secondaryButton { min-width:0; width:100%; padding-inline:10px; }
+}
+
+.caseSearchForm { display:flex; align-items:flex-end; flex-wrap:wrap; gap:10px; width:100%; max-width:1360px; padding:18px 20px; border:1px solid var(--color-border); border-radius:var(--radius-card); background:var(--color-surface); }
+.caseSearchForm .field { flex:1 1 240px; max-width:520px; min-width:0; margin:0; }
+.caseSearchForm button { min-height:46px; }
+.caseSearchForm p { flex-basis:100%; margin:0; color:var(--color-muted); font-size:.85rem; }
+@media (max-width:600px) { .caseSearchForm { padding:16px; } .caseSearchForm .field { flex-basis:100%; max-width:none; } }

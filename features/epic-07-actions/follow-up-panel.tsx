@@ -435,7 +435,7 @@ export function FollowUpPanel({
             <button key={type} type="button" aria-pressed={mode === type} onClick={() => { setMode(type); setError(""); }}
               disabled={type === "action" && !actionAllowed}>{type === "sourced_outcome" ? "External update" : readable(type)}</button>)}
         </div>
-        {mode === "sourced_outcome" && <p className={styles.notice}>Record what an outside team reports happened. Add the date and source.</p>}
+        {mode === "sourced_outcome" && <p className={styles.notice}>Record what an external partner reports happened. Add the date and source.</p>}
         {mode === "action" && <>
           <label>Action stage<select value={actionState} onChange={(event) => setActionState(event.target.value as "action_planned" | "action_taken")}>
             <option value="action_planned">Planned — not completed</option><option value="action_taken" disabled={!canRecordTaken}>Taken</option></select></label>

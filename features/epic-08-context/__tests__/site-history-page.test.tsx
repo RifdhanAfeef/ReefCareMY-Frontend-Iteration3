@@ -27,15 +27,36 @@ beforeEach(() => {
 describe("site history selection", () => {
   it("narrows the site list by area and name, then loads the selected history", async () => {
     render(<SiteHistoryPage />);
-    expect(await screen.findByRole("heading", { name: "Batu Nisan" })).toBeInTheDocument();
+    await screen.findByText("Choose a dive site to view its history.");
+    expect(screen.getByRole("combobox", { name: "Dive site" })).toHaveValue("");
+    expect(screen.queryByRole("heading", { name: "Batu Nisan" })).not.toBeInTheDocument();
+    expect(getSiteHistory).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("combobox", { name: "Island or area" }), { target: { value: "Tioman Island" } });
-    await waitFor(() => expect(getSiteHistory).toHaveBeenCalledWith(2));
+    expect(getSiteHistory).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: "Dive site" })).toHaveValue("");
     expect(screen.getByRole("combobox", { name: "Dive site" })).not.toHaveTextContent("Batu Nisan");
     fireEvent.change(screen.getByRole("searchbox", { name: "Search dive sites" }), { target: { value: "Coral" } });
     expect(screen.getByText("1 matching dive site.")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Dive site" }), { target: { value: "3" } });
     await waitFor(() => expect(getSiteHistory).toHaveBeenCalledWith(3));
     expect(await screen.findByRole("heading", { name: "Coral Island" })).toBeInTheDocument();
+  });
+
+  it("clears the displayed history when the placeholder or another area is selected", async () => {
+    render(<SiteHistoryPage />);
+    await screen.findByText("Choose a dive site to view its history.");
+    const selection = screen.getByRole("combobox", { name: "Dive site" });
+    fireEvent.change(selection, { target: { value: "1" } });
+    expect(await screen.findByRole("heading", { name: "Batu Nisan" })).toBeInTheDocument();
+    fireEvent.change(selection, { target: { value: "" } });
+    expect(screen.queryByRole("heading", { name: "Batu Nisan" })).not.toBeInTheDocument();
+    expect(screen.getByText("Choose a dive site to view its history.")).toBeInTheDocument();
+    fireEvent.change(selection, { target: { value: "2" } });
+    expect(await screen.findByRole("heading", { name: "Shark Point" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Island or area" }), { target: { value: "Perhentian Islands" } });
+    expect(screen.queryByRole("heading", { name: "Shark Point" })).not.toBeInTheDocument();
+    expect(selection).toHaveValue("");
+    expect(getSiteHistory).toHaveBeenCalledTimes(2);
   });
 
   it("filters the selected site's timeline by inclusive dates and record type without refetching", async () => {
@@ -51,6 +72,8 @@ describe("site history selection", () => {
       ], hotspotNote: null,
     });
     render(<SiteHistoryPage />);
+    await screen.findByText("Choose a dive site to view its history.");
+    fireEvent.change(screen.getByRole("combobox", { name: "Dive site" }), { target: { value: "1" } });
     expect(await screen.findByText("Anchor damage")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "From date, format dd/mm/yyyy" }), { target: { value: "10/09/2026" } });
     fireEvent.change(screen.getByRole("textbox", { name: "To date, format dd/mm/yyyy" }), { target: { value: "10/09/2026" } });
@@ -76,6 +99,8 @@ describe("site history selection", () => {
       ], hotspotNote: null,
     });
     render(<SiteHistoryPage />);
+    await screen.findByText("Choose a dive site to view its history.");
+    fireEvent.change(screen.getByRole("combobox", { name: "Dive site" }), { target: { value: "1" } });
     expect(await screen.findByText("Action planned")).toBeInTheDocument();
     expect(screen.getByText("Not yet done")).toBeInTheDocument();
     expect(screen.getByText("Showing 2 of 2 recorded entries. Counts above cover all site records.")).toBeInTheDocument();

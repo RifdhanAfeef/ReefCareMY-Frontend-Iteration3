@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   claimAndCompare, compareReports, decideRelationship, getRejectionReasons, getRelatedReports,
 } from "@/lib/api/iteration3Api";
@@ -54,7 +54,26 @@ function differentIncidentGroups(comparison: RelatedComparison | null) {
   return Boolean(current && candidate && current !== candidate);
 }
 
-const INCIDENT_CONFLICT_MESSAGE = "These reports already belong to different incident groups and cannot be linked.";
+const INCIDENT_CONFLICT_MESSAGE = "These reports are already linked to separate incidents. They cannot be combined here.";
+
+function DecisionDialog({ title, children, pending, onCancel }: { title: string; children: ReactNode; pending: boolean; onCancel: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const headingId = useId();
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
+    dialog?.showModal();
+    return () => {
+      if (dialog?.open) dialog.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, []);
+  return <dialog ref={dialogRef} className={styles.decisionDialog} aria-labelledby={headingId}
+    onCancel={(event) => { event.preventDefault(); if (!pending) onCancel(); }}>
+    <h3 id={headingId}>{title}</h3>
+    {children}
+  </dialog>;
+}
 
 export function RelatedReportsPanel({ reportReference }: { reportReference: string }) {
   const [result, setResult] = useState<RelatedReports | null>(null);
@@ -71,6 +90,8 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const comparisonRef = useRef<HTMLDivElement>(null);
   const comparisonId = useId();
+  const conflictInfoId = useId();
+  const [conflictInfoOpen, setConflictInfoOpen] = useState(false);
   const requestBusy = useRef(false);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -106,7 +127,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
     if (requestBusy.current) return;
     requestBusy.current = true;
     setPending(true); setComparisonLoading(true); setError(""); setSuccess("");
-    setCandidateReference(reference); setComparison(null); setDecision(null); setReasonCode(""); setNote("");
+    setCandidateReference(reference); setComparison(null); setDecision(null); setReasonCode(""); setNote(""); setConflictInfoOpen(false);
     try {
       const data = unclaimed
         ? await claimAndCompare(reportReference, reference)
@@ -187,7 +208,7 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
     </header>
     <p className={styles.caveat}>Suggestions help you compare reports; only your decision links them. Candidates are unclaimed or already owned by you.</p>
     {loading && <p role="status">Loading related-report analysis…</p>}
-    {error && <p role="alert" className={styles.error}>{error}</p>}
+    {error && !decision && <p role="alert" className={styles.error}>{error}</p>}
     {analysisError && <p role="alert" className={styles.error}>{analysisError}</p>}
     {success && <p role="status" className={styles.success}>{success}</p>}
     {result && <p role="status">{result.message || ({
@@ -235,25 +256,37 @@ export function RelatedReportsPanel({ reportReference }: { reportReference: stri
       {comparison.signals.length > 0 && <div className={styles.matchSummary}><strong>Why they may be related</strong><ul className={styles.signals}>{comparison.signals.map((signal) => <li key={signal.code}>{signal.label}</li>)}</ul></div>}
       {canDecide ? <div className={styles.actions}>
         <button type="button" className={styles.secondary} disabled={pending} onClick={() => chooseDecision("not_related")}>Not related</button>
-        <button type="button" className={styles.primary} disabled={pending || linkingBlocked} onClick={() => chooseDecision("same_incident")}>Confirm same incident</button>
+        <button type="button" className={styles.primary} disabled={pending || linkingBlocked} aria-describedby={linkingBlocked ? conflictInfoId : undefined} onClick={() => chooseDecision("same_incident")}>Same incident</button>
       </div> : null}
-      {linkingBlocked && <p className={styles.caveat}>{INCIDENT_CONFLICT_MESSAGE} Existing incident groups cannot be merged here.</p>}
-      {decision && <div className={styles.decisionBox}>
-        <h4>{decision === "same_incident" ? "Confirm the relationship" : "Record why these are not related"}</h4>
+      {linkingBlocked && <div className={styles.linkingRestriction}>
+        <p id={conflictInfoId}>{INCIDENT_CONFLICT_MESSAGE}</p>
+        <span className={styles.conflictInfo} onMouseEnter={() => setConflictInfoOpen(true)} onMouseLeave={() => setConflictInfoOpen(false)}>
+          <button type="button" className={styles.conflictInfoButton} aria-label="Why is Same incident unavailable?"
+            aria-describedby={conflictInfoOpen ? `${conflictInfoId}-details` : undefined}
+            onFocus={() => setConflictInfoOpen(true)} onBlur={() => setConflictInfoOpen(false)}
+            onClick={() => setConflictInfoOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") setConflictInfoOpen(false); }}>i</button>
+          {conflictInfoOpen && <span className={styles.conflictTooltip} role="tooltip" id={`${conflictInfoId}-details`}>
+            {comparison.current.reportReference} is linked to {comparison.current.incidentReference}; {comparison.candidate.reportReference} is linked to {comparison.candidate.incidentReference}. Confirming them as the same incident would merge these groups.
+          </span>}
+        </span>
+      </div>}
+      {decision && <DecisionDialog title={decision === "same_incident" ? "Confirm same incident?" : "Confirm not related?"} pending={pending} onCancel={() => { setDecision(null); setError(""); }}>
+        <p className={styles.comparePair}>{reportReference} and {candidateReference}</p>
         <p>{decision === "same_incident"
           ? "This links both original reports under one incident reference. Each report keeps its own history and evidence."
           : "This decision will be saved. New evidence can prompt another review."}</p>
         {decision === "not_related" && <label>Reason
-          <select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>
+          <select value={reasonCode} disabled={pending} onChange={(event) => setReasonCode(event.target.value)}>
             <option value="">Select a reason</option>{reasons.map((reason) => <option key={reason.code} value={reason.code}>{reason.label}</option>)}
           </select>
         </label>}
         <label>Note {decision === "not_related" && reasons.find((reason) => reason.code === reasonCode)?.requiresNote ? "(required)" : "(optional)"}
-          <textarea value={note} maxLength={1000} onChange={(event) => setNote(event.target.value)} />
+          <textarea value={note} disabled={pending} maxLength={1000} onChange={(event) => setNote(event.target.value)} />
         </label>
-        <div className={styles.actions}><button type="button" className={styles.secondary} disabled={pending} onClick={() => setDecision(null)}>Cancel</button>
-          <button type="button" className={styles.primary} disabled={pending || (decision === "not_related" && reasons.length === 0)} onClick={saveDecision}>{pending ? "Saving…" : "Save decision"}</button></div>
-      </div>}
+        {error && <p role="alert" className={styles.error}>{error}</p>}
+        <div className={styles.actions}><button type="button" className={styles.secondary} disabled={pending} onClick={() => { setDecision(null); setError(""); }}>Cancel</button>
+          <button type="button" className={styles.primary} disabled={pending || (decision === "not_related" && reasons.length === 0)} onClick={saveDecision}>{pending ? "Saving…" : decision === "same_incident" ? "Confirm and link" : "Confirm not related"}</button></div>
+      </DecisionDialog>}
     </div>}
   </section>;
 }

@@ -59,7 +59,7 @@ export function SiteHistoryPage() {
   useEffect(() => {
     let cancelled = false;
     getDiveSites().then((items) => {
-      if (!cancelled) { setSites(items); setLoadingHistory(items.length > 0); setSiteId((current) => current ?? items[0]?.diveSiteId ?? null); }
+      if (!cancelled) { setSites(items); }
     }).catch((requestError) => {
       if (!cancelled) setError(userFacingError(requestError, "Dive sites could not be loaded."));
     }).finally(() => { if (!cancelled) setLoadingSites(false); });
@@ -74,14 +74,12 @@ export function SiteHistoryPage() {
     return () => { cancelled = true; };
   }, [siteId, retryKey]);
 
-  function selectSite(value: number) {
-    setHistory(null); setError(""); setLoadingHistory(true); setSiteId(value);
+  function selectSite(value: number | null) {
+    setHistory(null); setError(""); setLoadingHistory(value !== null); setSiteId(value);
   }
   function filterArea(value: string) {
     setArea(value); setSiteSearch("");
-    const first = sites.find((site) => !value || site.publicAreaLabel === value);
-    if (first && first.diveSiteId !== siteId) selectSite(first.diveSiteId);
-    if (!first) { setSiteId(null); setHistory(null); setLoadingHistory(false); }
+    selectSite(null);
   }
   function searchSites(value: string) {
     setSiteSearch(value);
@@ -114,7 +112,7 @@ export function SiteHistoryPage() {
           <input type="search" value={siteSearch} onChange={(event) => searchSites(event.target.value)} placeholder="Search by name" disabled={loadingSites || sites.length === 0} />
         </label>
         <label className={styles.selectLabel}>Dive site
-          <select value={filteredSites.some((site) => site.diveSiteId === siteId) ? siteId ?? "" : ""} onChange={(event) => event.target.value && selectSite(Number(event.target.value))} disabled={loadingSites || filteredSites.length === 0}>
+          <select value={filteredSites.some((site) => site.diveSiteId === siteId) ? siteId ?? "" : ""} onChange={(event) => selectSite(event.target.value ? Number(event.target.value) : null)} disabled={loadingSites || filteredSites.length === 0}>
             <option value="">Choose a dive site</option>{filteredSites.map((site) => <option key={site.diveSiteId} value={site.diveSiteId}>{site.name} · {site.publicAreaLabel}</option>)}
           </select>
         </label>

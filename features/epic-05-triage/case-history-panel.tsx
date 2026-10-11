@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { getCoordinatorCaseHistory } from "@/lib/api/coordinatorApi";
 import type { CoordinatorCase, CoordinatorHistoryItem } from "@/lib/api/types";
 import { formatDateTime } from "@/lib/format/date";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import styles from "./triage.module.css";
 
-type HistoryEvent = { title: string; date: string | null; detail?: string | null; actor?: string | null };
+type HistoryEvent = { title: string; date: string | null; detail?: string | null; actor?: string | null; evidence?: CoordinatorCase["evidence"] };
 const responseLabels = {
   monitoring_only: "Monitoring recommended",
   refer_or_share: "Shared for possible response",
@@ -20,7 +20,7 @@ function displayDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? "Date unavailable" : formatDateTime(date);
 }
 
-export function CaseHistoryPanel({ report }: { report: CoordinatorCase }) {
+export function CaseHistoryPanel({ report, renderEvidence }: { report: CoordinatorCase; renderEvidence?: (evidence: CoordinatorCase["evidence"]) => ReactNode }) {
   const lookupClosure = report.statusCode.startsWith("closed_") || report.statusCode === "referred";
   const [closure, setClosure] = useState<CoordinatorHistoryItem | null>(null);
   const [loading, setLoading] = useState(lookupClosure);
@@ -53,7 +53,7 @@ export function CaseHistoryPanel({ report }: { report: CoordinatorCase }) {
   for (const entry of report.informationExchange ?? []) {
     events.push({ title: entry.eventType === "info_requested" ? "Additional information requested"
       : entry.eventType === "info_provided" ? "Observer response received" : "Recorded case update",
-      date: entry.occurredAt, detail: entry.message, actor: entry.actorDisplayName });
+      date: entry.occurredAt, detail: entry.message, actor: entry.actorDisplayName, evidence: entry.evidence });
   }
   const decision = report.latestDecision;
   if (decision) events.push({ title: `Latest response decision: ${responseLabels[decision.responseType]}`,
@@ -71,7 +71,7 @@ export function CaseHistoryPanel({ report }: { report: CoordinatorCase }) {
   });
 
   return <section className={styles.informationExchange} aria-labelledby="recorded-case-history-heading">
-    <h2 id="recorded-case-history-heading">Recorded case history</h2>
+    <h2 id="recorded-case-history-heading">Case timeline</h2>
     <p><strong>Current status:</strong> {report.statusLabel}</p>
     <p><strong>Current owner:</strong> {report.owner.displayName}</p>
     {loading && <p role="status">Loading closure and referral history…</p>}
@@ -86,6 +86,7 @@ export function CaseHistoryPanel({ report }: { report: CoordinatorCase }) {
         {event.date && !Number.isNaN(Date.parse(event.date))
           ? <time dateTime={event.date}>{displayDate(event.date)}</time> : displayDate(event.date)}
       </small>
+      {Boolean(event.evidence?.length) && renderEvidence && <section aria-label="Photos attached to this Observer reply"><h3>Reply photos</h3>{renderEvidence(event.evidence ?? [])}</section>}
     </li>)}</ol>
     {closure?.wasReferred && <p>A recorded referral does not mean the recipient agreed to act.</p>}
     <p className={styles.muted}>This view shows the case records returned by ReefCare, including the latest response decision. Earlier decision changes may not be available here. Follow-up records are shown separately below.</p>
