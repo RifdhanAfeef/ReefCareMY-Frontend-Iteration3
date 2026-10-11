@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
+import { PhotoFileInput } from "@/components/forms/photo-file-input";
 import { getConservationActionTypes, getCoordinatorEvidence } from "@/lib/api/coordinatorApi";
 import {
   correctFollowUp, createFollowUp, createMonitoring, getFollowUps, getMonitoringConditions, setFollowUpPublication, uploadFollowUpEvidence,
@@ -459,7 +460,7 @@ export function FollowUpPanel({
         {mode !== "monitoring" && <label>{mode === "sourced_outcome" ? "What was reported *" : "Recorded outcome"}
           <textarea required={mode === "sourced_outcome"} value={outcome} onChange={(event) => setOutcome(event.target.value)} /></label>}
         <label>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
-        <label>Supporting photo (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} disabled={saving || pendingPhoto != null} /></label>
+        <div className={styles.photoField}><label htmlFor="follow-up-supporting-photo">Supporting photo (optional)</label><PhotoFileInput id="follow-up-supporting-photo" selectedCount={photo ? 1 : 0} accept="image/jpeg,image/png,image/webp" onChange={choosePhoto} disabled={saving || pendingPhoto != null} /></div>
         {photo && <SelectedPhotoPreview file={photo} previewUrl={photoPreviewUrl} disabled={saving || pendingPhoto != null} onRemove={() => updatePhoto(null)} />}
         {error && <p className={styles.error} role="alert">{error}</p>}
         {notice && <p className={styles.success} role="status">{notice}</p>}

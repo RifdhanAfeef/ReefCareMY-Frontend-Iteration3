@@ -31,14 +31,15 @@
 .addPaused { background:#f5f8f8; border:1px dashed #abc2c7; border-radius:12px; margin-top:24px; padding:18px; }
 .addPaused h3 { margin:0 0 8px; } .addPaused p { margin:0; color:#547078; }
 .form input:not([type="checkbox"]):not([type="file"]),.form select,.form textarea { width:100%; background:#fff; border:1px solid #abc2c7; border-radius:8px; padding:9px; color:#153a47; font:inherit; }
-.form textarea { min-height:80px; } .form input[type=file] { width:100%; max-width:100%; min-width:0; font:inherit; }
+.form textarea { min-height:80px; }
+.photoField { display:grid; min-width:0; gap:8px; }
 .tabs,.buttons { display:flex; gap:8px; flex-wrap:wrap; }
 .tabs button,.buttons button,.textButton,.form button { cursor:pointer; border:1px solid #297181; border-radius:8px; background:white; color:#155464; padding:9px 12px; font:inherit; font-weight:600; }
 .tabs button[aria-pressed=true],.form .save { background:#176474; color:#fff; }
 .tabs button:disabled,.form button:disabled { opacity:.5; cursor:not-allowed; }
 .form .checkbox { display:flex; align-items:center; gap:8px; }
-.notice { background:#eaf4f3; border-radius:8px; padding:10px; color:#21545f; }
-.error { color:#992326; } .success { color:#13674c; }
+.notice { min-width:0; overflow-wrap:anywhere; background:#eaf4f3; border-radius:8px; padding:10px; color:#21545f; }
+.error { overflow-wrap:anywhere; color:#992326; } .success { color:#13674c; }
 .publication { border-top:1px solid #d5e4e7; padding-top:12px; margin-top:12px; display:grid; gap:8px; }
 .publication strong { font-size:.9rem; color:#21545f; }
 .publication .textButton { justify-self:start; }
@@ -52,7 +53,7 @@
 
 .selectedPhoto { display:grid; grid-template-columns:142px minmax(0,1fr); align-items:center; min-width:0; overflow:hidden; background:#fff; border-radius:12px; }
 .selectedPhotoImage { display:block; width:100%; height:110px; object-fit:cover; border-radius:10px; }
-.selectedPhotoMeta { display:grid; gap:8px; min-width:0; padding:12px; }
+.selectedPhotoMeta { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; min-width:0; padding:12px; }
 .selectedPhotoMeta strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .selectedPhotoMeta span { color:var(--color-muted); font-size:14px; }
 .form .removePhoto { justify-self:start; padding:0; border:0; background:transparent; color:var(--color-primary-hover); font-size:14px; font-weight:800; text-decoration:underline; }

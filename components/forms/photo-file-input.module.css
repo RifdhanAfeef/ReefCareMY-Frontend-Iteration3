@@ -1,0 +1,26 @@
+.control {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.control > .button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-field);
+  color: var(--color-primary-hover);
+  background: #fff;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.control > .button:hover:not(:disabled) { background: var(--color-surface-muted); }
+.control > .button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
+.control > .button:disabled { opacity: .6; cursor: not-allowed; }
+.selection { min-width: 0; overflow-wrap: anywhere; color: var(--color-muted); font-size: .9rem; font-weight: 400; }

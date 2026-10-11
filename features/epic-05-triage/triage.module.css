@@ -881,6 +881,7 @@
 }
 
 .evidenceRecord {
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr);
   gap: 20px;
@@ -891,13 +892,18 @@
   background: var(--color-surface-muted);
 }
 
+.evidenceRecord > div { min-width: 0; }
+
 .compactDetails {
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   margin: 0;
 }
 
 .compactDetails > div {
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(100px, 0.45fr) minmax(0, 1fr);
   gap: 10px;
@@ -910,6 +916,7 @@
 }
 
 .compactDetails dd {
+  min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }

@@ -373,6 +373,7 @@
 
 .replyPhotoMeta {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   min-width: 0;
   padding: 12px;
@@ -408,6 +409,8 @@
 
 .responseError,
 .responseSuccess {
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin: 0;
   padding: 12px 14px;
   border-radius: var(--radius-field);

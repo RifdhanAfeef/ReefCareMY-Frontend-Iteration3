@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { DisplayDateInput } from "@/components/forms/display-date-input";
+import { PhotoFileInput } from "@/components/forms/photo-file-input";
 import {
   createConservationAction,
   getConservationActions,
@@ -431,8 +432,8 @@ export function ConservationActionPanel({
                 <p>Attach one image that supports this planned or completed action.</p>
                 <small>JPG, PNG or WebP. Maximum 10 MB.</small>
               </div>
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseEvidence} disabled={submitting} aria-label="Choose action evidence image" />
-              {evidenceFile && <div className={styles.selectedEvidence}><span>{evidenceFile.name}</span><button type="button" onClick={() => setEvidenceFile(null)} disabled={submitting}>Remove</button></div>}
+              <PhotoFileInput selectedCount={evidenceFile ? 1 : 0} accept="image/jpeg,image/png,image/webp" onChange={chooseEvidence} disabled={submitting} aria-label="Choose action evidence image" />
+              {evidenceFile && <div className={styles.selectedEvidence}><span title={evidenceFile.name}>{evidenceFile.name}</span><button type="button" onClick={() => setEvidenceFile(null)} disabled={submitting}>Remove</button></div>}
             </section>
 
             {pendingEvidence && <aside className={styles.evidenceRetry} role="alert"><strong>Evidence still needs uploading</strong><p>{pendingEvidence.file.name} belongs to the action that was just recorded.</p><button type="button" onClick={() => void retryEvidenceUpload()} disabled={submitting}>{submitting ? "Uploading…" : "Retry evidence upload"}</button></aside>}

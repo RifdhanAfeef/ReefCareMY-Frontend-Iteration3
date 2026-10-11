@@ -353,7 +353,9 @@
 }
 
 .evidenceUpload {
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 18px;
   border: 1px solid var(--color-border);
@@ -375,27 +377,8 @@
   margin-top: 5px;
 }
 
-.evidenceUpload input[type="file"] {
-  width: 100%;
-  color: var(--color-muted);
-  font: inherit;
-  font-size: 0.9rem;
-}
-
-.evidenceUpload input[type="file"]::file-selector-button {
-  min-height: 42px;
-  margin-right: 12px;
-  padding: 8px 14px;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-field);
-  color: var(--color-primary-hover);
-  background: #fff;
-  font: inherit;
-  font-weight: 750;
-  cursor: pointer;
-}
-
 .selectedEvidence {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -406,11 +389,14 @@
 }
 
 .selectedEvidence span {
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.selectedEvidence button { flex-shrink: 0; }
 
 .selectedEvidence button,
 .evidenceRetry button {
@@ -425,6 +411,8 @@
 }
 
 .evidenceRetry {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 14px 16px;
   border: 1px solid #d7c49b;
   background: #fff8e9;
@@ -442,6 +430,7 @@
 }
 
 .formError {
+  overflow-wrap: anywhere;
   color: var(--color-danger-ink);
   background: var(--color-danger-soft);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { PhotoFileInput } from "@/components/forms/photo-file-input";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import {
@@ -268,7 +269,7 @@ export function ReportDetail({ reportReference }: { reportReference: string }) {
               <small>Written details are required. Photos are optional.</small>
             </div>
             <label htmlFor="information-response-photos">Additional photos (optional)</label>
-            <input id="information-response-photos" type="file" multiple
+            <PhotoFileInput id="information-response-photos" multiple selectedCount={responsePhotos.length}
               accept="image/jpeg,image/png,image/webp" onChange={choosePhotos}
               disabled={submittingResponse} aria-describedby="information-response-photos-help"
               aria-invalid={Boolean(photoError)} />
