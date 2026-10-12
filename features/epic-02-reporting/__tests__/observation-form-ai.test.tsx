@@ -134,9 +134,12 @@ describe("automatic Smart Report Structuring", () => {
     expect(screen.getByRole("list", { name: "Report progress" })).toBeInTheDocument();
     expect(screen.getByText("Observation").closest("li")).toHaveAttribute("aria-current", "step");
     expect(screen.queryByRole("button", { name: "Check my description" })).not.toBeInTheDocument();
+    await act(async () => { await Promise.resolve(); });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(800);
+      await vi.advanceTimersByTimeAsync(1299);
     });
+    expect(structureReportDescription).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
 
     expect(structureReportDescription).toHaveBeenCalledWith(
       "A large fishing net is tangled around coral at about 12 metres.",
@@ -173,7 +176,7 @@ describe("automatic Smart Report Structuring", () => {
     render(<ObservationForm />);
     await act(async () => { await Promise.resolve(); });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(800);
+      await vi.advanceTimersByTimeAsync(1300);
     });
 
     expect(updateReportDraft).toHaveBeenCalledWith(expect.objectContaining({
@@ -618,7 +621,7 @@ describe("automatic Smart Report Structuring", () => {
     expect(screen.getByRole("img", { name: "Photo suggestion decision confirmed" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: /^Description \*/ }), { target: { value: "A fishing net was tangled around the coral." } });
     applyChange();
-    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
     expect(updateReportDraft).toHaveBeenLastCalledWith(expect.objectContaining({
       visualRecognition: expect.objectContaining({ resolution: "unresolved" }),
       aiSuggestions: [expect.objectContaining({ status: "unresolved", conflict: true })],
@@ -662,7 +665,7 @@ describe("automatic Smart Report Structuring", () => {
       suggestions: [{ field: "possible_threat", label: "Possible threat", suggestedValue: "Coral bleaching" }],
       missingFields: [], followUpQuestions: [], warnings: [], requiresUserConfirmation: true });
     render(<ObservationForm />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
     const changes = updateReportDraft.mock.lastCall![0];
     expect(changes).not.toHaveProperty("visualRecognition");
     expect(changes.aiSuggestions).toEqual([expect.objectContaining({ status: "confirmed", conflict: false })]);
@@ -698,7 +701,7 @@ describe("automatic Smart Report Structuring", () => {
         fireEvent.change(screen.getByRole("textbox", { name: /^Description/ }), { target: { value: description } });
         view.rerender(<ObservationForm />);
         await act(async () => { await Promise.resolve(); });
-        await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
         view.rerender(<ObservationForm />);
       },
       refresh() { view.rerender(<ObservationForm />); },
@@ -788,7 +791,7 @@ describe("automatic Smart Report Structuring", () => {
     let finish!: (value: Awaited<ReturnType<typeof structureReportDescription>>) => void;
     vi.mocked(structureReportDescription).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     await act(async () => { await Promise.resolve(); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Estimated depth (m)" }), { target: { value: "3" } });
     draft.refresh();
     fireEvent.change(screen.getByRole("textbox", { name: "Site reference" }), { target: { value: "My reef" } });

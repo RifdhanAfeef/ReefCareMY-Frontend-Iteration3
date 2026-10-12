@@ -290,7 +290,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
     setAssistantMessage("AI suggestions will update automatically when you pause typing.");
     const timeoutId = window.setTimeout(() => {
       void runSmartStructuring(description, requestId);
-    }, 800);
+    }, 1300);
     return () => window.clearTimeout(timeoutId);
   }, [reportDraft.description, runSmartStructuring]);
 
