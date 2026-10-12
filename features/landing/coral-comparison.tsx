@@ -56,7 +56,6 @@ export function CoralComparison({ className }: { className?: string }) {
     </div>
     <figcaption className={styles.caption}>
       <p id={helpId}>Drag to compare healthy and bleached coral.</p>
-      <p className={styles.credit}>Illustration</p>
     </figcaption>
   </figure>;
 }
