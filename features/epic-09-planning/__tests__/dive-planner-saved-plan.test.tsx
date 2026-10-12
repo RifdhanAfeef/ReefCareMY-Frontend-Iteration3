@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAreaDates, getAreaSites } from "@/lib/api/planningApi";
 import { getPlan, listPlans } from "@/lib/api/plansApi";
 import { addDays, localToday } from "../planning-data";
+import { inputDateToDisplayValue } from "@/lib/format/date";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -76,6 +77,32 @@ describe("saved dive plans", () => {
       retrievedAt: "2026-10-04T09:10:00Z",
       sites: [],
     });
+  });
+
+  it("starts today with seven days and retains the 14-day comparison limit", async () => {
+    vi.stubEnv("NEXT_PUBLIC_E9_DATA_SOURCE", "api");
+    vi.resetModules();
+    const { DivePlanner } = await import("../dive-planner");
+    render(<DivePlanner />);
+    const today = localToday();
+    const from = screen.getByRole("textbox", { name: "From, format dd/mm/yyyy" });
+    const to = screen.getByRole("textbox", { name: "To, format dd/mm/yyyy" });
+    expect(from).toHaveValue(inputDateToDisplayValue(today));
+    expect(to).toHaveValue(inputDateToDisplayValue(addDays(today, 6)));
+    await waitFor(() => expect(getAreaDates).toHaveBeenCalledWith("perhentian", today, addDays(today, 6)));
+
+    fireEvent.change(to, { target: { value: inputDateToDisplayValue(addDays(today, 14)) } });
+    fireEvent.click(screen.getByRole("button", { name: /Compare dates/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose up to 14 days, including the start date.");
+
+    fireEvent.change(to, { target: { value: inputDateToDisplayValue(addDays(today, 13)) } });
+    fireEvent.click(screen.getByRole("button", { name: /Compare dates/ }));
+    await waitFor(() => expect(getAreaDates).toHaveBeenCalledWith("perhentian", today, addDays(today, 13)));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.change(to, { target: { value: inputDateToDisplayValue(addDays(today, -1)) } });
+    fireEvent.click(screen.getByRole("button", { name: /Compare dates/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose an end date on or after the start date.");
   });
 
   it("reloads the saved intent on reopen and requests current conditions for it", async () => {

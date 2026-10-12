@@ -83,6 +83,26 @@ export function dateLabel(date: string, long = false) {
 export function signalValue(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
+// Suggestions use the returned band and forecast facts; they do not reclassify live data.
+export function planningSuggestion(assessment: Assessment): string {
+  const conditions = [
+    assessment.waves !== null ? `waves of ${signalValue(assessment.waves)} m` : null,
+    assessment.wind !== null ? `wind of ${signalValue(assessment.wind)} km/h` : null,
+  ].filter(Boolean).join(" and ");
+  if (!conditions) return assessment.reason;
+  const forecast = `The forecast shows ${conditions}.`;
+  const rain = assessment.rain !== null ? ` Rain chance is ${assessment.rain}%.` : "";
+  switch (assessment.band) {
+    case "more_favourable":
+      return `Consider visiting on this date for calmer wave and wind conditions. ${forecast}${rain}`;
+    case "mixed":
+      return `Consider this date with caution, or choose a calmer day. Wave or wind conditions may make boat travel, entry and exit less comfortable. ${forecast}${rain}`;
+    case "less_favourable":
+      return `Consider choosing a calmer date. Higher waves or stronger wind may make boat travel, entry and exit more challenging. ${forecast}${rain}`;
+    default:
+      return assessment.reason;
+  }
+}
 // Provider timestamps are shown as a Malaysia local time, e.g. "6 Oct 2026, 4:20 pm MYT".
 export function retrievedLabel(value: string | null): string | null {
   if (!value) return null;

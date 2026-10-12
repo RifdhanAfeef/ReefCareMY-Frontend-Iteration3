@@ -304,13 +304,61 @@
 }
 
 /* Date comparison */
-.dates {
+.dateNavigation {
+  --date-card-min-width: 180px;
+  --date-card-gap: 12px;
+  animation: dateRefresh 280ms ease-out;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+@keyframes dateRefresh {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.dateArrow {
   display: grid;
-  /* 180px keeps "More favourable" / "Less favourable" on one line in the card. */
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 48px;
+  padding: 0;
+  color: var(--color-primary);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+}
+.dateArrow:hover:not(:disabled) {
+  background: var(--color-info);
+}
+.dateArrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.dates {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  /* Match the outline padding so snapping the first card does not scroll it off the left edge. */
+  scroll-padding-inline: 3px;
+  scroll-behavior: smooth;
+  /* Leave space for the selected outline and the horizontal scrollbar. */
+  padding: 3px 3px 12px;
+  gap: var(--date-card-gap);
 }
 .dateCard {
+  /* Short ranges share the whole row; longer ranges retain readable card widths. */
+  flex: 1 0 var(--date-card-min-width);
+  scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -357,6 +405,20 @@
 .dateCount {
   color: var(--color-muted);
   font-size: 14px;
+}
+.bandGuide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.bandGuide dt {
+  color: var(--color-ink);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.bandGuide dd {
+  margin: 0;
 }
 .breakdown {
   width: 100%;
@@ -1134,9 +1196,6 @@
   .tabNote {
     display: none;
   }
-  .dates {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
   .planActions {
     flex-wrap: wrap;
     max-width: 200px;
@@ -1190,14 +1249,14 @@
   .sectionHeading h2 {
     font-size: 24px;
   }
-  .sectionHeading > .smallTag {
-    display: none;
+  .sectionHeading:has(> .smallTag) {
+    flex-wrap: wrap;
   }
-  .dates {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dateNavigation {
+    --date-card-min-width: 160px;
   }
-  .dateCard:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+  .bandGuide {
+    grid-template-columns: 1fr;
   }
   .contentGrid {
     grid-template-columns: 1fr;
@@ -1271,24 +1330,15 @@
   .search {
     grid-template-columns: minmax(0, 1fr);
   }
-  .dates {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .dateNavigation {
+    --date-card-gap: 8px;
   }
   .dateCard {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px 12px;
+    gap: 8px;
     padding: 12px 14px;
   }
-  .dateCard .pill {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .breakdown,
-  .dateCount {
-    grid-column: 1 / -1;
+  .dateArrow {
+    flex-basis: 32px;
   }
   .siteGrid {
     grid-template-columns: 1fr;
@@ -1318,6 +1368,12 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .dateNavigation {
+    animation: none;
+  }
+  .dates {
+    scroll-behavior: auto;
+  }
   .dateCard,
   .siteCard {
     transition: none;

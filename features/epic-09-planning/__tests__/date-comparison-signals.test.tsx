@@ -1,8 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { DateComparison } from "../planning-panels";
 import type { DaySummaryView } from "../planning-source";
-import type { Assessment } from "../planning-data";
+import { dateRange, type Assessment } from "../planning-data";
 
 const date = "2026-10-06";
 const summary = (signals: DaySummaryView["signals"]): DaySummaryView => ({
@@ -12,6 +12,61 @@ const summary = (signals: DaySummaryView["signals"]): DaySummaryView => ({
   breakdown: { more_favourable: 0, mixed: 0, less_favourable: 4 },
   signals,
   reasons: ["The least favourable assessable site determines the area band."],
+});
+
+describe("forecast strip", () => {
+  const comparison = (dates: string[]) => (
+    <DateComparison dates={dates}
+      summaries={{ status: "ready", data: {} }} onRetry={() => {}}
+      siteAssessments={[]} total={4} selected={dates[0]} onSelect={() => {}} mode="api" />
+  );
+  it.each([1, 5, 7, 14])("labels a %i-day comparison with a maximum of seven", (count) => {
+    const dates = dateRange("2026-10-06", `2026-10-${String(5 + count).padStart(2, "0")}`);
+    render(comparison(dates));
+    expect(screen.getByText(`${Math.min(count, 7)}-day forecast`)).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { pressed: false })).toHaveLength(count - 1);
+  });
+  it("scrolls in either direction and disables arrows at the ends", () => {
+    const view = render(comparison(dateRange("2026-10-06", "2026-10-19")));
+    const strip = screen.getByRole("group", { name: "Comparison dates" });
+    Object.defineProperties(strip, { clientWidth: { value: 600 }, scrollWidth: { value: 1500 } });
+    const scrollBy = vi.fn(({ left }: { left: number }) => {
+      strip.scrollLeft = Math.max(0, Math.min(900, strip.scrollLeft + left));
+      fireEvent.scroll(strip);
+    });
+    Object.defineProperty(strip, "scrollBy", { value: scrollBy });
+    fireEvent(window, new Event("resize"));
+    const earlier = screen.getByRole("button", { name: "Show earlier dates" });
+    const later = screen.getByRole("button", { name: "Show later dates" });
+    expect(earlier).toBeDisabled();
+    expect(later).toBeEnabled();
+    fireEvent.click(later);
+    expect(scrollBy).toHaveBeenCalledWith({ left: 600, behavior: "auto" });
+    expect(earlier).toBeEnabled();
+    fireEvent.click(later);
+    expect(later).toBeDisabled();
+    fireEvent.click(earlier);
+    expect(scrollBy).toHaveBeenLastCalledWith({ left: -600, behavior: "auto" });
+    view.rerender(comparison(dateRange("2026-10-06", "2026-10-10")));
+    expect(screen.getByRole("group", { name: "Comparison dates" }).scrollLeft).toBe(0);
+  });
+  it("hides arrows when dates fit in the full row and updates after resizing", () => {
+    render(comparison(dateRange("2026-10-06", "2026-10-09")));
+    const strip = screen.getByRole("group", { name: "Comparison dates" });
+    let availableWidth = 1000;
+    Object.defineProperty(strip.parentElement, "clientWidth", { get: () => availableWidth });
+    Object.defineProperties(strip, { clientWidth: { value: 500 }, scrollWidth: { value: 762 } });
+    fireEvent(window, new Event("resize"));
+    expect(screen.queryByRole("button", { name: "Show earlier dates" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show later dates" })).not.toBeInTheDocument();
+    availableWidth = 600;
+    fireEvent(window, new Event("resize"));
+    expect(screen.getByRole("button", { name: "Show earlier dates" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Show later dates" })).toBeEnabled();
+    availableWidth = 1000;
+    fireEvent(window, new Event("resize"));
+    expect(screen.queryByRole("button", { name: "Show later dates" })).not.toBeInTheDocument();
+  });
 });
 const site = (waves: number | null, wind: number | null): Assessment => ({
   band: "less_favourable",

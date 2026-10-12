@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { forecastProvenance, Signals } from "../planning-panels";
-import { retrievedLabel, signalValue, type Assessment } from "../planning-data";
+import { planningSuggestion, retrievedLabel, signalValue, type Assessment } from "../planning-data";
 
 const assessment = (overrides: Partial<Assessment> = {}): Assessment => ({
   band: "mixed",
@@ -46,7 +46,7 @@ describe("signal values", () => {
 describe("forecast provenance", () => {
   it("names the provider and shows a readable Malaysia retrieval time", () => {
     expect(forecastProvenance(assessment(), false)).toBe(
-      "Source: Open-Meteo · retrieved 6 Oct 2026, 4:20 pm MYT · rule i3-draft-1",
+      "Source: Open-Meteo · retrieved 6 Oct 2026, 4:20 pm MYT",
     );
   });
 
@@ -66,5 +66,22 @@ describe("forecast provenance", () => {
   it("ignores missing or malformed timestamps", () => {
     expect(retrievedLabel(null)).toBeNull();
     expect(retrievedLabel("unknown")).toBeNull();
+  });
+});
+
+describe("condition planning suggestions", () => {
+  it.each(["more_favourable", "mixed", "less_favourable"] as const)(
+    "uses forecast facts in a suggestion for %s", (band) => {
+      const text = planningSuggestion(assessment({ band }));
+      expect(text).toMatch(/^Consider /);
+      expect(text).toContain("0.3 m");
+      expect(text).toContain("19.1 km/h");
+      expect(text).toContain("90%");
+      expect(text).not.toContain("threshold");
+    },
+  );
+  it("retains the reason when conditions cannot be assessed", () => {
+    const item = assessment({ band: "unavailable", waves: null, wind: null, rain: null, reason: "Forecast unavailable." });
+    expect(planningSuggestion(item)).toBe("Forecast unavailable.");
   });
 });

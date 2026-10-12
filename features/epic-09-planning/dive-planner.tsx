@@ -106,12 +106,12 @@ export function DivePlanner() {
   const [today] = useState(() => localToday());
   const initialDate = validDate(params.get("date") ?? "")
     ? params.get("date")!
-    : addDays(today, 1);
+    : today;
   const [area, setArea] = useState<Area>(initialArea);
   const [from, setFrom] = useState(initialDate);
-  const [to, setTo] = useState(addDays(initialDate, 4));
+  const [to, setTo] = useState(addDays(initialDate, FORECAST_HORIZON_DAYS));
   const [dates, setDates] = useState(() =>
-    dateRange(initialDate, addDays(initialDate, 4)),
+    dateRange(initialDate, addDays(initialDate, FORECAST_HORIZON_DAYS)),
   );
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [selectedSites, setSelectedSites] = useState<string[]>(
@@ -236,7 +236,11 @@ export function DivePlanner() {
     const nextDates = dateRange(from, to);
     if (!nextDates.length) {
       setError(
-        "Choose an end date on or after the start date, within a 14-day window.",
+        !validDate(from) || !validDate(to)
+          ? "Enter valid start and end dates."
+          : to < from
+            ? "Choose an end date on or after the start date."
+            : "Choose up to 14 days, including the start date.",
       );
       return;
     }

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronLeft,
   ChevronRight,
   CloudRain,
   ExternalLink,
@@ -14,13 +15,14 @@ import {
   Waves,
   Wind,
 } from "lucide-react";
-import { useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReefSite } from "@/features/epic-02-reef-explorer/types";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import {
   dateLabel,
   labels,
   months,
+  planningSuggestion,
   retrievedLabel,
   signalValue,
   splitBriefLeadIn,
@@ -106,13 +108,12 @@ export function Signals({ assessment }: { assessment: Assessment }) {
     </div>
   );
 }
-// Source, retrieval time and rule version, omitting any part the provider did not supply.
+// Keep provider attribution and retrieval time; internal rule versions are not user-facing.
 export function forecastProvenance(assessment: Assessment, sample: boolean): string {
   const retrieved = retrievedLabel(assessment.retrievedAt);
   return [
     sample ? "Sample forecast fixture" : `Source: ${assessment.source ?? "forecast provider"}`,
     retrieved ? `retrieved ${retrieved}` : null,
-    assessment.ruleVersion ? `rule ${assessment.ruleVersion}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -219,6 +220,53 @@ export function DateComparison({
   mode: PlanningSource["mode"];
 }) {
   const sample = mode === "sample";
+  const stripId = useId();
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [scrollState, setScrollState] = useState({ overflow: false, previous: false, next: false });
+  const forecastDays = Math.min(dates.length, FORECAST_HORIZON_DAYS + 1);
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    const navigation = navigationRef.current;
+    if (!strip || !navigation) return;
+    const update = () => {
+      const css = getComputedStyle(strip);
+      const minimumCardWidth = parseFloat(css.getPropertyValue("--date-card-min-width")) || 180;
+      const gap = parseFloat(css.columnGap) || 12;
+      const padding = (parseFloat(css.paddingLeft) || 3) + (parseFloat(css.paddingRight) || 3);
+      // Measure the full row before reserving arrow space, avoiding a show/hide loop.
+      const minimumRowWidth = dates.length * minimumCardWidth + Math.max(0, dates.length - 1) * gap + padding;
+      const overflow = navigation.clientWidth > 0
+        ? minimumRowWidth > navigation.clientWidth + 1
+        : strip.scrollWidth > strip.clientWidth + 1;
+      setScrollState({
+        overflow,
+        previous: overflow && strip.scrollLeft > 1,
+        next: overflow && strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1,
+      });
+    };
+    // Reset before paint without animating from the previous range's scroll position.
+    const previousBehavior = strip.style.scrollBehavior;
+    strip.style.scrollBehavior = "auto";
+    strip.scrollLeft = 0;
+    strip.style.scrollBehavior = previousBehavior;
+    update();
+    strip.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    observer?.observe(strip);
+    observer?.observe(navigation);
+    return () => {
+      strip.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      observer?.disconnect();
+    };
+  }, [dates]);
+  function scrollDates(direction: number) {
+    const strip = stripRef.current;
+    if (!strip) return;
+    strip.scrollBy({ left: direction * strip.clientWidth, behavior: "auto" });
+  }
   const summaryFor = (date: string): DaySummaryView =>
     (summaries.status === "ready" ? summaries.data[date] : undefined) ?? {
       band: "unavailable",
@@ -250,7 +298,7 @@ export function DateComparison({
           <p>Pick a day to see conditions at each site.</p>
         </div>
         <span className={styles.smallTag}>
-          {sample ? "7-day sample forecast" : "7-day forecast"}
+          {forecastDays}-day {sample ? "sample " : ""}forecast
         </span>
       </div>
       {summaries.status === "error" && (
@@ -260,7 +308,12 @@ export function DateComparison({
           onRetry={onRetry}
         />
       )}
-      <div className={styles.dates}>
+      <div key={dates.join(":")} ref={navigationRef} className={styles.dateNavigation}>
+        {scrollState.overflow && <button type="button" className={styles.dateArrow} aria-label="Show earlier dates"
+          aria-controls={stripId} disabled={!scrollState.previous} onClick={() => scrollDates(-1)}>
+          <ChevronLeft size={22} aria-hidden="true" />
+        </button>}
+      <div id={stripId} ref={stripRef} className={styles.dates} role="group" aria-label="Comparison dates">
         {dates.map((date) => {
           const summary = summaryFor(date);
           const loading = summaries.status === "loading";
@@ -303,6 +356,11 @@ export function DateComparison({
           );
         })}
       </div>
+        {scrollState.overflow && <button type="button" className={styles.dateArrow} aria-label="Show later dates"
+          aria-controls={stripId} disabled={!scrollState.next} onClick={() => scrollDates(1)}>
+          <ChevronRight size={22} aria-hidden="true" />
+        </button>}
+      </div>
       <div className={styles.dateFeedback}>
         <div role="status" aria-live="polite" aria-atomic="true">
           <strong>
@@ -337,6 +395,12 @@ export function DateComparison({
       </div>
       <details className={styles.details}>
         <summary>How are these conditions assessed?</summary>
+        <dl className={styles.bandGuide}>
+          <div><dt>More favourable</dt><dd>Calmer forecast wave and wind conditions. This date may be more comfortable for planning a visit.</dd></div>
+          <div><dt>Mixed</dt><dd>Wave height or wind speed is above the calmer range, without reaching the less favourable range. Consider visiting with caution or choosing a calmer date.</dd></div>
+          <div><dt>Less favourable</dt><dd>Higher waves or stronger wind. Consider another date, as boat travel, entry and exit may be more challenging.</dd></div>
+        </dl>
+        <p>These labels describe forecast wave and wind conditions. Rain chance is shown separately and does not determine the label.</p>
         {signalText && <p>Area daily maximum: {signalText}.</p>}
         {current.reasons.length > 0 && (
           <ul className={styles.dateReasons}>
@@ -348,7 +412,7 @@ export function DateComparison({
         {sample ? (
           <>
             <p>
-              Illustrative rule prototype-v1: wave height ≤ 0.8 m and wind ≤ 12 km/h
+              In the sample assessment: wave height ≤ 0.8 m and wind ≤ 12 km/h
               → more favourable; wave height &gt; 1.5 m or wind &gt; 20 km/h → less
               favourable; otherwise mixed. The area band is the least favourable of
               assessable sites. It is not one area-wide measurement.
@@ -363,7 +427,7 @@ export function DateComparison({
           <>
             <p>
               Each site is assessed from forecast wave height and wind speed. The
-              rule version and the reason for each result appear on the site
+              forecast values and planning suggestions appear on the site
               cards. The area band is the least favourable of assessable sites. It
               is not one area-wide measurement.
             </p>
@@ -457,7 +521,7 @@ export function SiteCard({
           <>
             <BandPill band={assessment.band} />
             <Signals assessment={assessment} />
-            <p className={styles.siteReason}>{assessment.reason}</p>
+            <p className={styles.siteReason}>{planningSuggestion(assessment)}</p>
           </>
         ) : (
           <p className={styles.siteReason} role="status">
@@ -547,7 +611,7 @@ export function BriefPanel({
           <>
             <BandPill band={assessment.band} />
             <Signals assessment={assessment} />
-            <p>{assessment.reason}</p>
+            <p>{planningSuggestion(assessment)}</p>
             <p className={styles.source}>
               {forecastProvenance(assessment, sample)}
             </p>
