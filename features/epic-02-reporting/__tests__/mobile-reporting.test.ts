@@ -27,4 +27,18 @@ describe("report validation feedback", () => {
   it("provides useful next steps even without structured field errors", () => {
     expect(reportSubmissionError(new ApiError("Invalid report", 422))).toContain("Check your observation details, dive location and photographs");
   });
+  it("does not claim a photo is oversized when validation identifies only the photo field", () => {
+    const message = reportSubmissionError(new ApiError("Invalid photo", 422, null, [{ path: ["body", "photos", 0], type: "value_error" }]));
+    expect(message).toContain("A photograph was rejected");
+    expect(message).not.toContain("10 MB");
+    expect(message).not.toContain("larger");
+  });
+  it("distinguishes capture metadata from photo-file rejection", () => {
+    const message = reportSubmissionError(new ApiError("Invalid metadata", 422, null, [{ path: ["payload", "evidenceMetadata", 0, "capturedAt"], type: "datetime_parsing" }]));
+    expect(message).toContain("Photo capture time");
+    expect(message).not.toContain("different JPG");
+  });
+  it.each([new TypeError("Failed to fetch"), new ApiError("Timeout", 408), new ApiError("Server failure", 500)])("asks the observer to check for an existing report when the outcome is unknown: %s", (error) => {
+    expect(reportSubmissionError(error)).toContain("Check My Reports before trying again");
+  });
 });

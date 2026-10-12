@@ -6,6 +6,7 @@ import { getThreatCategories } from "@/lib/api/referenceApi";
 import { clearDraftPhotos, loadDraftPhotos } from "../draft-storage";
 import { ReportReview } from "../report-review";
 import type { ReportPhotoMetadata } from "../types";
+import { ApiError } from "@/lib/api/client";
 
 const updateReportDraft = vi.hoisted(() => vi.fn());
 const push = vi.hoisted(() => vi.fn());
@@ -127,6 +128,41 @@ it("still navigates to confirmation when local photo cleanup fails after API suc
   fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
   await waitFor(() => expect(push).toHaveBeenCalled());
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("shows confirmation when local caching throws a TypeError after the server accepts a report", async () => {
+  const storage = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new TypeError("Storage unavailable"); });
+  try {
+    render(<ReportReview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Report submitted");
+    expect(submitReport).toHaveBeenCalledTimes(1);
+  } finally { storage.mockRestore(); }
+});
+
+it("keeps the draft and links to My Reports after a submission connection failure", async () => {
+  vi.mocked(submitReport).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  render(<ReportReview />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Submission not confirmed");
+  expect(screen.getByRole("link", { name: "Check My Reports" })).toHaveAttribute("href", "/my-reports");
+  expect(screen.getByRole("heading", { name: "Observation summary" })).toBeInTheDocument();
+  expect(clearDraftPhotos).not.toHaveBeenCalled();
+  expect(push).not.toHaveBeenCalled();
+});
+
+it("shows photo rejection without unsupported file-size advice", async () => {
+  vi.mocked(submitReport).mockRejectedValueOnce(new ApiError("Invalid photo", 422, null, [{ path: ["body", "photos", 0], type: "value_error" }]));
+  render(<ReportReview />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("A photograph was rejected");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("10 MB");
+  expect(clearDraftPhotos).not.toHaveBeenCalled();
 });
 
 it("accepts all non-conflicting AI suggestions together at final review", async () => {

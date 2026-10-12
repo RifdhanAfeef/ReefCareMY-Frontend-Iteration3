@@ -21,7 +21,7 @@ import { ReportProgress } from "./report-progress";
 import { formatCompletenessItem } from "./completeness-display";
 import { saveSubmittedStructuredDetails } from "./submitted-structured-details";
 import { confidenceLabel } from "./visual-recognition-state";
-import { reportSubmissionError } from "./report-submission-error";
+import { isSubmissionOutcomeUnknown, reportSubmissionError } from "./report-submission-error";
 
 type ReviewPhoto = StoredDraftPhoto & { previewUrl: string };
 
@@ -34,6 +34,7 @@ export function ReportReview() {
   const [confirmationUrl, setConfirmationUrl] = useState("");
   const submissionInProgress = useRef(false);
   const [submissionError, setSubmissionError] = useState("");
+  const [submissionOutcomeUnknown, setSubmissionOutcomeUnknown] = useState(false);
   const [photosLoaded, setPhotosLoaded] = useState(false);
   const [backendReview, setBackendReview] = useState<ReportReviewResponse | null>(null);
   const [reviewError, setReviewError] = useState("");
@@ -209,7 +210,6 @@ export function ReportReview() {
     try {
       const payload = buildReportSubmissionPayload(reportWithEvidence, locationDraft);
       const result = await submitReportApi(payload, photos.map((photo) => photo.file));
-      saveSubmittedStructuredDetails(result.reportReference, reportDraft);
       const query = new URLSearchParams({
         reportReference: result.reportReference,
         status: result.status,
@@ -219,12 +219,15 @@ export function ReportReview() {
       });
       const destination = `/report-a-reef/confirmation?${query.toString()}`;
       setConfirmationUrl(destination);
+      // Optional local caching cannot turn an accepted report into a failure.
+      try { saveSubmittedStructuredDetails(result.reportReference, reportDraft); } catch { /* Confirmation remains available. */ }
       // A local cleanup failure cannot undo a successful server submission.
       await clearDraftPhotos().catch(() => undefined);
       resetReportDraft();
       router.push(destination);
     } catch (error) {
       setSubmissionError(reportSubmissionError(error));
+      setSubmissionOutcomeUnknown(isSubmissionOutcomeUnknown(error));
       setSubmitting(false);
       submissionInProgress.current = false;
     }
@@ -242,7 +245,7 @@ export function ReportReview() {
       <ReportProgress current={3} />
       {missingItems.length > 0 && <section className={styles.errorBox} role="alert"><strong>Complete the report before submitting</strong><p>Missing: {missingItems.join(", ")}.</p><Link className={styles.textButton} href="/report-a-reef">Return to observation details</Link></section>}
       {photoLoadFailed && <section className={styles.errorBox}><strong>Photographs could not be restored</strong><p>Return to the observation form and select the evidence again.</p></section>}
-      {submissionError && <section className={styles.errorBox} role="alert"><strong>Report not submitted</strong><p>{submissionError}</p><div className={styles.actions}><Link className={styles.textButton} href="/report-a-reef">Edit observation</Link><Link className={styles.textButton} href="/report-a-reef/location">Check dive location</Link></div></section>}
+      {submissionError && <section className={styles.errorBox} role="alert"><strong>{submissionOutcomeUnknown ? "Submission not confirmed" : "Report not submitted"}</strong><p>{submissionError}</p><div className={styles.actions}>{submissionOutcomeUnknown && <Link className={styles.textButton} href="/my-reports">Check My Reports</Link>}<Link className={styles.textButton} href="/report-a-reef">Edit observation</Link><Link className={styles.textButton} href="/report-a-reef/location">Check dive location</Link></div></section>}
       {reviewing && <section className={styles.infoBox} role="status"><strong>Checking report completeness…</strong><p>Required fields, suggestions and location guidance are being checked.</p></section>}
       {reviewError && <section className={styles.errorBox} role="alert"><strong>Server review unavailable</strong><p>{reviewError}</p></section>}
       {unresolvedSuggestions.length > 0 && <section className={styles.warningBox} role="status"><strong>AI-assisted details need your review</strong><p>Resolve the highlighted fields below before submitting.</p></section>}
