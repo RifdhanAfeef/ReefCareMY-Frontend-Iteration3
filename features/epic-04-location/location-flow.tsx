@@ -163,6 +163,7 @@ export function LocationFlow() {
   } = locationDraft;
   const [sessionError, setSessionError] = useState("");
   const [dateError, setDateError] = useState("");
+  const [endTimeError, setEndTimeError] = useState("");
   const [confidenceError, setConfidenceError] = useState("");
   const [diveSites, setDiveSites] = useState<DiveSiteReference[]>([]);
   const [siteLoadError, setSiteLoadError] = useState("");
@@ -315,11 +316,13 @@ export function LocationFlow() {
 
   const createSession = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setDateError("");
+    setEndTimeError("");
     if (!form.site.trim()) { setSessionError("Enter or select a named dive site."); return; }
     setSessionError("");
     if (!isValidDisplayDate(form.date)) { setDateError("Enter the date in dd/mm/yyyy format, for example 26/08/2026."); return; }
     if (isFutureDisplayDate(form.date)) { setDateError("Dive date cannot be in the future."); return; }
-    if (form.start && form.end && form.end <= form.start) { setDateError("Approximate end time must be after the start time."); return; }
+    if (form.start && form.end && form.end <= form.start) { setEndTimeError("End time must be after the start time."); return; }
     const selectedSite = diveSites.find((item) => String(item.diveSiteId) === form.site);
     if (!selectedSite) { setSessionError("Select a named dive site from the list."); return; }
     setSavingSession(true);
@@ -448,7 +451,7 @@ export function LocationFlow() {
         <label className={styles.field}>Dive site *<span>From ReefCare&apos;s list of named sites</span><select value={form.site} disabled={loadingReferences || diveSites.length === 0} onChange={(event) => { updateForm({ site: event.target.value }); setSessionError(""); }} aria-invalid={Boolean(sessionError)} aria-describedby={sessionError ? "site-error" : undefined}><option value="">{loadingReferences ? "Loading dive sites…" : "Select a dive site"}</option>{diveSites.map((site) => <option value={site.diveSiteId} key={site.diveSiteId}>{site.name} — {site.publicAreaLabel}</option>)}</select></label>
         <label className={styles.field}>Dive number or label <span>Optional</span><input value={form.label} onChange={(event) => updateForm({ label: event.target.value })} placeholder="Dive 2" /></label>
         <div className={styles.field}>Dive date *<span>Use dd/mm/yyyy</span><DisplayDateInput label="Dive date" required value={form.date} onChange={(value) => { updateForm({ date: value }); setDateError(""); }} invalid={Boolean(dateError)} describedBy={dateError ? "date-error" : undefined} /></div>
-        <div className={styles.timeFields}><label className={styles.field}>Rough start time <span>Optional</span><input type="time" value={form.start} onChange={(event) => updateForm({ start: event.target.value })} /></label><label className={styles.field}>Rough end time <span>Optional</span><input type="time" value={form.end} onChange={(event) => updateForm({ end: event.target.value })} /></label></div>
+        <div className={styles.timeFields}><label className={styles.field}>Rough start time <span>Optional</span><input type="time" value={form.start} onChange={(event) => { updateForm({ start: event.target.value }); setEndTimeError(""); }} /></label><label className={styles.field}>Rough end time <span>Optional</span><input type="time" value={form.end} onChange={(event) => { updateForm({ end: event.target.value }); setEndTimeError(""); }} aria-invalid={Boolean(endTimeError)} aria-describedby={endTimeError ? "end-time-error" : undefined} />{endTimeError && <p className={styles.errorText} id="end-time-error" role="alert">{endTimeError}</p>}</label></div>
       </div>{siteLoadError && <div className={styles.inlineError} role="alert"><p>{siteLoadError}</p><button className={styles.textRetry} type="button" onClick={retryReferences}>Try again</button></div>}{sessionError && <p className={styles.errorText} id="site-error" role="alert">{sessionError}</p>}{dateError && <p className={styles.errorText} id="date-error" role="alert">{dateError}</p>}<div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setStep("session")}>Back</button><button className={styles.primaryButton} type="submit" disabled={savingSession || loadingReferences || Boolean(siteLoadError)}>{savingSession ? "Saving…" : "Save dive"}</button></div></section>
     </form>
   </section>;

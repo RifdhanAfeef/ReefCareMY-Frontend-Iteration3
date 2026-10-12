@@ -5,9 +5,8 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { PhotoCreditLine } from "@/features/shared/photo-credit-line";
+import { CoralComparison } from "./coral-comparison";
 import styles from "./landing-page.module.css";
-
-const heroPhoto = "/images/threats/open/bleaching-samoa.webp";
 
 const threats = [
   { name: "Ghost fishing gear", code: "ghost_gear", image: "/images/threats/open/net-reef.webp", alt: "A lost fishing net draped over coral on a reef slope", text: "Lost nets, lines, traps or ropes caught on the reef." },
@@ -120,24 +119,7 @@ export function LandingPage() {
             )}
           </div>
         </div>
-        <figure className={styles.visualPanel}>
-          <div className={styles.photoFrame}>
-            <Image
-              className={styles.reefPhoto}
-              src={heroPhoto}
-              alt="A bleached white table coral growing beside a healthy brown colony"
-              width={1440}
-              height={1080}
-              priority
-              sizes="(max-width: 1060px) 90vw, 45vw"
-            />
-            <span className={styles.labelBleached} aria-hidden="true">Bleached</span>
-            <span className={styles.labelHealthy} aria-hidden="true">Healthy</span>
-          </div>
-          <figcaption className={styles.photoCaption}>
-            <PhotoCreditLine images={[heroPhoto]} lead="Bleaching beside healthy coral, American Samoa. Photo:" />
-          </figcaption>
-        </figure>
+        <CoralComparison className={styles.visualPanel} />
       </section>
 
       <section ref={threatSectionRef} className={`${styles.section} ${styles.threatSection}`} aria-labelledby="threat-heading">
