@@ -210,6 +210,6 @@ describe("Epic 3 Reef Threat Explorer", () => {
     expect(screen.getByText(/photographs are real recognition examples/i)).toBeInTheDocument();
     expect(screen.getByText(/images are illustrations generated for reefcare/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Tim Sheerman-Chase" })).toHaveAttribute("href", expect.stringContaining("commons.wikimedia.org"));
-    expect(screen.getByText("Illustration")).toBeInTheDocument();
+    expect(screen.queryByText("Illustration")).not.toBeInTheDocument();
   });
 });

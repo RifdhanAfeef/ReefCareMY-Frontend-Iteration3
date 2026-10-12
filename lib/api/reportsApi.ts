@@ -1,4 +1,5 @@
 import { apiBlobRequest, apiRequest } from "./client";
+import { inspectReportFormData, prepareReportFormData, type PreparedReportUpload } from "./report-photo-upload";
 import type {
   LocationCheckRequest,
   LocationCheckResponse,
@@ -146,18 +147,10 @@ export async function submitInformationResponseWithPhotos(
 export async function submitReport(
   payload: ReportSubmissionPayload,
   photos: File[],
+  onPrepared?: (upload: PreparedReportUpload) => void,
 ): Promise<ReportSubmittedResult> {
-  const formData = new FormData();
-  formData.set("payload", JSON.stringify(payload));
-  for (const [index, photo] of photos.entries()) {
-    const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
-    const extension = extensions[photo.type];
-    // iOS may convert a selected camera image to JPEG while retaining its HEIC name.
-    const filename = extension
-      ? `${(photo.name || `reef-photo-${index + 1}`).replace(/\.[^.]+$/, "")}.${extension}`
-      : photo.name || `reef-photo-${index + 1}`;
-    formData.append("photos", photo, filename);
-  }
+  const formData = await prepareReportFormData(payload, photos);
+  onPrepared?.(inspectReportFormData(formData));
 
   return apiRequest<ReportSubmittedResult>({
     path: "/api/v1/reports",

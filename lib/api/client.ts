@@ -14,13 +14,15 @@ export class ApiError extends Error {
   /** The message the API itself sent, or null when `message` is a client-side fallback. */
   serverMessage: string | null;
   validationIssues: ApiValidationIssue[];
+  responseReceived: boolean;
 
-  constructor(message: string, status: number, serverMessage: string | null = null, validationIssues: ApiValidationIssue[] = []) {
+  constructor(message: string, status: number, serverMessage: string | null = null, validationIssues: ApiValidationIssue[] = [], responseReceived = true) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.serverMessage = serverMessage;
     this.validationIssues = validationIssues;
+    this.responseReceived = responseReceived;
   }
 }
 
@@ -128,7 +130,7 @@ async function executeRequest({
     });
   } catch (error) {
     if (timedOut) {
-      throw new ApiError("The request took too long. Please check your connection and try again.", 408);
+      throw new ApiError("The request took too long. Please check your connection and try again.", 408, null, [], false);
     }
     throw error;
   } finally {

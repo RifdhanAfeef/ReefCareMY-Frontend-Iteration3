@@ -1,11 +1,15 @@
 import { creditsFor } from "@/features/epic-03-threat-explorer/photo-credits";
+import type { ReactNode } from "react";
+import { ImageSources } from "./image-sources";
 
-/** Inline attribution for real photographs: author linked to the source, licence linked to its terms. */
-export function PhotoCreditLine({ images, className, lead = "Photos:" }: { images: string[]; className?: string; lead?: string }) {
+/** Collapsible attribution: author linked to the source, licence linked to its terms. */
+export function PhotoCreditLine({ images, className, lead = "Photos:", children }: { images: string[]; className?: string; lead?: string; children?: ReactNode }) {
   const credits = creditsFor(images);
-  if (credits.length === 0) return null;
+  if (credits.length === 0 && !children) return null;
   return (
-    <p className={className}>
+    <ImageSources className={className}>
+      {children}
+      {credits.length > 0 && <p>
       {lead}{" "}
       {credits.map((credit, index) => (
         <span key={credit.image}>
@@ -17,6 +21,7 @@ export function PhotoCreditLine({ images, className, lead = "Photos:" }: { image
         </span>
       ))}
       .
-    </p>
+      </p>}
+    </ImageSources>
   );
 }

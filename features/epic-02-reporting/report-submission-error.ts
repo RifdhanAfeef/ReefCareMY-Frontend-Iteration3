@@ -1,11 +1,13 @@
 import { ApiError } from "@/lib/api/client";
 import { userFacingError } from "@/lib/api/user-facing-error";
+import { ReportPhotoUploadError } from "@/lib/api/report-photo-upload";
 
 export function isSubmissionOutcomeUnknown(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof ApiError && (error.status === 408 || error.status >= 500));
 }
 
 export function reportSubmissionError(error: unknown): string {
+  if (error instanceof ReportPhotoUploadError) return `${error.message} Your draft is still saved.`;
   if (isSubmissionOutcomeUnknown(error)) return "We couldn’t confirm whether your report was submitted. Check My Reports before trying again. Your draft is still saved.";
   if (!(error instanceof ApiError) || error.status !== 422) return userFacingError(error, "The report could not be submitted. Your draft is still saved.");
   const messages = error.validationIssues.flatMap((issue) => {

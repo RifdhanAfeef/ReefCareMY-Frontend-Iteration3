@@ -165,6 +165,16 @@ describe("apiRequest — error message extraction", () => {
 });
 
 describe("apiRequest — slow connections", () => {
+  it("distinguishes a client timeout from an HTTP response for diagnostic capture", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockImplementation((_input, init) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+    const pending = apiRequest({ path: "/api/v1/reports", timeoutMs: 100 }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await pending).toMatchObject({ status: 408, responseReceived: false });
+  });
+
   it("stops an unresponsive request and provides a recoverable message", async () => {
     vi.useFakeTimers();
     vi.mocked(fetch).mockImplementation((_input, init) => new Promise<Response>((_resolve, reject) => {

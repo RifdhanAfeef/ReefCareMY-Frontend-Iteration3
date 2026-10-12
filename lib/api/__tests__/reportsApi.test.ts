@@ -120,6 +120,21 @@ describe("observer replies with photos", () => {
 });
 
 describe("mobile evidence upload filenames", () => {
+  it("records the actual multipart entries for mobile diagnostics before posting", async () => {
+    const prepared = vi.fn();
+    const payload = { threatCategoryId: 1, description: "Private observation", observedAt: "2020-01-01T01:00:00Z", diveSessionId: 1, location: { namedDiveSiteId: 1, locationConfidence: "dive_site_only" as const, locationSource: "named_dive_site" as const }, evidenceMetadata: [{ capturedAt: null }], aiSuggestions: [] };
+    await submitReport(payload, [new File(["jpeg-bytes"], "reef.jpg", { type: "image/jpeg" })], prepared);
+    expect(prepared).toHaveBeenCalledWith(expect.objectContaining({ payloadPresent: true, photoParts: 1 }));
+    expect(JSON.stringify(prepared.mock.calls)).not.toContain("Private observation");
+    expect(mockedApiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send a report without a photos file", async () => {
+    const payload = { threatCategoryId: 1, description: "Net on coral", observedAt: "2020-01-01T01:00:00Z", diveSessionId: 1, location: { namedDiveSiteId: 1, locationConfidence: "dive_site_only" as const, locationSource: "named_dive_site" as const }, evidenceMetadata: [], aiSuggestions: [] };
+    await expect(submitReport(payload, [])).rejects.toThrow("No photograph is attached");
+    expect(mockedApiRequest).not.toHaveBeenCalled();
+  });
+
   it("gives a JPEG converted from a camera image a JPEG filename without changing its bytes", async () => {
     const payload = { threatCategoryId: 1, description: "Net on coral", observedAt: "2020-01-01T01:00:00Z", diveSessionId: 1, location: { namedDiveSiteId: 1, locationConfidence: "dive_site_only" as const, locationSource: "named_dive_site" as const }, evidenceMetadata: [{ capturedAt: null }], aiSuggestions: [] };
     const photo = new File(["jpeg-bytes"], "IMG_001.HEIC", { type: "image/jpeg" });

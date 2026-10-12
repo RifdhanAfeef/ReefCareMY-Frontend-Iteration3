@@ -4,7 +4,7 @@ import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ReviewLocationSummary } from "@/features/epic-04-location/location-flow";
 import { useMockAppState } from "@/features/shared/mock-app-state";
 import { isFutureDisplayDateTime, isValidDisplayDate } from "@/lib/format/date";
@@ -22,6 +22,8 @@ import { formatCompletenessItem } from "./completeness-display";
 import { saveSubmittedStructuredDetails } from "./submitted-structured-details";
 import { confidenceLabel } from "./visual-recognition-state";
 import { isSubmissionOutcomeUnknown, reportSubmissionError } from "./report-submission-error";
+import { buildSubmissionDiagnostic, reportDiagnosticsEnabled, subscribeToDiagnosticMode, type SubmissionDiagnostic } from "./report-submission-diagnostics";
+import type { PreparedReportUpload } from "@/lib/api/report-photo-upload";
 
 type ReviewPhoto = StoredDraftPhoto & { previewUrl: string };
 
@@ -35,6 +37,9 @@ export function ReportReview() {
   const submissionInProgress = useRef(false);
   const [submissionError, setSubmissionError] = useState("");
   const [submissionOutcomeUnknown, setSubmissionOutcomeUnknown] = useState(false);
+  const diagnosticMode = useSyncExternalStore(subscribeToDiagnosticMode, reportDiagnosticsEnabled, () => false);
+  const [submissionDiagnostic, setSubmissionDiagnostic] = useState<SubmissionDiagnostic | null>(null);
+  const [diagnosticCopyMessage, setDiagnosticCopyMessage] = useState("");
   const [photosLoaded, setPhotosLoaded] = useState(false);
   const [backendReview, setBackendReview] = useState<ReportReviewResponse | null>(null);
   const [reviewError, setReviewError] = useState("");
@@ -207,9 +212,16 @@ export function ReportReview() {
     submissionInProgress.current = true;
     setSubmitting(true);
     setSubmissionError("");
+    setSubmissionDiagnostic(null);
+    setDiagnosticCopyMessage("");
+    const startedAt = Date.now();
+    let preparedUpload: PreparedReportUpload | null = null;
     try {
       const payload = buildReportSubmissionPayload(reportWithEvidence, locationDraft);
-      const result = await submitReportApi(payload, photos.map((photo) => photo.file));
+      const files = photos.map((photo) => photo.file);
+      const result = diagnosticMode
+        ? await submitReportApi(payload, files, (upload) => { preparedUpload = upload; })
+        : await submitReportApi(payload, files);
       const query = new URLSearchParams({
         reportReference: result.reportReference,
         status: result.status,
@@ -228,8 +240,26 @@ export function ReportReview() {
     } catch (error) {
       setSubmissionError(reportSubmissionError(error));
       setSubmissionOutcomeUnknown(isSubmissionOutcomeUnknown(error));
+      if (diagnosticMode) setSubmissionDiagnostic(buildSubmissionDiagnostic(error, {
+        photos: photos.map((photo) => photo.file),
+        evidenceMetadataCount: reportWithEvidence.photos.length,
+        elapsedMs: Date.now() - startedAt,
+        preparedUpload,
+        privateValues: [reportDraft.description, ...photos.map((photo) => photo.file.name),
+          String(locationDraft.pin?.latitude ?? ""), String(locationDraft.pin?.longitude ?? "")],
+      }));
       setSubmitting(false);
       submissionInProgress.current = false;
+    }
+  }
+
+  async function copyDiagnostics() {
+    if (!submissionDiagnostic) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(submissionDiagnostic, null, 2));
+      setDiagnosticCopyMessage("Diagnostics copied. You can paste them into the chat.");
+    } catch {
+      setDiagnosticCopyMessage("Copy is unavailable on this browser. Take a screenshot of the diagnostic panel.");
     }
   }
 
@@ -243,9 +273,18 @@ export function ReportReview() {
   return (
     <div className={styles.stack}>
       <ReportProgress current={3} />
+      {diagnosticMode && <section className={styles.infoBox}><strong>Report diagnostics enabled</strong><p>If submission fails, its HTTP status and validation details will appear on this page.</p></section>}
       {missingItems.length > 0 && <section className={styles.errorBox} role="alert"><strong>Complete the report before submitting</strong><p>Missing: {missingItems.join(", ")}.</p><Link className={styles.textButton} href="/report-a-reef">Return to observation details</Link></section>}
       {photoLoadFailed && <section className={styles.errorBox}><strong>Photographs could not be restored</strong><p>Return to the observation form and select the evidence again.</p></section>}
       {submissionError && <section className={styles.errorBox} role="alert"><strong>{submissionOutcomeUnknown ? "Submission not confirmed" : "Report not submitted"}</strong><p>{submissionError}</p><div className={styles.actions}>{submissionOutcomeUnknown && <Link className={styles.textButton} href="/my-reports">Check My Reports</Link>}<Link className={styles.textButton} href="/report-a-reef">Edit observation</Link><Link className={styles.textButton} href="/report-a-reef/location">Check dive location</Link></div></section>}
+      {diagnosticMode && submissionDiagnostic && <section className={styles.card} aria-labelledby="submission-diagnostics-heading">
+        <h2 id="submission-diagnostics-heading">Submission diagnostics</h2>
+        <p>Copy these details or take a screenshot to help investigate this attempt.</p>
+        {!submissionDiagnostic.responseReceived && <p>No HTTP response details were available for this error. Backend logs may be needed to identify the cause.</p>}
+        <pre className={styles.diagnosticOutput}>{JSON.stringify(submissionDiagnostic, null, 2)}</pre>
+        <button type="button" className={styles.smallButton} onClick={copyDiagnostics}>Copy diagnostics</button>
+        <p aria-live="polite">{diagnosticCopyMessage}</p>
+      </section>}
       {reviewing && <section className={styles.infoBox} role="status"><strong>Checking report completeness…</strong><p>Required fields, suggestions and location guidance are being checked.</p></section>}
       {reviewError && <section className={styles.errorBox} role="alert"><strong>Server review unavailable</strong><p>{reviewError}</p></section>}
       {unresolvedSuggestions.length > 0 && <section className={styles.warningBox} role="status"><strong>AI-assisted details need your review</strong><p>Resolve the highlighted fields below before submitting.</p></section>}

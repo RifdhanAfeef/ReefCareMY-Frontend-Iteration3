@@ -1380,37 +1380,10 @@
   }
 }
 
-/* Phones: a thumbnail beside the forecast keeps eight sites scannable
-   instead of eight full-width photographs. */
-@media (max-width: 520px) {
-  .siteCard {
-    display: grid;
-    grid-template-columns: 104px minmax(0, 1fr);
-  }
-  .siteImage {
-    height: auto;
-    min-height: 152px;
-  }
-  .imageCaption {
-    right: 6px;
-    bottom: 6px;
-    left: 6px;
-    padding: 3px 6px;
-    font-size: 12px;
-    line-height: 1.25;
-  }
-  .selectSite {
-    top: 8px;
-    right: auto;
-    left: 8px;
-  }
-}
-
 .container, .panel, .siteBody, .dateFeedback > div { min-width: 0; }
 .siteReason, .briefFacts, .generated, .details { overflow-wrap: anywhere; }
 @media (max-width: 520px) {
   .months { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .siteBody .signals { grid-template-columns: minmax(0, 1fr); }
   .tools label { min-width: 0; }
   .dateSignals span { max-width: 100%; }
 }

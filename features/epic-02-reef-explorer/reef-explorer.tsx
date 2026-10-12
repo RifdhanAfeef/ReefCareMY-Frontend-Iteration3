@@ -16,6 +16,7 @@ import { reefIslands, reefSites } from "./reef-sites";
 import { storeSelectedReefSite } from "./selected-site-storage";
 import type { ReefSite, ReefSiteReference } from "./types";
 import { PhotoCreditLine } from "@/features/shared/photo-credit-line";
+import { ImageSources } from "@/features/shared/image-sources";
 import { ReefMapBoundary } from "./reef-map-boundary";
 import { surfaceImages } from "@/features/epic-09-planning/surface-images";
 import styles from "./reef-explorer.module.css";
@@ -254,9 +255,11 @@ function SiteGallery({
           <span>View larger</span>
         </button>
       </figure>
-      <p className={styles.imageCredit}>
+      <ImageSources className={styles.imageCredit}>
+        <p>
         {image.caption} · Photo: <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.credit}</a> · {image.license}
-      </p>
+        </p>
+      </ImageSources>
       {site.images.length > 1 && (
         <div className={styles.galleryControls}>
           <button
@@ -375,9 +378,11 @@ function ImageDialog({ site, imageIndex, onClose }: { site: ReefSite; imageIndex
           <Image src={image.src} alt={image.alt} fill sizes="90vw" priority />
         </div>
         <p>{image.alt}</p>
-        <p className={styles.dialogImageCredit}>
+        <ImageSources className={styles.dialogImageCredit}>
+          <p>
           {image.caption} · Photo: <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.credit}</a> · {image.license}
-        </p>
+          </p>
+        </ImageSources>
       </section>
     </div>
   );
@@ -561,11 +566,6 @@ export function ReefExplorer() {
                 <span>{diveSiteCatalog.filter((site) => site.island === island).length} dive sites</span>
                 <span className={styles.areaCardAction}>Explore dive sites <ArrowRight size={19} aria-hidden="true" /></span>
               </button>
-              <p className={styles.areaPhotoCredit}>
-                Photo: <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.credit}</a>
-                {" ("}<a href={photo.licenseUrl} target="_blank" rel="noreferrer">{photo.license === "Copyrighted free use" ? "Free use" : photo.license}</a>{")"}
-                {" · Resized and cropped."}
-              </p>
             </div>;
           })}
         </div>
@@ -685,7 +685,20 @@ export function ReefExplorer() {
           <strong>Observe safely</strong>
           <p>Do not touch, move or attempt to remove anything unless you are trained and authorised.</p>
         </aside>
-        <PhotoCreditLine className={styles.guidanceCredits} images={guidanceCategories.map((category) => threatImages[category.code])} lead="Example photos from reefs worldwide:" />
+        <PhotoCreditLine className={styles.guidanceCredits} images={guidanceCategories.map((category) => threatImages[category.code])} lead="Example photos from reefs worldwide:">
+          <h3>Area photographs</h3>
+          <ul>
+            {reefIslands.map((island) => {
+              const photo = surfaceImages[island];
+              return <li key={island}>
+                {island}: <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.credit}</a>
+                {" ("}<a href={photo.licenseUrl} target="_blank" rel="noreferrer">{photo.license === "Copyrighted free use" ? "Free use" : photo.license}</a>{")"}
+                {" · Resized and cropped."}
+              </li>;
+            })}
+          </ul>
+          <h3>Threat example photographs</h3>
+        </PhotoCreditLine>
       </section>
 
       {selectedSite && status === "authenticated" && user?.role !== "observer" && (

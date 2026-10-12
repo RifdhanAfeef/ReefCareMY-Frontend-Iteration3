@@ -299,3 +299,15 @@
   .actions > * { min-width: 0; max-width: 100%; }
   .confirmDialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
 }
+
+.diagnosticOutput {
+  max-width: 100%;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  background: var(--color-surface);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

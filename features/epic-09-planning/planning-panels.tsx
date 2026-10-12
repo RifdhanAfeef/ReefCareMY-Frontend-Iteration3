@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReefSite } from "@/features/epic-02-reef-explorer/types";
+import { ImageSources } from "@/features/shared/image-sources";
 import { userFacingError } from "@/lib/api/user-facing-error";
 import {
   dateLabel,
@@ -455,8 +456,7 @@ export function AreaOverview({ area }: { area: Area }) {
       </div>
       <figcaption>
         <strong>{photo.caption}</strong>
-        <details>
-          <summary>Photo credit & source</summary>
+        <ImageSources>
           <p>
             <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.credit}</a>
             {" · "}
@@ -464,7 +464,7 @@ export function AreaOverview({ area }: { area: Area }) {
             . Resized and displayed cropped. This regional photograph does not
             show the exact dive sites or current conditions.
           </p>
-        </details>
+        </ImageSources>
       </figcaption>
     </figure>
   );
@@ -497,9 +497,6 @@ export function SiteCard({
           fill
           sizes="(max-width: 700px) 90vw, 350px"
         />
-        <span className={styles.imageCaption}>
-          Illustrative reef image
-        </span>
         <button
           type="button"
           className={styles.selectSite}
@@ -543,10 +540,12 @@ export function SiteCard({
               underwater conditions inferred.
             </p>
           )}
-          <a href={site.images[0].sourceUrl} target="_blank" rel="noreferrer">
-            Image: {site.images[0].credit} · {site.images[0].license}
-          </a>
         </details>
+        <ImageSources>
+          <p><a href={site.images[0].sourceUrl} target="_blank" rel="noreferrer">
+            Image: {site.images[0].credit} · {site.images[0].license}
+          </a></p>
+        </ImageSources>
         <button type="button" className={styles.textButton} onClick={onBrief}>
           View reef-aware brief <ArrowRight size={17} />
         </button>

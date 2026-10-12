@@ -46,6 +46,7 @@ vi.mock("@/features/shared/mock-app-state", async (importOriginal) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, "", "/report-a-reef/review");
   scenario.aiSuggestions = [];
   scenario.visualRecognition = null;
   scenario.photos = [];
@@ -163,6 +164,34 @@ it("shows photo rejection without unsupported file-size advice", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("A photograph was rejected");
   expect(screen.getByRole("alert")).not.toHaveTextContent("10 MB");
   expect(clearDraftPhotos).not.toHaveBeenCalled();
+});
+
+it("shows diagnostic details on the phone only when the debug link is used", async () => {
+  window.history.replaceState(null, "", "/report-a-reef/review?debugReport=1");
+  vi.mocked(submitReport).mockRejectedValueOnce(new ApiError("Invalid photo", 422, "The uploaded image could not be decoded.", [{ path: ["body", "photos", 0], type: "value_error" }]));
+  render(<ReportReview />);
+  expect(screen.getByText("Report diagnostics enabled")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+  const panel = await screen.findByRole("region", { name: "Submission diagnostics" });
+  expect(panel).toHaveTextContent('"httpStatus": 422');
+  expect(panel).toHaveTextContent("The uploaded image could not be decoded.");
+  expect(panel).toHaveTextContent('"photos"');
+  expect(panel).not.toHaveTextContent("Net on coral.");
+  expect(panel).not.toHaveTextContent("reef.jpg");
+  expect(submitReport).toHaveBeenCalledTimes(1);
+  expect(clearDraftPhotos).not.toHaveBeenCalled();
+});
+
+it("keeps diagnostic details hidden during normal report submission", async () => {
+  vi.mocked(submitReport).mockRejectedValueOnce(new ApiError("Invalid photo", 422, "The uploaded image could not be decoded."));
+  render(<ReportReview />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+  await screen.findByRole("alert");
+  expect(screen.queryByText("Report diagnostics enabled")).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Submission diagnostics" })).not.toBeInTheDocument();
+  expect(screen.queryByText("The uploaded image could not be decoded.")).not.toBeInTheDocument();
 });
 
 it("accepts all non-conflicting AI suggestions together at final review", async () => {

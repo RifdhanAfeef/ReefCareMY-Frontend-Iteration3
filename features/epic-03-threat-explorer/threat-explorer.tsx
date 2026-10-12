@@ -140,7 +140,6 @@ export function ThreatExplorer({ initialThreat }: { initialThreat?: ThreatExplor
           <div className={styles.quizPanel}>
             <figure className={styles.quizImage}>
               <Image key={question.id} src={question.image} alt={answered ? question.imageAlt : question.questionAlt} fill sizes="(max-width: 900px) 100vw, 52vw" />
-              <figcaption className={styles.illustrationTag}>Illustration</figcaption>
             </figure>
             <div className={styles.quizCopy}>
               {quiz.finished ? (
