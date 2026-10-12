@@ -189,4 +189,34 @@ describe("SiteHeader report navigation", () => {
     expect(screen.getByLabelText("Signed in as Jamie Lee")).toBeInTheDocument();
     expect(screen.queryByText("Registered Observer")).not.toBeInTheDocument();
   });
+
+  it("opens the navigation menu and closes it with Escape, returning focus to the toggle", async () => {
+    render(<SiteHeader navigation={[{ label: "Explore", href: "/explore" }]} />);
+    const toggle = screen.getByRole("button", { name: "Open navigation menu" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toBe(screen.getByRole("navigation"));
+    screen.getByRole("link", { name: "Explore" }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
+  });
+
+  it("closes the menu when navigating but preserves the draft choice and its focus", async () => {
+    setDraft(draftWithPhoto);
+    renderReportLink();
+    const toggle = screen.getByRole("button", { name: "Open navigation menu" });
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole("link", { name: "Report a Threat" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.keyboard("{Escape}");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("link", { name: "Report a Threat" })).toHaveFocus();
+    await userEvent.click(screen.getByRole("link", { name: "Report a Threat" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue report" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(push).toHaveBeenCalledWith("/report-a-reef");
+    expect(resetReportDraft).not.toHaveBeenCalled();
+  });
 });

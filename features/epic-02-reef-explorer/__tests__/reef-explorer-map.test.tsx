@@ -30,7 +30,7 @@ it("selects mobile markers without a fly animation", () => {
   expect(map.setView).toHaveBeenCalledWith(reefSites[0].position, 12, { animate: false });
   expect(map.flyTo).not.toHaveBeenCalled();
   view.unmount();
-  expect(map.stop).toHaveBeenCalledTimes(2);
+  expect(map.stop).toHaveBeenCalledTimes(1);
 });
 it("retains desktop focus animation", () => {
   vi.stubGlobal("matchMedia", () => ({ matches: false }));

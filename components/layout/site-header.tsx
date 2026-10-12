@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { Menu, X } from "lucide-react";
 import type { HeaderAction, NavigationItem } from "@/config/navigation";
 import { useAuth } from "@/features/epic-01-access/auth-context";
 import { clearSelectedReefSite } from "@/features/epic-02-reef-explorer/selected-site-storage";
@@ -27,7 +28,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function FreshReportLink({ item, active, className }: { item: NavigationItem; active: boolean; className?: string }) {
+function FreshReportLink({ item, active, className, onNavigate }: { item: NavigationItem; active: boolean; className?: string; onNavigate?: () => void }) {
   const router = useRouter();
   const { reportDraft, locationDraft, isAccountDraftRestored, resetReportDraft } = useMockAppState();
   const [choosing, setChoosing] = useState(false);
@@ -68,6 +69,7 @@ function FreshReportLink({ item, active, className }: { item: NavigationItem; ac
   }
 
   function openReportForm() {
+    onNavigate?.();
     router.push("/report-a-reef");
     router.refresh();
   }
@@ -176,7 +178,21 @@ export function SiteHeader({
   const { user, logout } = useAuth();
   const navigationRef = useRef<HTMLElement>(null);
   const headerRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuPath, setMenuPath] = useState<string | null>(null);
+  const menuOpen = menuPath === pathname;
   const reportItem = navigation.find((item) => item.href === "/report-a-reef");
+
+  function closeMenu() {
+    setMenuPath(null);
+  }
+
+  function handleMenuKeys(event: KeyboardEvent<HTMLElement>) {
+    // Draft dialogs manage their own Escape key and focus restoration.
+    if (event.key !== "Escape" || !menuOpen || (event.target as HTMLElement).closest('[role="dialog"]')) return;
+    closeMenu();
+    menuButtonRef.current?.focus();
+  }
 
   // On narrow screens the navigation scrolls sideways; keep the current page in view.
   useEffect(() => {
@@ -210,20 +226,33 @@ export function SiteHeader({
     : undefined);
 
   async function signOut() {
+    closeMenu();
     await logout();
     router.push("/");
   }
 
   return (
-    <header ref={headerRef} className={styles.header}>
-      <div className={`${styles.inner} ${resolvedIdentity ? styles.signedIn : ""}`}>
+    <header ref={headerRef} className={styles.header} onKeyDown={handleMenuKeys}>
+      <div className={`${styles.inner} ${resolvedIdentity ? styles.signedIn : ""}`} data-menu-open={menuOpen}>
         <Brand />
 
-        <nav className={styles.navigation} aria-label="Primary navigation" ref={navigationRef} data-count={navigation.length}>
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className={styles.mobileMenuToggle}
+          aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={menuOpen}
+          aria-controls="site-navigation-panel"
+          onClick={() => setMenuPath(menuOpen ? null : pathname)}
+        >
+          {menuOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
+        </button>
+
+        <nav id="site-navigation-panel" className={styles.navigation} aria-label="Primary navigation" ref={navigationRef} data-count={navigation.length}>
           {navigation.map((item) => {
             const active = isActive(pathname, item.href);
             if (item.href === "/report-a-reef") {
-              return <FreshReportLink key={item.href} item={item} active={active} />;
+              return <FreshReportLink key={item.href} item={item} active={active} onNavigate={closeMenu} />;
             }
             return (
               <Link
@@ -231,6 +260,7 @@ export function SiteHeader({
                 className={`${styles.navLink} ${active ? styles.active : ""}`}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
+                onClick={closeMenu}
               >
                 {item.label}
               </Link>
@@ -245,6 +275,7 @@ export function SiteHeader({
                 item={{ ...reportItem, label: "Report" }}
                 active={false}
                 className={styles.quickReport}
+                onNavigate={closeMenu}
               />
             )}
             {resolvedIdentity && (
@@ -269,6 +300,7 @@ export function SiteHeader({
                 key={`${action.href}-${action.label}`}
                 className={`${styles.action} ${styles[action.variant]}`}
                 href={action.href}
+                onClick={closeMenu}
               >
                 {action.label}
               </Link>

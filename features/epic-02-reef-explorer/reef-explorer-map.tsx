@@ -28,7 +28,9 @@ function FocusMap({ selectedSite, areaSites, mapOpen }: { selectedSite: ReefSite
     } else {
       map.fitBounds(areaSites.length ? areaSites.map((site) => site.position) : malaysiaBounds, { padding: [38, 38], maxZoom: 11, animate });
     }
-    return () => { map.stop(); };
+    // MapContainer owns destruction and cancels animation in Leaflet.remove().
+    // Parent cleanup runs first on unmount; calling stop() afterwards accesses
+    // panes that Leaflet has already removed when hiding the map or changing page.
   }, [map, selectedSite, areaSites, mapOpen]);
 
   return null;
