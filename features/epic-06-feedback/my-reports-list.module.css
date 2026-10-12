@@ -189,3 +189,14 @@
     text-align: center;
   }
 }
+
+.card, .link { min-width: 0; max-width: 100%; }
+.reference { flex: 0 0 auto; white-space: nowrap; }
+.status { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.threat, .location, .outcome, .date { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .link { padding: 18px; }
+  .headline { flex-wrap: wrap; align-items: flex-start; }
+  .status { flex: 0 1 auto; }
+  .pagination { min-width: 0; }
+}

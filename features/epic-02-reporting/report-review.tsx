@@ -21,6 +21,7 @@ import { ReportProgress } from "./report-progress";
 import { formatCompletenessItem } from "./completeness-display";
 import { saveSubmittedStructuredDetails } from "./submitted-structured-details";
 import { confidenceLabel } from "./visual-recognition-state";
+import { reportSubmissionError } from "./report-submission-error";
 
 type ReviewPhoto = StoredDraftPhoto & { previewUrl: string };
 
@@ -42,6 +43,14 @@ export function ReportReview() {
   const [editedSuggestionValue, setEditedSuggestionValue] = useState("");
   const threat = getThreatCategory(reportDraft.threatCategoryCode);
   const session = locationDraft.sessions.find((item) => item.id === locationDraft.selectedSessionId);
+  // IndexedDB returns files by key, which may differ from the selection order.
+  // Metadata must follow the exact files uploaded, including restored manual drafts.
+  const reportWithEvidence = useMemo(() => ({
+    ...reportDraft,
+    photos: photos.map(({ id, file }) => reportDraft.photos.find((item) => item.id === id) ?? {
+      id, name: file.name, type: file.type, size: file.size,
+    }),
+  }), [reportDraft, photos]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +84,7 @@ export function ReportReview() {
   useEffect(() => {
     if (!photosLoaded) return;
     let cancelled = false;
-    reviewReport(buildReportReviewPayload(reportDraft, locationDraft, photos.length))
+    reviewReport(buildReportReviewPayload(reportWithEvidence, locationDraft, photos.length))
       .then((result) => { if (!cancelled) setBackendReview(result); })
       .catch((error) => {
         if (!cancelled) {
@@ -85,7 +94,7 @@ export function ReportReview() {
       })
       .finally(() => { if (!cancelled) setReviewing(false); });
     return () => { cancelled = true; };
-  }, [locationDraft, photos.length, photosLoaded, reportDraft]);
+  }, [locationDraft, photos.length, photosLoaded, reportWithEvidence]);
 
   const missingItems = useMemo(() => {
     const items: string[] = [];
@@ -198,7 +207,7 @@ export function ReportReview() {
     setSubmitting(true);
     setSubmissionError("");
     try {
-      const payload = buildReportSubmissionPayload(reportDraft, locationDraft);
+      const payload = buildReportSubmissionPayload(reportWithEvidence, locationDraft);
       const result = await submitReportApi(payload, photos.map((photo) => photo.file));
       saveSubmittedStructuredDetails(result.reportReference, reportDraft);
       const query = new URLSearchParams({
@@ -215,7 +224,7 @@ export function ReportReview() {
       resetReportDraft();
       router.push(destination);
     } catch (error) {
-      setSubmissionError(userFacingError(error, "The report could not be submitted."));
+      setSubmissionError(reportSubmissionError(error));
       setSubmitting(false);
       submissionInProgress.current = false;
     }
@@ -233,7 +242,7 @@ export function ReportReview() {
       <ReportProgress current={3} />
       {missingItems.length > 0 && <section className={styles.errorBox} role="alert"><strong>Complete the report before submitting</strong><p>Missing: {missingItems.join(", ")}.</p><Link className={styles.textButton} href="/report-a-reef">Return to observation details</Link></section>}
       {photoLoadFailed && <section className={styles.errorBox}><strong>Photographs could not be restored</strong><p>Return to the observation form and select the evidence again.</p></section>}
-      {submissionError && <section className={styles.errorBox} role="alert"><strong>Report not submitted</strong><p>{submissionError}</p></section>}
+      {submissionError && <section className={styles.errorBox} role="alert"><strong>Report not submitted</strong><p>{submissionError}</p><div className={styles.actions}><Link className={styles.textButton} href="/report-a-reef">Edit observation</Link><Link className={styles.textButton} href="/report-a-reef/location">Check dive location</Link></div></section>}
       {reviewing && <section className={styles.infoBox} role="status"><strong>Checking report completeness…</strong><p>Required fields, suggestions and location guidance are being checked.</p></section>}
       {reviewError && <section className={styles.errorBox} role="alert"><strong>Server review unavailable</strong><p>{reviewError}</p></section>}
       {unresolvedSuggestions.length > 0 && <section className={styles.warningBox} role="status"><strong>AI-assisted details need your review</strong><p>Resolve the highlighted fields below before submitting.</p></section>}

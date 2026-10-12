@@ -1,6 +1,9 @@
 export type StoredDraftPhoto = {
   id: string;
   file: File;
+  name?: string;
+  type?: string;
+  lastModified?: number;
 };
 
 import { readStoredAuth } from "@/lib/api/token-store";
@@ -14,6 +17,16 @@ export function draftPhotoDatabaseName(userId: number | null) {
 
 export function createPhotoId(file: File) {
   return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+// Some mobile browsers restore a stored File as a Blob. Keep its upload metadata.
+export function restoreDraftPhoto(photo: StoredDraftPhoto): StoredDraftPhoto {
+  const name = photo.name || photo.file.name || photo.id.replace(/-\d+-\d+$/, "");
+  const type = photo.type || photo.file.type;
+  const lastModified = photo.lastModified ?? photo.file.lastModified ?? 0;
+  const file = photo.file instanceof File && photo.file.name === name && photo.file.type === type
+    ? photo.file : new File([photo.file], name, { type, lastModified });
+  return { id: photo.id, file };
 }
 
 function openDatabase() {
@@ -38,7 +51,10 @@ export async function loadDraftPhotos() {
   return new Promise<StoredDraftPhoto[]>((resolve, reject) => {
     const transaction = database.transaction(storeName, "readonly");
     const request = transaction.objectStore(storeName).getAll();
-    request.onsuccess = () => resolve(request.result as StoredDraftPhoto[]);
+    request.onsuccess = () => {
+      try { resolve((request.result as StoredDraftPhoto[]).map(restoreDraftPhoto)); }
+      catch (error) { reject(error); }
+    };
     request.onerror = () => reject(request.error);
     transaction.oncomplete = () => database.close();
   });
@@ -50,7 +66,7 @@ export async function saveDraftPhotos(photos: StoredDraftPhoto[]) {
     const transaction = database.transaction(storeName, "readwrite");
     const store = transaction.objectStore(storeName);
     store.clear();
-    photos.forEach((photo) => store.put(photo));
+    photos.forEach((photo) => store.put({ ...photo, name: photo.file.name, type: photo.file.type, lastModified: photo.file.lastModified }));
     transaction.oncomplete = () => { database.close(); resolve(); };
     transaction.onerror = () => { database.close(); reject(transaction.error); };
   });

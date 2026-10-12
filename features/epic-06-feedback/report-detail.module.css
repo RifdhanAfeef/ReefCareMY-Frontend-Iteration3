@@ -482,3 +482,14 @@
   .replyPhotos img { height: 100px; }
   .replyPhotoMeta { padding: 8px 12px; }
 }
+
+.reportPageGrid { width: 100%; min-width: 0; }
+.reportPageGrid > *, .descriptionBlock, .infoRequest, .responseForm { min-width: 0; max-width: 100%; }
+.description, .locationNote, .surfaceContextNote, .photoCaption { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .reportPageGrid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .responseForm button { max-width: 100%; }
+  .photoDialogHeader { align-items: flex-start; }
+  .photoDialogHeader h2 { min-width: 0; overflow-wrap: anywhere; }
+  .statusChip { max-width: 100%; }
+}

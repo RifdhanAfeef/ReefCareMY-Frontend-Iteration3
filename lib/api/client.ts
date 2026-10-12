@@ -3,17 +3,40 @@ import { invalidateStoredAuth, readStoredAuth } from "./token-store";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://reefcare-backend.vercel.app";
 const REQUEST_TIMEOUT_MS = 15_000;
 
+export type ApiValidationIssue = {
+  path: Array<string | number>;
+  type: string;
+  minimumLength?: number;
+};
+
 export class ApiError extends Error {
   status: number;
   /** The message the API itself sent, or null when `message` is a client-side fallback. */
   serverMessage: string | null;
+  validationIssues: ApiValidationIssue[];
 
-  constructor(message: string, status: number, serverMessage: string | null = null) {
+  constructor(message: string, status: number, serverMessage: string | null = null, validationIssues: ApiValidationIssue[] = []) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.serverMessage = serverMessage;
+    this.validationIssues = validationIssues;
   }
+}
+
+// Retain field names and constraint types, never submitted values or raw backend details.
+function validationIssues(payload: unknown): ApiValidationIssue[] {
+  if (!payload || typeof payload !== "object" || !("detail" in payload) || !Array.isArray(payload.detail)) return [];
+  return payload.detail.flatMap((entry: unknown) => {
+    if (!entry || typeof entry !== "object") return [];
+    const issue = entry as { loc?: unknown; type?: unknown; ctx?: { min_length?: unknown } };
+    if (!Array.isArray(issue.loc)) return [];
+    const path = issue.loc.filter((part): part is string | number => typeof part === "string" || typeof part === "number");
+    const minimumLength = issue.ctx?.min_length;
+    return [{ path, type: typeof issue.type === "string" ? issue.type : "",
+      ...(typeof minimumLength === "number" && Number.isSafeInteger(minimumLength) && minimumLength > 0 ? { minimumLength } : {}),
+    }];
+  });
 }
 
 export type ApiRequestOptions = Omit<RequestInit, "body" | "signal"> & {
@@ -122,6 +145,7 @@ async function executeRequest({
       extractErrorMessage(payload, "ReefCare MY could not complete the request. Please try again."),
       response.status,
       extractServerMessage(payload),
+      validationIssues(payload),
     );
   }
 

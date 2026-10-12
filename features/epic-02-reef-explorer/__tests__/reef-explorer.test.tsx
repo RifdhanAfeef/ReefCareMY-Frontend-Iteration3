@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReefExplorer } from "../reef-explorer";
 import { diveSiteCatalog } from "../dive-site-catalog";
 import { reefSites } from "../reef-sites";
@@ -63,7 +63,30 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => { vi.unstubAllGlobals(); });
+
 describe("Epic 2 Reef Explorer", () => {
+  it("browses mobile site details without starting a hidden map and unloads it on Hide map", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const user = userEvent.setup();
+    render(<ReefExplorer />);
+    expect(screen.queryByRole("button", { name: "Map marker Tiger Reef" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Redang 4 dive sites/ }));
+    await user.click(screen.getByRole("button", { name: /Mini Mount/ }));
+    expect(screen.getByRole("heading", { name: "Mini Mount", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Map marker Tiger Reef" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show map" }));
+    expect(screen.getByRole("button", { name: "Map marker Tiger Reef" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Hide map" }));
+    expect(screen.queryByRole("button", { name: "Map marker Tiger Reef" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mini Mount", level: 2 })).toBeInTheDocument();
+  });
+
+  it("keeps the desktop map available without opening a mobile toggle", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(min-width: 1121px)", addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    render(<ReefExplorer />);
+    expect(screen.getByRole("button", { name: "Map marker Tiger Reef" })).toBeInTheDocument();
+  });
   it("starts with three areas and shows only the chosen area's dive sites", async () => {
     const user = userEvent.setup();
     render(<ReefExplorer />);
@@ -203,7 +226,7 @@ describe("Epic 2 Reef Explorer", () => {
 
     await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
-    await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
+    await user.click(screen.getByRole("button", { name: "Report a Threat" }));
 
     expect(await screen.findByRole("dialog", { name: "Sign in to report this reef threat" })).toBeInTheDocument();
     expect(getPublicReportHandoff).toHaveBeenCalledWith(19);
@@ -219,7 +242,7 @@ describe("Epic 2 Reef Explorer", () => {
 
     await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
-    await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
+    await user.click(screen.getByRole("button", { name: "Report a Threat" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We could not start the report from this site",
@@ -236,7 +259,7 @@ describe("Epic 2 Reef Explorer", () => {
 
     await user.click(screen.getByRole("button", { name: /Perhentian 8 dive sites/i }));
     await user.click(screen.getByRole("button", { name: /D'Lagoon/i }));
-    await user.click(screen.getByRole("button", { name: "Report a Reef Threat" }));
+    await user.click(screen.getByRole("button", { name: "Report a Threat" }));
 
     expect(routerPush).toHaveBeenCalledWith("/report-a-reef?source=explore");
     expect(JSON.parse(window.localStorage.getItem("reefcare-my-i2-selected-reef-site") ?? "null"))

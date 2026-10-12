@@ -5,12 +5,14 @@ import { reviewReport, submitReport } from "@/lib/api/reportsApi";
 import { getThreatCategories } from "@/lib/api/referenceApi";
 import { clearDraftPhotos, loadDraftPhotos } from "../draft-storage";
 import { ReportReview } from "../report-review";
+import type { ReportPhotoMetadata } from "../types";
 
 const updateReportDraft = vi.hoisted(() => vi.fn());
 const push = vi.hoisted(() => vi.fn());
 const scenario = vi.hoisted(() => ({
   aiSuggestions: [] as Array<Record<string, unknown>>,
   visualRecognition: null as Record<string, unknown> | null,
+  photos: [] as ReportPhotoMetadata[],
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/lib/api/reportsApi", () => ({ reviewReport: vi.fn(), submitReport: vi.fn() }));
@@ -25,6 +27,7 @@ vi.mock("@/features/shared/mock-app-state", async (importOriginal) => {
       observationDate: "01/01/2020", observationTime: "10:00", description: "Net on coral.",
       aiSuggestions: scenario.aiSuggestions as typeof original.initialReportDraft.aiSuggestions,
       visualRecognition: scenario.visualRecognition as typeof original.initialReportDraft.visualRecognition,
+      photos: scenario.photos,
     });
     const [locationDraft, setLocation] = useState<typeof original.initialLocationDraft>({ ...original.initialLocationDraft,
       confidence: "dive_site_only", selectedSessionId: "one",
@@ -44,6 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   scenario.aiSuggestions = [];
   scenario.visualRecognition = null;
+  scenario.photos = [];
   URL.createObjectURL = vi.fn(() => "blob:photo");
   URL.revokeObjectURL = vi.fn();
   vi.mocked(loadDraftPhotos).mockResolvedValue([{ id: "one", file: new File(["photo"], "reef.jpg") }]);
@@ -65,6 +69,35 @@ beforeEach(() => {
     };
   });
   vi.mocked(submitReport).mockResolvedValue({ reportReference: "RC-1", status: "received", submittedAt: "2026-09-11T10:00:00Z", generalLocation: "Reef" });
+});
+
+it("submits a manual report without AI suggestions when server review is unavailable", async () => {
+  vi.mocked(reviewReport).mockRejectedValueOnce(new Error("Unavailable"));
+  render(<ReportReview />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+  await waitFor(() => expect(push).toHaveBeenCalled());
+  expect(submitReport).toHaveBeenCalledWith(expect.objectContaining({
+    aiSuggestions: [], evidenceMetadata: [{ capturedAt: null }],
+  }), expect.arrayContaining([expect.any(File)]));
+});
+
+it("keeps capture metadata aligned with the restored file upload order", async () => {
+  scenario.photos = [
+    { id: "second", name: "second.jpg", type: "image/jpeg", size: 1, capturedAt: "2020-01-01T02:00:00Z", capturedAtConfirmed: true },
+    { id: "first", name: "first.jpg", type: "image/jpeg", size: 1, capturedAt: "2020-01-01T01:00:00Z", capturedAtConfirmed: true },
+  ];
+  vi.mocked(loadDraftPhotos).mockResolvedValue([
+    { id: "first", file: new File(["photo"], "first.jpg") },
+    { id: "second", file: new File(["photo"], "second.jpg") },
+  ]);
+  render(<ReportReview />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Submit report" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+  await waitFor(() => expect(submitReport).toHaveBeenCalled());
+  expect(vi.mocked(submitReport).mock.calls[0][0].evidenceMetadata).toEqual([
+    { capturedAt: "2020-01-01T01:00:00Z" }, { capturedAt: "2020-01-01T02:00:00Z" },
+  ]);
 });
 
 it("puts the location privacy explanation in its own box below the submission checklist", async () => {

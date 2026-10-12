@@ -24,7 +24,7 @@ export const observerNavigation: NavigationItem[] = [
   { label: "Explore", href: "/explore" },
   { label: "Reef threats", href: "/reef-threats" },
   { label: "Plan a dive", href: "/plan-a-dive" },
-  { label: "Report a Reef", href: "/report-a-reef" },
+  { label: "Report a Threat", href: "/report-a-reef" },
   { label: "My Reports", href: "/my-reports" },
 ];
 

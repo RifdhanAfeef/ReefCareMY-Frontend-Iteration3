@@ -953,3 +953,11 @@
 .caseSearchForm button { min-height:46px; }
 .caseSearchForm p { flex-basis:100%; margin:0; color:var(--color-muted); font-size:.85rem; }
 @media (max-width:600px) { .caseSearchForm { padding:16px; } .caseSearchForm .field { flex-basis:100%; max-width:none; } }
+
+.stack, .card, .detailCard, .tableCard { min-width: 0; max-width: 100%; }
+@media (max-width: 700px) {
+  .viewTabs { width: 100%; min-width: 0; flex-wrap: wrap; border-radius: 14px; }
+  .viewTabs button { flex: 1 1 auto; padding-inline: 12px; }
+  .historyFilterActions, .pageActions { flex-wrap: wrap; }
+  .editorGrid, .reviewGrid, .caseGrid { grid-template-columns: minmax(0, 1fr); }
+}

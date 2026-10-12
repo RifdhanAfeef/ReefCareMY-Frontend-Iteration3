@@ -129,3 +129,10 @@
   .page *, .page *::before, .page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 .quizImage .illustrationTag { top: 12px; right: auto; bottom: auto; left: 12px; padding: 4px 10px; color: #fff; background: rgba(11, 52, 64, 0.82); border-radius: 999px; font-size: 13px; font-weight: 700; }
+
+@media (max-width: 640px) {
+  .sectionHeader { align-items: flex-start; flex-wrap: wrap; }
+  .carouselControls { flex-wrap: wrap; }
+  .answers { grid-template-columns: minmax(0, 1fr); }
+  .detail { scroll-margin-top: calc(var(--sticky-header-offset, 132px) + 16px); }
+}

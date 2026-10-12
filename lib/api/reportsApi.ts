@@ -149,8 +149,14 @@ export async function submitReport(
 ): Promise<ReportSubmittedResult> {
   const formData = new FormData();
   formData.set("payload", JSON.stringify(payload));
-  for (const photo of photos) {
-    formData.append("photos", photo);
+  for (const [index, photo] of photos.entries()) {
+    const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+    const extension = extensions[photo.type];
+    // iOS may convert a selected camera image to JPEG while retaining its HEIC name.
+    const filename = extension
+      ? `${(photo.name || `reef-photo-${index + 1}`).replace(/\.[^.]+$/, "")}.${extension}`
+      : photo.name || `reef-photo-${index + 1}`;
+    formData.append("photos", photo, filename);
   }
 
   return apiRequest<ReportSubmittedResult>({

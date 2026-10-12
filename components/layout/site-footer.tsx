@@ -8,7 +8,7 @@ const exploreLinks = [
 ];
 
 const takePartLinks = [
-  { label: "Report a reef threat", href: "/report-a-reef" },
+  { label: "Report a Threat", href: "/report-a-reef" },
   { label: "My reports", href: "/my-reports" },
   { label: "Create an account", href: "/register" },
 ];

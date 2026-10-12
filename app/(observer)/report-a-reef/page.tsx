@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PageTemplate } from "@/components/templates/page-template";
 import { ObservationForm } from "@/features/epic-02-reporting/observation-form";
 
-export const metadata: Metadata = { title: "Report a reef" };
+export const metadata: Metadata = { title: "Report a Threat" };
 
 const supportedThreats = new Set([
   "ghost_gear",
@@ -29,7 +29,7 @@ export default async function ReportAReefPage({
 
   return (
     <PageTemplate
-      title="Report a reef observation"
+      title="Report a Threat"
       description="Add photos and a short description. You do not need to identify the threat yourself."
       hideHeading
       showBackButton

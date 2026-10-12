@@ -74,3 +74,8 @@
     width: 100%;
   }
 }
+
+.page, .workspace, .headingCopy { min-width: 0; }
+.workspace { max-width: 100%; }
+.headingCopy { overflow-wrap: anywhere; }
+@media (max-width: 700px) { .headingCopy > p { font-size: 16px; } }

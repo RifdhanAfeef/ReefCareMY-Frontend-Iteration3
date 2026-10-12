@@ -54,8 +54,8 @@ const draftWithPhoto: Partial<ReportDraft> = {
 };
 
 function renderReportLink() {
-  render(<SiteHeader navigation={[{ label: "Report a Reef", href: "/report-a-reef" }]} />);
-  return screen.getByRole("link", { name: "Report a Reef" });
+  render(<SiteHeader navigation={[{ label: "Report a Threat", href: "/report-a-reef" }]} />);
+  return screen.getByRole("link", { name: "Report a Threat" });
 }
 
 vi.mock("next/navigation", () => ({
@@ -88,9 +88,9 @@ describe("SiteHeader report navigation", () => {
 
   it("starts a fresh report and clears a Reef Explorer handoff", async () => {
     window.localStorage.setItem(selectedReefSiteStorageKey, JSON.stringify({ name: "D'Lagoon" }));
-    render(<SiteHeader navigation={[{ label: "Report a Reef", href: "/report-a-reef" }]} />);
+    render(<SiteHeader navigation={[{ label: "Report a Threat", href: "/report-a-reef" }]} />);
 
-    await userEvent.click(screen.getByRole("link", { name: "Report a Reef" }));
+    await userEvent.click(screen.getByRole("link", { name: "Report a Threat" }));
 
     expect(resetReportDraft).toHaveBeenCalledOnce();
     expect(window.localStorage.getItem(selectedReefSiteStorageKey)).toBeNull();

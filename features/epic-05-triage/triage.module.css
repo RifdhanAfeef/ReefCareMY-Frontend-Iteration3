@@ -1166,3 +1166,6 @@
 .searchRow input { min-width:0; flex:1 1 160px; }
 .searchRow button { min-height:46px; flex:0 0 auto; padding:10px 16px; }
 @media (max-width:850px) { .filters .searchField { grid-column:1 / -1; } }
+
+.page, .card, .tableWrap, .filters, .sidePanel { min-width: 0; max-width: 100%; }
+@media (max-width: 650px) { .triageContext, .evidenceRecord { grid-template-columns: minmax(0, 1fr); } .card, .sidePanel { overflow-wrap: anywhere; } }

@@ -175,14 +175,35 @@ export function SiteHeader({
   const router = useRouter();
   const { user, logout } = useAuth();
   const navigationRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const reportItem = navigation.find((item) => item.href === "/report-a-reef");
 
   // On narrow screens the navigation scrolls sideways; keep the current page in view.
   useEffect(() => {
-    navigationRef.current
-      ?.querySelector<HTMLElement>('[aria-current="page"]')
-      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const navigation = navigationRef.current;
+    const active = navigation?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!navigation || !active || navigation.scrollWidth <= navigation.clientWidth) return;
+    const row = navigation.getBoundingClientRect();
+    const link = active.getBoundingClientRect();
+    // Scroll only the navigation, never its page ancestors.
+    if (link.left < row.left) navigation.scrollLeft += link.left - row.left;
+    else if (link.right > row.right) navigation.scrollLeft += link.right - row.right;
   }, [pathname]);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const update = () => document.documentElement.style.setProperty("--sticky-header-offset", `${header.getBoundingClientRect().height}px`);
+    update();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    observer?.observe(header);
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+      document.documentElement.style.removeProperty("--sticky-header-offset");
+    };
+  }, []);
 
   const resolvedIdentity = identity ?? (user
     ? { label: user.displayName.trim() || "Signed-in user", initial: user.displayName.trim().charAt(0).toUpperCase() || "U" }
@@ -194,11 +215,11 @@ export function SiteHeader({
   }
 
   return (
-    <header className={styles.header}>
+    <header ref={headerRef} className={styles.header}>
       <div className={`${styles.inner} ${resolvedIdentity ? styles.signedIn : ""}`}>
         <Brand />
 
-        <nav className={styles.navigation} aria-label="Primary navigation" ref={navigationRef}>
+        <nav className={styles.navigation} aria-label="Primary navigation" ref={navigationRef} data-count={navigation.length}>
           {navigation.map((item) => {
             const active = isActive(pathname, item.href);
             if (item.href === "/report-a-reef") {

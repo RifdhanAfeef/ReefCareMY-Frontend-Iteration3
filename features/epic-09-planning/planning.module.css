@@ -1405,3 +1405,12 @@
     left: 8px;
   }
 }
+
+.container, .panel, .siteBody, .dateFeedback > div { min-width: 0; }
+.siteReason, .briefFacts, .generated, .details { overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .months { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .siteBody .signals { grid-template-columns: minmax(0, 1fr); }
+  .tools label { min-width: 0; }
+  .dateSignals span { max-width: 100%; }
+}

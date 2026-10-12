@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiBlobRequest, apiRequest } from "../client";
+import { ApiError, apiBlobRequest, apiRequest } from "../client";
 import { writeStoredAuth } from "../token-store";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -12,6 +12,17 @@ function jsonResponse(body: unknown, status = 200) {
 beforeEach(() => {
   window.localStorage.clear();
   vi.stubGlobal("fetch", vi.fn());
+});
+
+it("retains validation field constraints without retaining the submitted input", async () => {
+  vi.mocked(fetch).mockResolvedValue(jsonResponse({ detail: [{
+    loc: ["body", "payload", "description"], type: "string_too_short", msg: "Too short",
+    ctx: { min_length: 20 }, input: "Private description",
+  }] }, 422));
+  const error = await apiRequest({ path: "/api/v1/reports" }).catch((error: unknown) => error);
+  expect(error).toBeInstanceOf(ApiError);
+  expect((error as ApiError).validationIssues).toEqual([{ path: ["body", "payload", "description"], type: "string_too_short", minimumLength: 20 }]);
+  expect(JSON.stringify((error as ApiError).validationIssues)).not.toContain("Private description");
 });
 
 afterEach(() => {

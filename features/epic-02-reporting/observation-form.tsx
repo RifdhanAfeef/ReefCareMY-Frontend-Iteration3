@@ -671,7 +671,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   return (
     <form className={`${styles.formShell} ${styles.observationShell}`} onSubmit={continueToLocation} noValidate>
       <header className={styles.observationHeader}>
-        <div><span className={styles.reportEyebrow}>New report</span><h1>Report a reef observation</h1><p>Add photos and a short description. You do not need to identify the threat yourself.</p></div>
+        <div><span className={styles.reportEyebrow}>New report</span><h1>Report a Threat</h1><p>Add photos and a short description. You do not need to identify the threat yourself.</p></div>
         <button className={styles.secondaryButton} type="button" onClick={() => { setResetError(""); setShowResetConfirmation(true); }}>Reset report</button>
       </header>
       <ReportProgress current={1} />

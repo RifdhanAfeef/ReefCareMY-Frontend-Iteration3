@@ -11,3 +11,6 @@
 .attribution a { color: var(--color-primary-hover); text-decoration: underline; }
 .caveat { margin: 12px 0 0; }
 .section button { min-height: 38px; padding: 7px 12px; color: var(--color-primary-hover); background: #fff; border: 1px solid var(--color-primary); border-radius: 8px; cursor: pointer; }
+
+.section { min-width: 0; overflow-wrap: anywhere; }
+.measurements { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }

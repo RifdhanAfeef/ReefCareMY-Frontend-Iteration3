@@ -14,13 +14,21 @@ function FocusMap({ selectedSite, areaSites, mapOpen }: { selectedSite: ReefSite
   const map = useMap();
 
   useEffect(() => {
-    map.invalidateSize();
-    const animate = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    map.stop();
+    map.invalidateSize({ animate: false });
+    const size = map.getSize();
+    // Leaflet's flyTo divides by the viewport size. Never run it on a hidden map.
+    if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.x <= 0 || size.y <= 0) return;
+    const compact = window.matchMedia?.("(max-width: 1120px)").matches ?? false;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const animate = !compact && !reducedMotion;
     if (selectedSite) {
-      map.flyTo(selectedSite.position, 12, { animate, duration: 0.6 });
-      return;
+      if (animate) map.flyTo(selectedSite.position, 12, { animate, duration: 0.6 });
+      else map.setView(selectedSite.position, 12, { animate: false });
+    } else {
+      map.fitBounds(areaSites.length ? areaSites.map((site) => site.position) : malaysiaBounds, { padding: [38, 38], maxZoom: 11, animate });
     }
-    map.fitBounds(areaSites.length ? areaSites.map((site) => site.position) : malaysiaBounds, { padding: [38, 38], maxZoom: 11, animate });
+    return () => { map.stop(); };
   }, [map, selectedSite, areaSites, mapOpen]);
 
   return null;

@@ -16,6 +16,7 @@ import { reefIslands, reefSites } from "./reef-sites";
 import { storeSelectedReefSite } from "./selected-site-storage";
 import type { ReefSite, ReefSiteReference } from "./types";
 import { PhotoCreditLine } from "@/features/shared/photo-credit-line";
+import { ReefMapBoundary } from "./reef-map-boundary";
 import { surfaceImages } from "@/features/epic-09-planning/surface-images";
 import styles from "./reef-explorer.module.css";
 
@@ -122,7 +123,7 @@ function BasicSiteDetail({
       <div className={styles.siteActions}>
         <Link className={styles.primaryButton} href={planningHref(site)}>Plan a dive</Link>
         <button className={styles.primaryButton} type="button" onClick={onReport} disabled={reportPending}>
-          {reportPending ? "Checking selected site…" : "Report a Reef Threat"}
+          {reportPending ? "Checking selected site…" : "Report a Threat"}
         </button>
         <a className={styles.secondaryButton} href="#responsible-observation">View guidance</a>
       </div>
@@ -347,7 +348,7 @@ function SiteDetail({
       <div className={styles.siteActions}>
         <Link className={styles.primaryButton} href={planningHref(site)}>Plan a dive</Link>
         <button className={styles.primaryButton} type="button" onClick={onReport} disabled={reportPending}>
-          {reportPending ? "Checking selected site…" : "Report a Reef Threat"}
+          {reportPending ? "Checking selected site…" : "Report a Threat"}
         </button>
         <a className={styles.secondaryButton} href="#responsible-observation">View guidance</a>
       </div>
@@ -425,6 +426,7 @@ export function ReefExplorer() {
   const [search, setSearch] = useState("");
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [desktopMap, setDesktopMap] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [showAuthentication, setShowAuthentication] = useState(false);
   const [validatedReportingPath, setValidatedReportingPath] = useState("/report-a-reef?source=explore");
@@ -456,6 +458,15 @@ export function ReefExplorer() {
   }, [search, selectedArea]);
   const showSiteList = Boolean(selectedArea || search.trim());
   const backLabel = selectedArea ? `${selectedArea} dive sites` : "Search results";
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const desktop = window.matchMedia("(min-width: 1121px)");
+    const update = () => setDesktopMap(desktop.matches);
+    update();
+    desktop.addEventListener("change", update);
+    return () => desktop.removeEventListener("change", update);
+  }, []);
 
   function chooseArea(area: string | null) {
     pendingBrowseFocus.current = true;
@@ -612,7 +623,9 @@ export function ReefExplorer() {
         </aside>
 
         <div id="explore-map" className={styles.mapRegion} data-open={mapOpen}>
-          <ReefExplorerMap sites={mappedProfiles} selectedSiteId={selectedSiteId} selectedArea={selectedArea} mapOpen={mapOpen} onSelectSite={selectMapSite} />
+          {(desktopMap || mapOpen) && <ReefMapBoundary>
+            <ReefExplorerMap sites={mappedProfiles} selectedSiteId={selectedSiteId} selectedArea={selectedArea} mapOpen={mapOpen} onSelectSite={selectMapSite} />
+          </ReefMapBoundary>}
         </div>
       </section>
 

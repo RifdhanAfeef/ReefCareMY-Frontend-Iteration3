@@ -286,3 +286,16 @@
 .analysisControls button { text-align: left; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .observationLayout { grid-template-columns: 1fr; } .observationSidebar { gap: 16px; } .sidebarActions { padding: 0; } }
 @media (max-width: 540px) { .observationHeader { align-items: flex-start; flex-direction: column; gap: 16px; } .observationLayout .card { padding: 18px; } .observationMain .whenRow, .observationDetails .inlineSuggestionGrid { grid-template-columns: 1fr; } .observationPhotos .photoCard { grid-template-columns: 100px minmax(0, 1fr); } .observationPhotos .photoImage { height: 100px; } .observationPhotos .photoMeta { padding: 8px 12px; } .photoHeading { gap: 10px; } .photoHeading .uploadLabel { padding: 8px 12px; } }
+
+/* Grid children may shrink on phones; long descriptions and filenames still wrap. */
+.stack, .formShell, .observationShell, .card, .sideCard, .reviewMain, .reviewSide, .reviewPhotos, .summaryList > div { min-width: 0; }
+.description, .errorBox, .warningBox, .successBox, .infoBox { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .observationLayout, .reviewLayout, .detailCard { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 650px) {
+  .formGrid, .photoGrid, .summaryList { grid-template-columns: minmax(0, 1fr); }
+  .field { min-width: 0; }
+  .photoHeading { flex-wrap: wrap; }
+  .actions { align-items: stretch; }
+  .actions > * { min-width: 0; max-width: 100%; }
+  .confirmDialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+}

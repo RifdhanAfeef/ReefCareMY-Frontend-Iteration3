@@ -140,3 +140,7 @@
 .locationDialogActions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .locationDialogActions > button { min-height: 48px; margin: 0; padding: 10px 18px; }
 @media (max-width: 520px) { .locationDialog { padding: 22px; } .locationDialogHeader { gap: 10px; } .locationDialogHeader h2 { font-size: 21px; } .locationDialogIcon { flex-basis: 40px; width: 40px; height: 40px; border-radius: 12px; } .locationDialogActions { flex-direction: column-reverse; } .locationDialogActions > button { width: 100%; } }
+
+.page, .card > *, .sidePanel > *, .field, .sessionOption > div { min-width: 0; }
+.card, .sidePanel { overflow-wrap: anywhere; }
+@media (max-width: 650px) { .formLayout, .confirmGrid, .savedContent { grid-template-columns: minmax(0, 1fr); } }

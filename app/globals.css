@@ -241,3 +241,11 @@ textarea::placeholder {
 .leaflet-control-attribution a {
   color: var(--color-primary-hover);
 }
+
+/* Mobile browsers must keep text sizing and form focus predictable. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (max-width: 760px) {
+  body :is(input, select, textarea) { font-size: 16px !important; min-width: 0; max-width: 100%; }
+}
+
+:where(main [id]) { scroll-margin-top: calc(var(--sticky-header-offset, 88px) + 16px); }

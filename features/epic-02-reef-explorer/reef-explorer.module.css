@@ -161,3 +161,21 @@
 @media (max-width: 1120px) { .explorer, .explorerSelected, .explorerStart { grid-template-columns: 1fr; } .explorerStart .sidePanel, .explorerStart .mapRegion { grid-column: auto; grid-row: auto; } .sidePanel { order: 1; scroll-margin-top: calc(var(--header-height) + 24px); } .sidePanel h2, .areaHeadingRow h2 { scroll-margin-top: calc(var(--header-height) + 24px); } .mapRegion { order: 2; position: relative; top: auto; } .mapRegion[data-open="false"] { display: none; } .mobileMapToggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 24px; padding: 10px 16px; color: var(--color-primary-hover); background: #fff; border: 1px solid var(--color-primary); border-radius: var(--radius-button); font: inherit; font-weight: 750; cursor: pointer; } .siteList { max-height: none; overflow: visible; scrollbar-gutter: auto; } .mapFrame, .mapLoading, .explorerSelected .mapFrame, .explorerSelected .mapLoading { height: 420px; min-height: 360px; } .mapCanvas { min-height: 360px; } }
 @media (max-width: 760px) { .page { width: min(calc(100% - 32px), var(--content-width)); padding: 38px 0 56px; } .hero h1 { font-size: clamp(40px, 12vw, 56px); } .hero > p:last-child { font-size: 16px; } .explorer { margin-top: 30px; } .sidePanel { padding: 22px; } .mapFrame, .mapLoading, .explorerSelected .mapFrame, .explorerSelected .mapLoading { height: 340px; min-height: 300px; } .mapCanvas { min-height: 300px; } .siteImage { aspect-ratio: 4 / 3; } .mapPrivacy { left: 12px; right: 12px; bottom: 12px; font-size: 12px; } .guidance { margin-top: 54px; } .guidanceHeading { align-items: flex-start; flex-direction: column; } .threatGrid { grid-template-columns: 1fr; } .threatCard { min-height: 112px; grid-template-columns: 72px 1fr; padding: 16px; } .threatCard > img { width: 72px; height: 58px; } .threatDetail { padding: 20px; } .threatDetailHeading { grid-template-columns: 72px 1fr; } .threatDetailHeading img { width: 72px; height: 58px; } .threatDetailBody { grid-template-columns: 1fr; } .dialog { padding: 30px 22px 24px; } }
 @media (max-width: 760px) { .areaHeadingRow { align-items: stretch; flex-direction: column; gap: 18px; } .areaHeadingRow h2 { font-size: 24px; } .areaSearch { width: 100%; } .areaCards { grid-template-columns: 1fr; gap: 20px; } .areaCard { grid-template-columns: 104px minmax(0, 1fr); column-gap: 14px; padding: 16px; } .areaPhoto { grid-row: 1 / 4; height: 100%; min-height: 112px; margin: 0; } .areaCard > strong { font-size: 22px; } .areaCardAction { margin-top: 6px; } .explorerStart .mapFrame, .explorerStart .mapLoading { height: 340px; min-height: 300px; } }
+
+.page, .siteDetail, .siteFacts, .threatCard > span, .threatDetailHeading > div, .activityList li > div { min-width: 0; }
+.siteDetail, .imageCredit, .dialogImageCredit, .activityList { overflow-wrap: anywhere; }
+.mapError { padding: 24px; text-align: center; }
+.imageDialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.dialog { max-height: calc(100dvh - 32px); }
+@media (max-width: 760px) {
+  .searchField input, .areaSearch input { font-size: 16px; }
+  .galleryControls button, .imageDialogClose, .dialogClose { min-width: 44px; min-height: 44px; }
+  .imageDialogBackdrop, .dialogBackdrop { padding: 16px; }
+  .imageDialog { width: 100%; }
+  .enlargedImage { height: min(55dvh, 620px); }
+  .siteImage span { opacity: 1; }
+  .backToSites, .activityRetry { min-height: 44px; }
+  .sidePanel h2, .areaHeadingRow h2 { scroll-margin-top: calc(var(--sticky-header-offset, 132px) + 16px); }
+}
+
+@media (max-width: 1120px) { .sidePanel { scroll-margin-top: calc(var(--sticky-header-offset, 132px) + 16px); } }

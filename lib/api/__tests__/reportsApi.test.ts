@@ -7,6 +7,7 @@ import {
   getReportTimeline,
   submitInformationResponse,
   submitInformationResponseWithPhotos,
+  submitReport,
 } from "../reportsApi";
 import * as client from "../client";
 
@@ -115,5 +116,19 @@ describe("observer replies with photos", () => {
     const form = mockedApiRequest.mock.calls[0][0].body as FormData;
     expect(form.get("responseText")).toBe("About three metres wide.");
     expect(form.getAll("photos")).toEqual([]);
+  });
+});
+
+describe("mobile evidence upload filenames", () => {
+  it("gives a JPEG converted from a camera image a JPEG filename without changing its bytes", async () => {
+    const payload = { threatCategoryId: 1, description: "Net on coral", observedAt: "2020-01-01T01:00:00Z", diveSessionId: 1, location: { namedDiveSiteId: 1, locationConfidence: "dive_site_only" as const, locationSource: "named_dive_site" as const }, evidenceMetadata: [{ capturedAt: null }], aiSuggestions: [] };
+    const photo = new File(["jpeg-bytes"], "IMG_001.HEIC", { type: "image/jpeg" });
+    await submitReport(payload, [photo]);
+    const body = mockedApiRequest.mock.calls[0][0].body as FormData;
+    const uploaded = body.get("photos") as File;
+    expect(uploaded.name).toBe("IMG_001.jpg");
+    expect(uploaded.type).toBe("image/jpeg");
+    expect(uploaded.size).toBe(photo.size);
+    expect(body.get("payload")).toBe(JSON.stringify(payload));
   });
 });
