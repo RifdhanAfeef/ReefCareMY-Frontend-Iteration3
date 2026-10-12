@@ -124,6 +124,16 @@ const SEASON_COPY: Record<SeasonState, { headline: string; detail: string }> = {
   },
 };
 
+// Mirrors the backend's fixed band guidance so sample briefs read like live ones.
+const sampleMeaning: Partial<Record<Band, string>> = {
+  more_favourable:
+    "the forecast is generally calm, so the weather adds little extra difficulty. ReefCare suggests this is a good date to plan a dive here, as long as the site suits your experience.",
+  mixed:
+    "the forecast is not severe, but boat rides, entries and exits may be rougher. ReefCare suggests planning with caution; newer divers may prefer a calmer date.",
+  less_favourable:
+    "the forecast is rough, which makes the dive noticeably harder. ReefCare suggests choosing another date or site if you can.",
+};
+
 const sampleSource: PlanningSource = {
   mode: "sample",
   async seasonality() {
@@ -189,11 +199,11 @@ const sampleSource: PlanningSource = {
     return {
       status: "generated",
       paragraphs: [
-        `The sample forecast for ${site.name} shows ${assessment.waves} m wave height and ${assessment.wind} km/h wind, giving ${labels[assessment.band].toLowerCase()} forecast conditions under the illustrative rule.`,
+        `Why this is ${labels[assessment.band]}: the sample forecast for ${site.name} shows ${assessment.waves} m waves and ${assessment.wind} km/h wind under the illustrative rule.`,
+        `What this means: ${sampleMeaning[assessment.band] ?? sampleMeaning.mixed}`,
         contextAvailable
-          ? "The sample reef context includes assessed debris and bleaching observations. Familiarise yourself with these threats, keep your equipment clear of coral and observe without disturbing the reef."
-          : "Public ReefCare context is unavailable; no conclusion about reef threats can be drawn.",
-        "Confirm the day’s conditions, site access and your experience requirements with a local operator. This brief does not determine whether a dive should proceed.",
+          ? "Reef activity: the sample context includes assessed debris and bleaching observations. ReefCare shows these so you know what to look out for; they are past records, not a live survey. If you spot ghost fishing gear, debris, coral damage or anything unusual, report it in ReefCare."
+          : "Reef activity: public ReefCare context is unavailable, so no conclusion about reef threats can be drawn. If you spot ghost fishing gear, debris, coral damage or anything unusual, report it in ReefCare.",
       ],
       footnote: "Sample text generated from local fixtures · Not a connected AI service",
     };
@@ -330,7 +340,7 @@ const apiSource: PlanningSource = {
     return {
       status: "generated",
       paragraphs: dto.text.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean),
-      footnote: "AI-generated from the facts above · Confirm conditions with a local operator",
+      footnote: "AI-generated suggestion can make mistakes. Confirm with a local operator before you dive.",
     };
   },
   async listPlans() {

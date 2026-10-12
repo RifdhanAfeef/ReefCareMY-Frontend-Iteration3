@@ -9,6 +9,7 @@ import {
   pastExample,
   readPlans,
   sitesIn,
+  splitBriefLeadIn,
   validDate,
   writePlans,
 } from "../planning-data";
@@ -67,5 +68,20 @@ describe("planning data and boundaries", () => {
       returnPathForRole("//evil.example/plan-a-dive", "observer"),
     ).toBeNull();
     expect(returnPathForRole("/plan-a-dive", "case_coordinator")).toBeNull();
+  });
+});
+
+describe("splitBriefLeadIn", () => {
+  it("separates the brief's lead-in so it can be shown in bold", () => {
+    expect(splitBriefLeadIn("Why this is Mixed: wind is moderate.")).toEqual({
+      lead: "Why this is Mixed:",
+      body: "wind is moderate.",
+    });
+    expect(splitBriefLeadIn("What this means: plan with caution.").lead).toBe("What this means:");
+    expect(splitBriefLeadIn("Reef activity: 7 reviewed observations.").lead).toBe("Reef activity:");
+  });
+
+  it("leaves paragraphs without a known lead-in untouched", () => {
+    expect(splitBriefLeadIn("Note: something else.")).toEqual({ lead: null, body: "Note: something else." });
   });
 });

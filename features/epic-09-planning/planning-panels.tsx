@@ -23,6 +23,7 @@ import {
   months,
   retrievedLabel,
   signalValue,
+  splitBriefLeadIn,
   type Area,
   type Assessment,
   type Band,
@@ -642,9 +643,17 @@ export function BriefPanel({
           </div>
         ) : (
           <div role="status">
-            {brief.view.paragraphs.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
-            ))}
+            {brief.view.paragraphs.map((paragraph) => {
+              const { lead, body } = splitBriefLeadIn(paragraph);
+              return (
+                <p key={paragraph}>
+                  {lead && <strong>{lead}</strong>} {body}
+                </p>
+              );
+            })}
+            <Link className={styles.textButton} href="/report-a-reef">
+              Report something unusual <ChevronRight size={15} />
+            </Link>
             <small>{brief.view.footnote}</small>
           </div>
         )}
