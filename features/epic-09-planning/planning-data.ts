@@ -110,6 +110,12 @@ export function sitesIn(area: Area) {
     (site) => site.island === area && site.backendDiveSiteId > 0,
   );
 }
+// Brief paragraphs open with a short lead-in ("What this means:") that the panel shows in bold.
+export function splitBriefLeadIn(paragraph: string): { lead: string | null; body: string } {
+  const match = /^(Why this is [^:]{1,30}:|What this means:|Reef activity:)\s*/.exec(paragraph);
+  if (!match) return { lead: null, body: paragraph };
+  return { lead: match[1], body: paragraph.slice(match[0].length) };
+}
 export function bandFor(waves: number, wind: number): Band {
   if (waves > 1.5 || wind > 20) return "less_favourable";
   if (waves > 0.8 || wind > 12) return "mixed";

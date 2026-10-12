@@ -218,6 +218,23 @@ describe("API source", () => {
     const assessment = { band: "mixed" as const, waves: 1, wind: 10, rain: null, reason: "", source: null, retrievedAt: null, ruleVersion: "v1" };
     expect(await source.brief(site, today, assessment, context, true)).toEqual({ status: "unavailable" });
   });
+
+  it("splits a generated brief into paragraphs and flags it as a suggestion that may be wrong", async () => {
+    const source = await loadApiSource();
+    const [site] = sitesIn("Redang");
+    vi.mocked(planningApi.createPlanningBrief).mockResolvedValue({
+      siteId: site.backendDiveSiteId, plannedDate: today, status: "generated",
+      text: "Why this is Mixed: wind is moderate.\n\nWhat this means: plan with caution.\n\nReef activity: report anything unusual.",
+      generatedAt: "2026-10-12T10:00:00+08:00",
+    });
+    const assessment = { band: "mixed" as const, waves: 0.22, wind: 18.4, rain: 100, reason: "", source: null, retrievedAt: null, ruleVersion: "v1" };
+    const view = await source.brief(site, today, assessment, context, true);
+    expect(view).toEqual({
+      status: "generated",
+      paragraphs: ["Why this is Mixed: wind is moderate.", "What this means: plan with caution.", "Reef activity: report anything unusual."],
+      footnote: "AI-generated suggestion can make mistakes. Confirm with a local operator before you dive.",
+    });
+  });
 });
 
 describe("sample source", () => {
