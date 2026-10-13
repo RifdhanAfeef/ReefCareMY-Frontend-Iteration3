@@ -96,13 +96,14 @@ function ActionEvidencePreview({
   return (
     <div className={styles.actionEvidenceItem}>
       {loading && <span role="status">Loading action evidence…</span>}
-      {evidenceUrl && (
+      {evidenceUrl && !error && (
         <Image
           src={evidenceUrl}
           alt={`Action evidence ${index + 1} for ${actionLabel}`}
           width={360}
           height={240}
           unoptimized
+          onError={() => setError("This action evidence image could not be loaded.")}
         />
       )}
       {error && <div><p role="alert">{error}</p><button type="button" onClick={retry}>Try again</button></div>}

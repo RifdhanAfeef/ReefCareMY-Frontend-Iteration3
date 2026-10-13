@@ -58,7 +58,7 @@ describe("getReportDetail", () => {
 
 describe("observer evidence", () => {
   it("requests private image bytes from the authenticated Observer route and supports cancellation", async () => {
-    const blob = new Blob(["photo"], { type: "image/jpeg" });
+    const blob = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" });
     vi.mocked(client.apiBlobRequest).mockResolvedValueOnce(blob);
     const controller = new AbortController();
     await expect(getObserverEvidence("RC/0241", 501, controller.signal)).resolves.toBe(blob);

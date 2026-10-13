@@ -220,12 +220,13 @@ function SecureEvidencePreview({ reportReference, evidenceId }: { reportReferenc
   function retryEvidence() {
     setLoading(true);
     setError("");
+    setEvidenceUrl("");
     setRetryKey((value) => value + 1);
   }
 
   return <div className={styles.evidenceAction}>
     {loading && <div className={styles.evidenceLoading} role="status">Loading evidence…</div>}
-    {evidenceUrl && <Image className={styles.evidencePreview} src={evidenceUrl} alt={`Submitted evidence ${evidenceId}`} width={320} height={240} unoptimized />}
+    {evidenceUrl && !error && <Image className={styles.evidencePreview} src={evidenceUrl} alt={`Submitted evidence ${evidenceId}`} width={320} height={240} unoptimized onError={() => setError("The evidence image could not be loaded.")} />}
     {error && <div><p className={styles.errorText} role="alert">{error}</p><button className={styles.evidenceButton} type="button" onClick={retryEvidence}>Try again</button></div>}
   </div>;
 }

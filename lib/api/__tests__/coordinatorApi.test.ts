@@ -25,7 +25,7 @@ beforeEach(() => {
   mockedApiRequest.mockReset();
   mockedApiRequest.mockResolvedValue({} as never);
   mockedApiBlobRequest.mockReset();
-  mockedApiBlobRequest.mockResolvedValue(new Blob());
+  mockedApiBlobRequest.mockResolvedValue(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" }));
 });
 
 describe("coordinator API contract", () => {

@@ -19,11 +19,9 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
     : user?.role === "system_administrator"
       ? administratorNavigation
       : observerNavigation;
-  const actions = status === "loading"
-    ? []
-    : signedIn
-      ? signedInActions
-      : publicActions;
+  // Public account links also belong in the initial server render. Session
+  // validation must not leave a blank header while hydration or /auth/me waits.
+  const actions = signedIn ? signedInActions : publicActions;
 
   return (
     <AppShell

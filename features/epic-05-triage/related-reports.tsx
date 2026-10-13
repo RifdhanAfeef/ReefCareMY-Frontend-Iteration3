@@ -26,7 +26,7 @@ function EvidenceImage({ reference, evidenceId }: { reference: string; evidenceI
   }, [reference, evidenceId]);
   if (error) return <span className={styles.evidenceUnavailable}>Image unavailable</span>;
   if (!url) return <span className={styles.evidenceUnavailable}>Loading image…</span>;
-  return <Image src={url} alt={`Evidence for report ${reference}`} width={110} height={82} unoptimized />;
+  return <Image src={url} alt={`Evidence for report ${reference}`} width={110} height={82} unoptimized onError={() => setError(true)} />;
 }
 
 function ReportSide({ report }: { report: ComparedReport }) {

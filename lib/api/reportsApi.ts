@@ -1,4 +1,5 @@
-import { apiBlobRequest, apiRequest } from "./client";
+import { apiRequest } from "./client";
+import { apiEvidenceImageRequest } from "./evidence-image";
 import { inspectReportFormData, prepareReportFormData, type PreparedReportUpload } from "./report-photo-upload";
 import type {
   LocationCheckRequest,
@@ -95,7 +96,7 @@ export async function getObserverEvidence(
   evidenceId: number,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  return apiBlobRequest({
+  return apiEvidenceImageRequest({
     path: `/api/v1/reports/${encodeURIComponent(reportReference)}/evidence/${encodeURIComponent(String(evidenceId))}`,
     auth: true,
     timeoutMs: 60_000,

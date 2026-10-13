@@ -43,7 +43,7 @@ function EvidencePreview({ reportReference, evidenceId }: { reportReference: str
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [reportReference, evidenceId]);
   return failed ? <span>Image unavailable</span>
-    : url ? <Image src={url} width={180} height={120} unoptimized alt="Supporting follow-up evidence" />
+    : url ? <Image src={url} width={180} height={120} unoptimized alt="Supporting follow-up evidence" onError={() => setFailed(true)} />
       : <span>Loading image…</span>;
 }
 

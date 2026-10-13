@@ -1,4 +1,5 @@
-import { apiBlobRequest, apiRequest } from "./client";
+import { apiRequest } from "./client";
+import { apiEvidenceImageRequest } from "./evidence-image";
 import type {
   CaseClosureCreate,
   CaseClosureResult,
@@ -82,7 +83,7 @@ export async function getCoordinatorEvidence(
   reportReference: string,
   evidenceId: number,
 ): Promise<Blob> {
-  return apiBlobRequest({
+  return apiEvidenceImageRequest({
     path: `/api/v1/coordinator/reports/${encodeURIComponent(reportReference)}/evidence/${encodeURIComponent(String(evidenceId))}`,
     timeoutMs: 60_000,
   });
