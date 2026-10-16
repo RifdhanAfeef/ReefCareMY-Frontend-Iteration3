@@ -15,7 +15,7 @@ import {
   Waves,
   Wind,
 } from "lucide-react";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReefSite } from "@/features/epic-02-reef-explorer/types";
 import { ImageSources } from "@/features/shared/image-sources";
 import { userFacingError } from "@/lib/api/user-facing-error";
@@ -559,6 +559,58 @@ type BriefState =
   | { status: "no-facts" }
   | { status: "done"; view: BriefView };
 
+// The live brief waits on forecast retrieval and an AI call (up to ~30s), so the
+// steps advance on elapsed time to show progress; they are not backend events.
+const BRIEF_STEPS = [
+  { afterSeconds: 0, label: "Reading the forecast facts" },
+  { afterSeconds: 4, label: "Adding recent reef context" },
+  { afterSeconds: 9, label: "Writing your brief" },
+];
+const BRIEF_SLOW_AFTER_SECONDS = 15;
+
+export function BriefLoading() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const active = BRIEF_STEPS.reduce(
+    (current, step, index) => (seconds >= step.afterSeconds ? index : current),
+    0,
+  );
+  const slow = seconds >= BRIEF_SLOW_AFTER_SECONDS;
+  return (
+    <div className={styles.briefLoading}>
+      <p className={styles.briefLoadingStatus} role="status">
+        <span className={styles.briefSpinner} aria-hidden="true" />
+        <span>
+          {BRIEF_STEPS[active].label}…
+          {slow && (
+            <small>Still working. This can take up to 30 seconds.</small>
+          )}
+        </span>
+      </p>
+      <ol className={styles.briefSteps} aria-hidden="true">
+        {BRIEF_STEPS.map((step, index) => (
+          <li
+            key={step.label}
+            data-state={index < active ? "done" : index === active ? "active" : "pending"}
+          >
+            {index < active ? <Check size={14} /> : <span />}
+            {step.label}
+          </li>
+        ))}
+      </ol>
+      <div className={styles.briefSkeleton} aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+
 export function BriefPanel({
   site,
   date,
@@ -677,7 +729,7 @@ export function BriefPanel({
             </button>
           </>
         ) : brief.status === "loading" ? (
-          <p role="status">Writing your brief…</p>
+          <BriefLoading />
         ) : brief.status === "no-facts" ? (
           <div role="status">
             <h4>Forecast information is missing</h4>
