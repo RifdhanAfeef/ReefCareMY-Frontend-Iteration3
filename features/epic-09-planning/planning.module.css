@@ -1181,6 +1181,111 @@
   margin: 14px 0 0;
   font-size: 17px;
 }
+.briefLoading {
+  margin-top: 14px;
+}
+.briefLoadingStatus {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  color: var(--color-ink);
+  font-weight: 700;
+}
+.briefLoadingStatus small {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-weight: 400;
+}
+.briefSpinner {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: briefSpin 900ms linear infinite;
+}
+@keyframes briefSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.briefSteps {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+.briefSteps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-muted);
+}
+.briefSteps li > span {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin: 0 3px;
+  background: var(--color-border);
+  border-radius: 50%;
+}
+.briefSteps li > svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+.briefSteps li[data-state="active"] {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+.briefSteps li[data-state="active"] > span {
+  background: var(--color-primary);
+  animation: briefPulse 1.2s ease-in-out infinite;
+}
+@keyframes briefPulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.briefSkeleton {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.briefSkeleton span {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--color-info) 25%,
+    #ffffff 50%,
+    var(--color-info) 75%
+  );
+  background-size: 200% 100%;
+  animation: briefShimmer 1.6s ease-in-out infinite;
+}
+.briefSkeleton span:nth-child(2) {
+  width: 92%;
+}
+.briefSkeleton span:nth-child(3) {
+  width: 96%;
+}
+.briefSkeleton span:nth-child(4) {
+  width: 60%;
+}
+@keyframes briefShimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
 
 @media (max-width: 1100px) {
   .container {
@@ -1368,8 +1473,13 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dateNavigation {
+  .dateNavigation,
+  .briefSkeleton span,
+  .briefSteps li[data-state="active"] > span {
     animation: none;
+  }
+  .briefSpinner {
+    animation-duration: 2.4s;
   }
   .dates {
     scroll-behavior: auto;
