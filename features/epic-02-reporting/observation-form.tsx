@@ -124,6 +124,11 @@ function formatFileSize(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 }
 
+// One status line per running AI request, with the same spinner as the planning brief.
+function AiWorkingStatus({ children }: { children: React.ReactNode }) {
+  return <p className={styles.aiWorking} role="status"><span className={styles.aiSpinner} aria-hidden="true" /><span>{children}</span></p>;
+}
+
 export function ObservationForm({ initialThreat, fromExplorer = false, plannedDate }: { initialThreat?: string; fromExplorer?: boolean; plannedDate?: string }) {
   const router = useRouter();
   const { reportDraft, locationDraft, isAccountDraftRestored, updateReportDraft, saveReportDraft, resetReportDraft } = useMockAppState();
@@ -177,7 +182,6 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
 
   const runSmartStructuring = useCallback(async (description: string, requestId: number) => {
     setAssistantBusy(true);
-    setAssistantMessage("Analysing your description…");
     try {
       const result = await structureReportDescription(description);
       if (requestId !== smartStructuringRequest.current) return;
@@ -385,7 +389,7 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
   async function analysePhoto(photo: PhotoPreview) {
     const requestId = ++visualRecognitionRequest.current;
     setVisualRecognitionBusy(true);
-    setVisualRecognitionMessage(`Analysing ${photo.file.name}…`);
+    setVisualRecognitionMessage(`Checking ${photo.file.name} for reef threats…`);
     try {
       const result = await recognizeVisualThreat(photo.file);
       if (requestId !== visualRecognitionRequest.current) return;
@@ -733,8 +737,9 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
           <section className={`${styles.card} ${styles.observationDetails}`} aria-labelledby="additional-details-heading">
             <h2 id="additional-details-heading">Additional details</h2>
             <p className={styles.supporting}>Some details are AI suggestions from your description. Check or edit them.</p>
-            {assistantBusy && <p className={styles.muted} role="status">Reading your description…</p>}
-            {assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
+            {assistantBusy
+              ? <AiWorkingStatus>Reading your description…</AiWorkingStatus>
+              : assistantMessage && <p className={styles.assistantMessage} role="status">{assistantMessage}</p>}
           <div className={styles.inlineSuggestionGrid}>{smartReportFields.filter((item) => item.field !== "possible_threat").map(({ field, label }) => {
             const suggestionIndex = reportDraft.aiSuggestions.findIndex((item) => item.field === field);
             const suggestion = suggestionIndex >= 0 ? reportDraft.aiSuggestions[suggestionIndex] : undefined;
@@ -782,10 +787,10 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
         <aside className={styles.observationSidebar} aria-labelledby="your-review-heading">
           <section className={`${styles.card} ${styles.reviewDecisionCard}`}>
             <div><h2 id="your-review-heading">Your review</h2><p className={styles.supporting}>Check your choice before continuing.</p></div>
-            <section className={styles.threatSuggestionCard} aria-labelledby="ai-threat-heading" aria-busy={visualRecognitionBusy || assistantBusy}>
+            <section className={styles.threatSuggestionCard} aria-labelledby="ai-threat-heading">
               <h3 id="ai-threat-heading">AI suggested threat</h3>
               {sourcesDisagree && <p className={styles.conflictNotice}><Info size={18} aria-hidden="true" />The photo and description suggest different threats. {textCategory ? "Use either suggestion, or choose a category below." : "Choose a category below, or use the photo suggestion."}</p>}
-              {visualRecognitionBusy ? <p className={styles.assistantMessage} role="status">{visualRecognitionMessage}</p> : visual?.status === "recognized" && visual.suggestedThreatCode && visual.suggestedThreatLabel ? <div className={styles.threatSource}>
+              {visualRecognitionBusy ? <AiWorkingStatus>{visualRecognitionMessage}</AiWorkingStatus> :visual?.status === "recognized" && visual.suggestedThreatCode && visual.suggestedThreatLabel ? <div className={styles.threatSource}>
                 <span className={styles.sourceBadge}>Photo analysis</span>
                 <strong className={styles.suggestedCategory}>{visual.suggestedThreatLabel}</strong>
                 <span>Confidence level</span><strong>{confidenceLabel(visual.confidence)}</strong>
@@ -803,7 +808,6 @@ export function ObservationForm({ initialThreat, fromExplorer = false, plannedDa
                   <p className={styles.fieldHelp}>Check this suggestion using the category below. You can also review it before submitting.</p>
                 </> : <span className={styles.confirmedChoice} role="img" aria-label="Description suggestion decision confirmed"><CheckCircle2 size={22} aria-hidden="true" /></span>}
               </div>}
-              {!textThreat && assistantBusy && <p className={styles.muted}>Reading your description…</p>}
               <details className={styles.suggestionDetails}>
                 <summary>Suggestion details</summary>
                 <p>AI suggestions help identify a possible threat; they do not verify it. You can select Unsure.</p>

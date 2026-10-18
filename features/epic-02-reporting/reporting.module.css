@@ -311,3 +311,10 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* AI request in progress: same spinner as the planning brief loading state. */
+.aiWorking { display: flex; align-items: center; gap: 10px; margin: 0; padding: 11px 13px; color: var(--color-ink); font-size: 14px; font-weight: 600; background: #fff; border-radius: 10px; }
+.aiWorking > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.aiSpinner { flex: 0 0 18px; width: 18px; height: 18px; border: 2px solid var(--color-border); border-top-color: var(--color-primary); border-radius: 50%; animation: aiSpin 900ms linear infinite; }
+@keyframes aiSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .aiSpinner { animation-duration: 2.4s; } }
