@@ -6,25 +6,28 @@ describe("planning brief loading state", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  async function wait(seconds: number) {
+  async function wait(ms: number) {
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(seconds * 1000);
+      await vi.advanceTimersByTimeAsync(ms);
     });
   }
 
-  it("advances through the brief steps while the AI is writing", async () => {
+  it("reaches the last step within a typical ~4s brief", async () => {
     render(<BriefLoading />);
     expect(screen.getByRole("status")).toHaveTextContent("Reading the forecast facts");
-    await wait(4);
+    await wait(1000);
     expect(screen.getByRole("status")).toHaveTextContent("Adding recent reef context");
-    await wait(5);
+    await wait(1250);
     expect(screen.getByRole("status")).toHaveTextContent("Writing your brief");
   });
 
-  it("reassures the user once the brief is taking a while", async () => {
+  it("only shows the slow note once the brief is taking longer than usual", async () => {
     render(<BriefLoading />);
-    expect(screen.queryByText(/up to 30 seconds/)).not.toBeInTheDocument();
-    await wait(15);
-    expect(screen.getByRole("status")).toHaveTextContent("Still working. This can take up to 30 seconds.");
+    await wait(9750);
+    expect(screen.queryByText(/longer than usual/)).not.toBeInTheDocument();
+    await wait(250);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Taking longer than usual. This can take up to a minute.",
+    );
   });
 });

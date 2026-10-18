@@ -559,26 +559,31 @@ type BriefState =
   | { status: "no-facts" }
   | { status: "done"; view: BriefView };
 
-// The live brief waits on forecast retrieval and an AI call (up to ~30s), so the
-// steps advance on elapsed time to show progress; they are not backend events.
+// The live brief usually returns in about 4s (forecast retrieval plus a DeepSeek
+// call), so the steps advance on elapsed time to fit inside that; they are not
+// backend events. The backend can take up to 35s before giving up on the AI.
+const BRIEF_TICK_MS = 250;
 const BRIEF_STEPS = [
-  { afterSeconds: 0, label: "Reading the forecast facts" },
-  { afterSeconds: 4, label: "Adding recent reef context" },
-  { afterSeconds: 9, label: "Writing your brief" },
+  { afterMs: 0, label: "Reading the forecast facts" },
+  { afterMs: 1000, label: "Adding recent reef context" },
+  { afterMs: 2250, label: "Writing your brief" },
 ];
-const BRIEF_SLOW_AFTER_SECONDS = 15;
+const BRIEF_SLOW_AFTER_MS = 10_000;
 
 export function BriefLoading() {
-  const [seconds, setSeconds] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => setSeconds((value) => value + 1), 1000);
+    const id = window.setInterval(
+      () => setElapsedMs((value) => value + BRIEF_TICK_MS),
+      BRIEF_TICK_MS,
+    );
     return () => window.clearInterval(id);
   }, []);
   const active = BRIEF_STEPS.reduce(
-    (current, step, index) => (seconds >= step.afterSeconds ? index : current),
+    (current, step, index) => (elapsedMs >= step.afterMs ? index : current),
     0,
   );
-  const slow = seconds >= BRIEF_SLOW_AFTER_SECONDS;
+  const slow = elapsedMs >= BRIEF_SLOW_AFTER_MS;
   return (
     <div className={styles.briefLoading}>
       <p className={styles.briefLoadingStatus} role="status">
@@ -586,7 +591,7 @@ export function BriefLoading() {
         <span>
           {BRIEF_STEPS[active].label}…
           {slow && (
-            <small>Still working. This can take up to 30 seconds.</small>
+            <small>Taking longer than usual. This can take up to a minute.</small>
           )}
         </span>
       </p>
