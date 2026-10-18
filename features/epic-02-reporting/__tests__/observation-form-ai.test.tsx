@@ -332,6 +332,41 @@ describe("automatic Smart Report Structuring", () => {
     expect(recognitionChange).not.toHaveProperty("threatCategoryCode");
   });
 
+  it("shows a single spinner status while the description is being read", async () => {
+    vi.mocked(structureReportDescription).mockReturnValue(new Promise(() => {}));
+    render(<ObservationForm />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
+
+    const reading = screen.getAllByText("Reading your description…");
+    expect(reading).toHaveLength(1);
+    const line = reading[0].closest("[role=status]");
+    expect(line).not.toBeNull();
+    expect(line?.querySelector("[aria-hidden=true]")).not.toBeNull();
+    expect(screen.queryByText(/Analysing your description/)).not.toBeInTheDocument();
+    const threatPanel = screen.getByRole("region", { name: "AI suggested threat" });
+    expect(within(threatPanel).queryByText(/Reading your description/)).not.toBeInTheDocument();
+  });
+
+  it("shows a single spinner status in the threat panel while a photo is checked", async () => {
+    vi.mocked(recognizeVisualThreat).mockReturnValue(new Promise(() => {}));
+    const file = new File(["reef"], "reef.jpg", { type: "image/jpeg" });
+    const { createPhotoId } = await import("@/features/epic-02-reporting/draft-storage");
+    vi.mocked(createPhotoId).mockReturnValue("photo-1");
+    render(<ObservationForm />);
+
+    fireEvent.change(screen.getByLabelText("Add photos"), { target: { files: [file] } });
+    await act(async () => {
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
+    });
+
+    const threatPanel = screen.getByRole("region", { name: "AI suggested threat" });
+    expect(threatPanel).not.toHaveAttribute("aria-busy");
+    const checking = screen.getAllByText("Checking reef.jpg for reef threats…");
+    expect(checking).toHaveLength(1);
+    expect(threatPanel).toContainElement(checking[0]);
+    expect(checking[0].closest("[role=status]")?.querySelector("[aria-hidden=true]")).not.toBeNull();
+  });
+
   it("lets the observer review image analysis on the photo-upload page", async () => {
     runtime.reportDraft = {
       ...runtime.reportDraft,
